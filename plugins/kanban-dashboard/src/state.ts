@@ -1,0 +1,99 @@
+export interface Task {
+  id: number;
+  title: string;
+  agent: string;
+  agent_color: string;
+  status: "blocked" | "ready" | "in_progress" | "done";
+  message: string;
+  progress: number;
+  high?: number;
+  medium?: number;
+  low?: number;
+  blocked_by?: number[];
+  phase?: number;
+  files?: string[];
+  subtasks?: string[];
+  subtasks_done?: string[];
+}
+
+export interface LogEntry {
+  time: string;
+  agent: string;
+  color: string;
+  message: string;
+}
+
+export interface DashboardConfig {
+  title: string;
+  subtitle: string;
+}
+
+const defaultConfig: DashboardConfig = { title: "Dashboard", subtitle: "" };
+
+let tasks: Task[] = [];
+let logs: LogEntry[] = [];
+let config: DashboardConfig = { ...defaultConfig };
+
+export function initDashboard(cfg: DashboardConfig): void {
+  config = { ...cfg };
+}
+
+export function addTask(task: Task): void {
+  tasks.push({ ...task });
+}
+
+export function updateTask(id: number, updates: Partial<Task>): void {
+  const index = tasks.findIndex((t) => t.id === id);
+  if (index === -1) return;
+
+  tasks[index] = { ...tasks[index], ...updates };
+
+  if (updates.status === "done") {
+    unblockDependents();
+  }
+}
+
+function unblockDependents(): void {
+  const doneIds = new Set(
+    tasks.filter((t) => t.status === "done").map((t) => t.id)
+  );
+
+  for (const task of tasks) {
+    if (
+      task.status === "blocked" &&
+      task.blocked_by &&
+      task.blocked_by.length > 0 &&
+      task.blocked_by.every((depId) => doneIds.has(depId))
+    ) {
+      task.status = "ready";
+    }
+  }
+}
+
+export function addLog(entry: LogEntry): void {
+  logs.push({ ...entry });
+}
+
+export function getState(): {
+  tasks: Task[];
+  config: DashboardConfig;
+  server_time: string;
+} {
+  return {
+    tasks: tasks.map((t) => ({ ...t })),
+    config: { ...config },
+    server_time: new Date().toISOString(),
+  };
+}
+
+export function getLogs(): { entries: LogEntry[] } {
+  return {
+    entries: logs.map((e) => ({ ...e })),
+  };
+}
+
+export function reset(): void {
+  tasks = [];
+  logs = [];
+  config = { ...defaultConfig };
+}

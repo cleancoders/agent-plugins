@@ -1,0 +1,15 @@
+{
+  "name": "cleancoders-agent-plugins",
+  "owner": {
+    "name": "AlexRoot-Roatch",
+    "email": ""
+  },
+  "plugins": [
+    {
+      "name": "kanban-dashboard",
+      "source": "./plugins/kanban-dashboard",
+      "description": "Live KanBan dashboard for monitoring Claude Code agent teams in real-time",
+      "version": "1.0.0"
+    }
+  ]
+}

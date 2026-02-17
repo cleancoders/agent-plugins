@@ -498,14 +498,70 @@
     font-variant-numeric: tabular-nums;
     font-family: 'SF Mono', 'Fira Code', monospace;
   }
+
+  .connecting-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(13, 17, 23, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    font-size: 18px;
+    color: var(--text-muted);
+    transition: opacity 0.5s ease;
+  }
+
+  .connecting-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .completion-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(135deg, rgba(105, 219, 124, 0.15), rgba(77, 171, 247, 0.15));
+    border-bottom: 2px solid var(--green);
+    padding: 16px 24px;
+    text-align: center;
+    z-index: 200;
+    animation: card-enter 0.5s ease;
+  }
+
+  .completion-banner h2 {
+    color: var(--green);
+    font-size: 16px;
+    margin-bottom: 4px;
+  }
+
+  .completion-banner p {
+    color: var(--text-muted);
+    font-size: 12px;
+  }
 </style>
 </head>
 <body>
 
+<div class="completion-banner" id="completion-banner" style="display:none">
+  <h2>All Tasks Complete!</h2>
+  <p id="completion-time"></p>
+</div>
+
+<div class="connecting-overlay" id="connecting-overlay">
+  <div>
+    <div class="live-indicator" style="justify-content:center;margin-bottom:12px;font-size:14px">
+      <div class="live-dot"></div> Connecting to dashboard...
+    </div>
+    <div style="text-align:center;font-size:12px;color:var(--text-dim)">Waiting for kanban_init</div>
+  </div>
+</div>
+
 <header>
   <div class="header-left">
     <div class="live-indicator"><div class="live-dot"></div> LIVE</div>
-    <h1>Story Settings Cleanup <span>/ Agent Swarm</span></h1>
+    <h1 id="dashboard-title">Dashboard <span id="dashboard-subtitle"></span></h1>
   </div>
   <div class="header-stats">
     <div class="stat">
@@ -521,7 +577,7 @@
       <div class="stat-label">Total</div>
     </div>
     <div class="stat">
-      <div class="stat-value" id="stat-findings" style="color:var(--yellow)">85</div>
+      <div class="stat-value" id="stat-findings" style="color:var(--yellow)">0</div>
       <div class="stat-label">Findings</div>
     </div>
     <div class="elapsed" id="elapsed">00:00:00</div>
@@ -681,10 +737,23 @@ function renderBoard(tasks) {
   document.getElementById('stat-done').textContent = done;
   document.getElementById('stat-total').textContent = tasks.length;
 
+  // Dynamic findings total
+  const findings = tasks.reduce((sum, t) => sum + (t.high || 0) + (t.medium || 0) + (t.low || 0), 0);
+  document.getElementById('stat-findings').textContent = findings;
+
   // Progress
   const pct = tasks.length > 0 ? Math.round((done / tasks.length) * 100) : 0;
   document.getElementById('progress-fill').style.width = pct + '%';
   document.getElementById('progress-text').textContent = `${pct}% complete (${done}/${tasks.length} tasks)`;
+
+  // Completion banner
+  const banner = document.getElementById('completion-banner');
+  if (tasks.length > 0 && done === tasks.length) {
+    banner.style.display = 'block';
+    document.getElementById('completion-time').textContent = 'Completed in ' + elapsed();
+  } else {
+    banner.style.display = 'none';
+  }
 
   // Save state for diff
   prevTaskMap = {};
@@ -712,12 +781,25 @@ async function poll() {
   try {
     const res = await fetch('/api/status');
     const data = await res.json();
+    // Update title from config
+    if (data.config) {
+      const titleEl = document.getElementById('dashboard-title');
+      const subtitleEl = document.getElementById('dashboard-subtitle');
+      if (titleEl && data.config.title) {
+        titleEl.childNodes[0].textContent = data.config.title + ' ';
+      }
+      if (subtitleEl && data.config.subtitle) {
+        subtitleEl.textContent = '/ ' + data.config.subtitle;
+      }
+    }
+    document.getElementById('connecting-overlay').classList.add('hidden');
     if (data.tasks) {
       renderBoard(data.tasks);
       renderAgentBar(data.tasks);
     }
   } catch (e) {
     console.warn('Poll failed:', e);
+    document.getElementById('connecting-overlay').classList.remove('hidden');
   }
   document.getElementById('elapsed').textContent = elapsed();
 }
