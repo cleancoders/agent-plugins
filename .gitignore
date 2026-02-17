@@ -1,0 +1,5 @@
+status/
+activity.log
+server.log
+__pycache__/
+*.pyc

@@ -1,0 +1,210 @@
+{
+  "project": "Story Settings Cleanup Swarm",
+  "tasks": [
+    {
+      "id": 1,
+      "title": "Cross-cutting: Move shared utilities to common.cljs",
+      "agent": "impl-common",
+      "agent_color": "#4dabf7",
+      "status": "ready",
+      "message": "Queued",
+      "progress": 0,
+      "high": 0, "medium": 5, "low": 1,
+      "blocked_by": [],
+      "phase": 1,
+      "files": ["common.cljs", "todo.cljs", "tags.cljs", "members.cljs"],
+      "subtasks": [
+        "Move should-update? from todo.cljs",
+        "Extract toggle-section into common.cljs",
+        "Replace juxt with defn for open-story!",
+        "Fix stale history initialization",
+        "Rename duplicate update-estimate!",
+        "Add region comments"
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Fix todo.cljs critical Reagent and correctness issues",
+      "agent": "impl-todo",
+      "agent_color": "#ff6b6b",
+      "status": "blocked",
+      "message": "Waiting on Task #1",
+      "progress": 0,
+      "high": 4, "medium": 5, "low": 2,
+      "blocked_by": [1],
+      "phase": 2,
+      "files": ["todo.cljs"],
+      "subtasks": [
+        "Fix reagent/atom in render loop",
+        "Remove side-effect in let binding",
+        "Fix rand-int-min-max math",
+        "Fix on-blur render-time eval",
+        "Fix double reset text-ratom",
+        "Fix nil arithmetic in effort sum",
+        "Remove redundant do wrapper",
+        "Standardize atom/value params"
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Fix modal.cljs state management and duplication",
+      "agent": "impl-modal",
+      "agent_color": "#da77f2",
+      "status": "ready",
+      "message": "Queued",
+      "progress": 0,
+      "high": 2, "medium": 5, "low": 5,
+      "blocked_by": [],
+      "phase": 1,
+      "files": ["modal.cljs"],
+      "subtasks": [
+        "Move apply-iteration-signed! to track!",
+        "Deduplicate DB lookups in render",
+        "Consolidate original/original-atom",
+        "Extract user-editable-fields def",
+        "Memoize markdown-it instance",
+        "Rename update-fn/sync-keys!",
+        "Remove unused requires"
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Fix history.cljs performance and fragile record-kind",
+      "agent": "impl-history",
+      "agent_color": "#ffd43b",
+      "status": "ready",
+      "message": "Queued",
+      "progress": 0,
+      "high": 2, "medium": 3, "low": 4,
+      "blocked_by": [],
+      "phase": 1,
+      "files": ["history.cljs"],
+      "subtasks": [
+        "Compute sorted-history-records once",
+        "Fix record-kind missing dissoc keys",
+        "Use set for expanded-records",
+        "Reduce timer interval to 30s",
+        "Remove unused signaturec require",
+        "Extract record-kind helper"
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Fix diff.cljs latent bug and readability",
+      "agent": "impl-diff",
+      "agent_color": "#69db7c",
+      "status": "ready",
+      "message": "Queued",
+      "progress": 0,
+      "high": 1, "medium": 4, "low": 3,
+      "blocked_by": [],
+      "phase": 1,
+      "files": ["diff.cljs"],
+      "subtasks": [
+        "Fix :default method wrong key",
+        "Guard multimethod dispatch",
+        "Replace triple-negative is-unchanged?",
+        "Rename pad-right",
+        "Extract regroup-marks helper"
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Fix members.cljs FA icon bug and performance",
+      "agent": "impl-members",
+      "agent_color": "#ff922b",
+      "status": "blocked",
+      "message": "Waiting on Task #1",
+      "progress": 0,
+      "high": 1, "medium": 4, "low": 4,
+      "blocked_by": [1],
+      "phase": 2,
+      "files": ["members.cljs"],
+      "subtasks": [
+        "Fix conflicting FA classes on toggle",
+        "Compute members-set once in parent",
+        "Filter before mapping in for-all",
+        "Extract member lookup to track",
+        "Fix toggle-user! stale state check"
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Fix tags.cljs shadowing and performance",
+      "agent": "impl-tags",
+      "agent_color": "#e599f7",
+      "status": "blocked",
+      "message": "Waiting on Task #1",
+      "progress": 0,
+      "high": 1, "medium": 3, "low": 5,
+      "blocked_by": [1],
+      "phase": 2,
+      "files": ["tags.cljs"],
+      "subtasks": [
+        "Fix shadowed function names",
+        "Fix duplicate :id attribute",
+        "Pass cursors instead of full editor atom",
+        "Lift shared tracks to parent",
+        "Create single tag-set track"
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Fix estimate.cljs update-state! inconsistency",
+      "agent": "impl-estimate",
+      "agent_color": "#38d9a9",
+      "status": "blocked",
+      "message": "Waiting on Task #1",
+      "progress": 0,
+      "high": 1, "medium": 2, "low": 4,
+      "blocked_by": [1],
+      "phase": 2,
+      "files": ["estimate.cljs"],
+      "subtasks": [
+        "Align update-state! calling pattern",
+        "Document toggle-bug! reload intent",
+        "Fix double negation in maybe-return-estimate"
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Fix attachments.cljs ID collision and cleanup",
+      "agent": "impl-attachments",
+      "agent_color": "#74c0fc",
+      "status": "ready",
+      "message": "Queued",
+      "progress": 0,
+      "high": 0, "medium": 3, "low": 4,
+      "blocked_by": [],
+      "phase": 1,
+      "files": ["attachments.cljs"],
+      "subtasks": [
+        "Fix stage-files! ID collision",
+        "Remove gensym fallback key",
+        "Inline trivial files wrapper",
+        "Use event target instead of DOM ID"
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Minor cleanups across actions, todo_dnd, file_types",
+      "agent": "impl-cleanups",
+      "agent_color": "#99e9f2",
+      "status": "ready",
+      "message": "Queued",
+      "progress": 0,
+      "high": 0, "medium": 2, "low": 10,
+      "blocked_by": [],
+      "phase": 1,
+      "files": ["actions.cljs", "todo_dnd.cljs", "file_types.cljs"],
+      "subtasks": [
+        "Remove redundant (and frozen?)",
+        "Fix extension no-dot case",
+        "Rename csv to spreadsheet",
+        "Use let instead of as-> in drag-over!",
+        "Use Reagent style map for z-index",
+        "Remove unused :as todo destructure"
+      ]
+    }
+  ]
+}
