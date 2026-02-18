@@ -1,0 +1,46 @@
+name: Build plugin dist
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'plugins/*/src/**'
+      - 'plugins/*/test/**'
+      - 'plugins/*/tsconfig.json'
+      - 'plugins/*/package.json'
+      - 'plugins/*/package-lock.json'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Test and build plugins
+        run: |
+          for plugin_dir in plugins/*/; do
+            if [ -f "$plugin_dir/package.json" ]; then
+              echo "Testing and building $plugin_dir"
+              cd "$plugin_dir"
+              npm ci
+              npm test
+              npm run build
+              cd "$GITHUB_WORKSPACE"
+            fi
+          done
+
+      - name: Commit dist if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add plugins/*/dist/bundle.js
+          if git diff --cached --quiet; then
+            echo "No dist changes to commit"
+          else
+            git commit -m "Build plugin dist [skip ci]"
+            git push
+          fi

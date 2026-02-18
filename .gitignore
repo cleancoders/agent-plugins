@@ -1,5 +1,8 @@
 node_modules/
 dist/
+!plugins/*/dist/
+plugins/*/dist/*
+!plugins/*/dist/bundle.js
 *.js.map
 status/
 activity.log
