@@ -1,0 +1,218 @@
+/* Task Detail Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 500;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-overlay.open {
+  display: flex;
+}
+
+.modal-content {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+  position: relative;
+  animation: card-enter 0.2s ease;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--bg-secondary);
+  z-index: 1;
+}
+
+.modal-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.modal-id {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.modal-status {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.modal-status.in_progress { background: rgba(77,171,247,0.15); color: var(--blue); }
+.modal-status.done { background: rgba(105,219,124,0.15); color: var(--green); }
+.modal-status.blocked { background: rgba(72,79,88,0.3); color: var(--text-dim); }
+.modal-status.ready { background: rgba(255,212,59,0.15); color: var(--yellow); }
+
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.modal-close:hover {
+  background: rgba(255,255,255,0.08);
+  color: var(--text);
+}
+
+.modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  padding: 16px 20px 0;
+  line-height: 1.4;
+}
+
+.modal-body {
+  padding: 12px 20px 20px;
+}
+
+.modal-section {
+  margin-bottom: 16px;
+}
+
+.modal-section-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.modal-agent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.modal-agent-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.modal-progress-bar {
+  height: 6px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+.modal-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.modal-progress-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.modal-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.modal-badges .badge {
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+.modal-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.modal-files .file-tag {
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
+.modal-message {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  padding: 8px 10px;
+  background: rgba(0,0,0,0.2);
+  border-radius: 4px;
+  word-break: break-word;
+}
+
+.modal-blocked-by {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.modal-subtask-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.modal-subtask {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.modal-subtask.done { text-decoration: line-through; opacity: 0.6; }
+.modal-subtask-icon { font-size: 11px; flex-shrink: 0; }
+.modal-subtask.done .modal-subtask-icon { color: var(--green); }
+.modal-subtask:not(.done) .modal-subtask-icon { color: var(--text-dim); }
+
+.modal-log-entry {
+  font-size: 11px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: var(--text-muted);
+  padding: 3px 0;
+  display: flex;
+  gap: 12px;
+}
+
+.modal-log-entry .log-time { color: var(--text-dim); min-width: 80px; flex-shrink: 0; }
+.modal-log-entry .log-msg { word-break: break-word; }
+
+.modal-empty {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-style: italic;
+}

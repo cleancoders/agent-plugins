@@ -1,0 +1,175 @@
+/* Cards */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 8px;
+  transition: all 0.4s ease, transform 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 3px;
+  height: 100%;
+  border-radius: 8px 0 0 8px;
+}
+
+.card:hover {
+  border-color: #444c56;
+  transform: translateY(-1px);
+}
+
+.card.in_progress {
+  border-color: rgba(88,166,255,0.3);
+  box-shadow: 0 0 20px rgba(88,166,255,0.05);
+}
+
+.card.in_progress::before { background: var(--blue); }
+.card.done::before { background: var(--green); }
+.card.blocked::before { background: var(--text-dim); }
+.card.ready::before { background: var(--yellow); }
+
+.card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.card-id {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.severity-badges {
+  display: flex;
+  gap: 4px;
+}
+
+.badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-variant-numeric: tabular-nums;
+}
+
+.badge-high { background: rgba(255,107,107,0.2); color: var(--red); }
+.badge-medium { background: rgba(255,212,59,0.2); color: var(--yellow); }
+.badge-low { background: rgba(105,219,124,0.15); color: var(--green); }
+
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.card.done .card-title { color: var(--text-muted); }
+
+.card-agent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.card-agent-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.card-message {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  padding: 6px 8px;
+  background: rgba(0,0,0,0.2);
+  border-radius: 4px;
+  margin-bottom: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-message:empty { display: none; }
+
+.card-progress-bar {
+  height: 3px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.card-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.6s ease;
+  background: var(--blue);
+}
+
+.card.done .card-progress-fill { background: var(--green); }
+
+.card-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.file-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.05);
+  color: var(--text-muted);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+/* Subtask list */
+.subtask-list {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+}
+
+.subtask {
+  font-size: 11px;
+  color: var(--text-dim);
+  padding: 2px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.subtask.done { color: var(--text-muted); text-decoration: line-through; opacity: 0.6; }
+
+.subtask-icon { font-size: 10px; flex-shrink: 0; }
+.subtask.done .subtask-icon { color: var(--green); }
+.subtask:not(.done) .subtask-icon { color: var(--text-dim); }
+
+/* Card animations */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.card.in_progress .card-message {
+  background: linear-gradient(90deg, rgba(0,0,0,0.2) 25%, rgba(88,166,255,0.08) 50%, rgba(0,0,0,0.2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 3s infinite linear;
+}

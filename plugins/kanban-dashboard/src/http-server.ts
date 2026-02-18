@@ -51,6 +51,34 @@ function handleRequest(
     return;
   }
 
+  // Serve static CSS and JS files
+  if (method === "GET" && (url.startsWith("/css/") || url.startsWith("/js/"))) {
+    const mimeTypes: Record<string, string> = {
+      ".css": "text/css",
+      ".js": "application/javascript",
+    };
+    const ext = path.extname(url);
+    const contentType = mimeTypes[ext];
+    if (!contentType || url.includes("..")) {
+      sendJson(res, 404, { error: "Not found" });
+      return;
+    }
+    const filePath = path.resolve(__dirname, "..", "public", url.slice(1));
+    fs.readFile(filePath, (err, data) => {
+      if (err) {
+        sendJson(res, 404, { error: "Not found" });
+        return;
+      }
+      res.writeHead(200, {
+        "Content-Type": contentType,
+        "Cache-Control": "no-cache",
+        ...CORS_HEADERS,
+      });
+      res.end(data);
+    });
+    return;
+  }
+
   if (method === "GET" && url === "/api/status") {
     sendJson(res, 200, getState());
     return;

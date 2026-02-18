@@ -1,0 +1,34 @@
+/* Activity Log */
+.log-panel {
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  padding: 12px 24px;
+  max-height: 200px;
+  overflow-y: auto;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+}
+
+.log-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.log-entry {
+  font-size: 11px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: var(--text-muted);
+  padding: 2px 0;
+  display: flex;
+  gap: 12px;
+}
+
+.log-time { color: var(--text-dim); min-width: 80px; }
+.log-agent { font-weight: 600; min-width: 120px; }
