@@ -111,15 +111,25 @@ The browser dashboard includes:
 - **Activity log** — scrolling log of agent messages
 - **Completion banner** — appears when all tasks reach done
 
+## Automatic Team Integration
+
+This plugin includes a **skill** (`skills/kanban-team/SKILL.md`) that makes Claude automatically use the dashboard whenever it creates an agent team with `TeamCreate`. No manual instructions or CLAUDE.md configuration needed — once the plugin is installed, Claude sees the skill and follows it.
+
+The skill designates the **team lead as the sole dashboard driver**. Teammates don't need the plugin or any special instructions. The lead:
+
+1. Calls `kanban_init` after creating tasks
+2. Calls `kanban_update_task` as teammates report progress
+3. Calls `kanban_stop` when the team shuts down
+
 ## Typical Workflow
 
 ```
-1. Team lead calls kanban_init with title + task list
-2. Browser opens to dashboard
+1. Team lead creates tasks with TaskCreate
+2. Team lead calls kanban_init — browser opens to dashboard
 3. Team lead spawns worker agents
-4. Workers call kanban_update_task as they progress
-5. Workers call kanban_log for activity entries
-6. When all done, team lead calls kanban_stop
+4. As workers report back, lead calls kanban_update_task
+5. Lead calls kanban_log for notable activity entries
+6. When all done, lead calls kanban_stop
 ```
 
 ## Development
@@ -149,6 +159,9 @@ kanban-dashboard/
       dashboard.js    Polling, rendering, stats
       modal.js        Task detail modal + file diffs
       diff.js         Unified diff parser + side-by-side renderer
+  skills/
+    kanban-team/
+      SKILL.md        Auto-triggers on TeamCreate to drive the dashboard
   test/               Unit tests (Vitest)
   e2e/                E2E tests (Playwright)
   plugin.json         MCP plugin manifest
