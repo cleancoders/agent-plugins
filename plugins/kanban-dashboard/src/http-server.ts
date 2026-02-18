@@ -1,7 +1,8 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
-import { getState, getLogs } from "./state.js";
+import { execSync } from "node:child_process";
+import { getState, getLogs, getProjectDir } from "./state.js";
 
 let server: http.Server | null = null;
 
@@ -10,6 +11,9 @@ const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Methods": "GET, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
+
+let filesCache: { data: unknown; time: number } | null = null;
+const FILES_CACHE_TTL = 2000;
 
 function sendJson(
   res: http.ServerResponse,
@@ -79,6 +83,51 @@ function handleRequest(
     return;
   }
 
+  if (method === "GET" && url === "/api/files") {
+    const projectDir = getProjectDir();
+    if (!projectDir) {
+      sendJson(res, 200, { error: "No project directory configured" });
+      return;
+    }
+
+    const now = Date.now();
+    if (filesCache && now - filesCache.time < FILES_CACHE_TTL) {
+      sendJson(res, 200, filesCache.data);
+      return;
+    }
+
+    try {
+      const output = execSync("git diff --name-status", {
+        cwd: projectDir,
+        encoding: "utf-8",
+        timeout: 5000,
+      }).trim();
+
+      const state = getState();
+      const files = output
+        .split("\n")
+        .filter((line) => line.length > 0)
+        .map((line) => {
+          const [status, ...pathParts] = line.split("\t");
+          const filePath = pathParts.join("\t");
+          const taskIds = state.tasks
+            .filter(
+              (t) => t.files && t.files.some((f) => filePath.endsWith(f) || f.endsWith(filePath))
+            )
+            .map((t) => t.id);
+          return { path: filePath, status, task_ids: taskIds };
+        });
+
+      const data = { files };
+      filesCache = { data, time: now };
+      sendJson(res, 200, data);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "git diff failed";
+      sendJson(res, 200, { error: message });
+    }
+    return;
+  }
+
   if (method === "GET" && url === "/api/status") {
     sendJson(res, 200, getState());
     return;
@@ -140,4 +189,8 @@ export function stopServer(): Promise<void> {
 
 export function isRunning(): boolean {
   return server !== null;
+}
+
+export function resetFilesCache(): void {
+  filesCache = null;
 }
