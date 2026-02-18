@@ -13,3 +13,4 @@ __pycache__/
 .playwright-mcp/
 test-results/
 playwright-report/
+.worktrees/
