@@ -1,8 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { Task, DashboardConfig, initDashboard, addTask, updateTask, addLog, reset, getState } from './state.js';
+import { Task, DashboardConfig, initDashboard, addTask, updateTask, addLog, reset, getState, getProjectDir } from './state.js';
 import { startServer, stopServer, isRunning } from './http-server.js';
-import { exec } from 'child_process';
+import { exec, execSync } from 'child_process';
 import { platform } from 'os';
 
 const COLOR_POOL = [
@@ -74,7 +74,16 @@ export function registerTools(server: McpServer): void {
       agentColors.clear();
       colorIndex = 0;
 
-      initDashboard({ title, subtitle: subtitle || '', project_dir });
+      let baseline_ref: string | undefined;
+      if (project_dir) {
+        try {
+          baseline_ref = execSync('git rev-parse HEAD', { cwd: project_dir, encoding: 'utf-8', timeout: 5000 }).trim();
+        } catch {
+          // skip baseline_ref if git fails
+        }
+      }
+
+      initDashboard({ title, subtitle: subtitle || '', project_dir, baseline_ref });
 
       for (const t of tasks) {
         const color = getAgentColor(t.agent, t.agent_color);
@@ -189,7 +198,61 @@ export function registerTools(server: McpServer): void {
       if (low !== undefined) updates.low = low;
       if (files !== undefined) updates.files = files;
 
+      if (status === 'in_progress' || status === 'done') {
+        const projectDir = getProjectDir();
+        if (projectDir) {
+          try {
+            const ref = execSync('git rev-parse HEAD', { cwd: projectDir, encoding: 'utf-8', timeout: 5000 }).trim();
+            if (status === 'in_progress') {
+              updates.start_ref = ref;
+            } else {
+              updates.end_ref = ref;
+            }
+          } catch {
+            // skip ref if git fails
+          }
+        }
+      }
+
+      const existingState = getState();
+      const existingTask = existingState.tasks.find(t => t.id === id);
+
       updateTask(id, updates);
+
+      const updatedState = getState();
+      const updatedTask = updatedState.tasks.find(t => t.id === id);
+
+      if (updatedTask) {
+        const logAgent = updatedTask.agent;
+        const logColor = updatedTask.agent_color;
+
+        if (status !== undefined && (!existingTask || existingTask.status !== status)) {
+          const statusMessages: Record<string, string> = {
+            'in_progress': `Started working on: ${updatedTask.title}`,
+            'done': `Completed: ${updatedTask.title}`,
+            'blocked': `Blocked: ${updatedTask.title}`,
+            'ready': `Ready: ${updatedTask.title}`,
+          };
+          const msg = statusMessages[status];
+          if (msg) {
+            addLog({ time: new Date().toLocaleTimeString(), agent: logAgent, color: logColor, message: msg });
+          }
+        }
+
+        if (subtasks_done !== undefined && existingTask) {
+          const oldDone = new Set(existingTask.subtasks_done || []);
+          for (const st of subtasks_done) {
+            if (!oldDone.has(st)) {
+              addLog({ time: new Date().toLocaleTimeString(), agent: logAgent, color: logColor, message: `Completed subtask: ${st}` });
+            }
+          }
+        }
+
+        if (message !== undefined && status === undefined && existingTask && existingTask.message !== message) {
+          addLog({ time: new Date().toLocaleTimeString(), agent: logAgent, color: logColor, message });
+        }
+      }
+
       return { content: [{ type: 'text' as const, text: JSON.stringify({ success: true, task_id: id }) }] };
     }
   );

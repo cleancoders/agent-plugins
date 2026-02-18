@@ -46,7 +46,7 @@ function openModal(taskId) {
   }
 
   // Files & Diffs
-  if (task.files && task.files.length > 0) {
+  if (task.status === 'in_progress' || task.status === 'done') {
     html += `<div class="modal-section">
       <div class="modal-section-title">Files</div>
       <div class="diff-file-list" id="modal-file-list">
@@ -142,18 +142,18 @@ function openModal(taskId) {
   document.getElementById('task-modal').classList.add('open');
 
   // Load file diffs async after modal is open
-  if (task.files && task.files.length > 0) {
-    loadFileDiffs(task.files);
+  if (task.status === 'in_progress' || task.status === 'done') {
+    loadFileDiffs(task.id);
   }
 }
 
-async function loadFileDiffs(taskFiles) {
+async function loadFileDiffs(taskId) {
   const fileListEl = document.getElementById('modal-file-list');
   const diffViewEl = document.getElementById('modal-diff-view');
   if (!fileListEl) return;
 
   try {
-    const res = await fetch('/api/files');
+    const res = await fetch('/api/files?task_id=' + encodeURIComponent(taskId));
     const data = await res.json();
 
     if (data.error) {
@@ -161,17 +161,14 @@ async function loadFileDiffs(taskFiles) {
       return;
     }
 
-    // Filter to files relevant to this task
-    const relevant = (data.files || []).filter(f =>
-      taskFiles.some(tf => f.path.endsWith(tf) || tf.endsWith(f.path))
-    );
+    const files = data.files || [];
 
-    if (relevant.length === 0) {
+    if (files.length === 0) {
       fileListEl.innerHTML = '<div class="modal-empty">No changed files detected</div>';
       return;
     }
 
-    fileListEl.innerHTML = relevant.map(f =>
+    fileListEl.innerHTML = files.map(f =>
       `<div class="diff-file-row" data-file="${escapeHtml(f.path)}" onclick="loadSingleDiff(this, '${escapeHtml(f.path)}')">
         <span class="diff-file-status ${f.status}">${f.status}</span>
         <span class="diff-file-path">${escapeHtml(f.path)}</span>

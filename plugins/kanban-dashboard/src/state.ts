@@ -14,6 +14,8 @@ export interface Task {
   files?: string[];
   subtasks?: string[];
   subtasks_done?: string[];
+  start_ref?: string;
+  end_ref?: string;
 }
 
 export interface LogEntry {
@@ -27,6 +29,7 @@ export interface DashboardConfig {
   title: string;
   subtitle: string;
   project_dir?: string;
+  baseline_ref?: string;
 }
 
 const defaultConfig: DashboardConfig = { title: "Dashboard", subtitle: "" };
@@ -48,6 +51,15 @@ export function updateTask(id: number, updates: Partial<Task>): void {
   if (index === -1) return;
 
   tasks[index] = { ...tasks[index], ...updates };
+
+  if (updates.progress !== undefined && updates.progress > 1) {
+    tasks[index].progress = updates.progress / 100;
+  }
+
+  const subtasks = tasks[index].subtasks;
+  if (subtasks && subtasks.length > 0) {
+    tasks[index].progress = (tasks[index].subtasks_done?.length || 0) / subtasks.length;
+  }
 
   if (updates.status === "done") {
     unblockDependents();
@@ -95,6 +107,10 @@ export function getLogs(): { entries: LogEntry[] } {
 
 export function getProjectDir(): string | undefined {
   return config.project_dir;
+}
+
+export function getBaselineRef(): string | undefined {
+  return config.baseline_ref;
 }
 
 export function reset(): void {

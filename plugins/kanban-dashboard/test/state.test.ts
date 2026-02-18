@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   initDashboard,
   getProjectDir,
+  getBaselineRef,
   getState,
   reset,
   addTask,
@@ -115,11 +116,11 @@ describe("updateTask", () => {
   });
 
   it("updates fields on an existing task", () => {
-    addTask(makeTask({ id: 1, message: "old msg", progress: 10 }));
-    updateTask(1, { message: "new msg", progress: 50 });
+    addTask(makeTask({ id: 1, message: "old msg", progress: 0 }));
+    updateTask(1, { message: "new msg", progress: 0.5 });
     const { tasks } = getState();
     expect(tasks[0].message).toBe("new msg");
-    expect(tasks[0].progress).toBe(50);
+    expect(tasks[0].progress).toBe(0.5);
   });
 
   it("is a no-op when id is not found", () => {
@@ -280,5 +281,156 @@ describe("reset", () => {
     expect(config.title).toBe("Dashboard");
     expect(config.subtitle).toBe("");
     expect(config.project_dir).toBeUndefined();
+  });
+});
+
+describe("getBaselineRef", () => {
+  beforeEach(() => {
+    reset();
+  });
+
+  it("returns undefined when baseline_ref is not configured", () => {
+    initDashboard({ title: "t", subtitle: "s" });
+    expect(getBaselineRef()).toBeUndefined();
+  });
+
+  it("returns the configured baseline_ref after initDashboard", () => {
+    initDashboard({ title: "t", subtitle: "s", baseline_ref: "abc123" });
+    expect(getBaselineRef()).toBe("abc123");
+  });
+
+  it("returns undefined after reset", () => {
+    initDashboard({ title: "t", subtitle: "s", baseline_ref: "abc123" });
+    reset();
+    expect(getBaselineRef()).toBeUndefined();
+  });
+});
+
+describe("Task start_ref and end_ref", () => {
+  beforeEach(() => {
+    reset();
+  });
+
+  it("stores start_ref and end_ref on a task", () => {
+    addTask(makeTask({ id: 1, start_ref: "aaa111", end_ref: "bbb222" }));
+    const { tasks } = getState();
+    expect(tasks[0].start_ref).toBe("aaa111");
+    expect(tasks[0].end_ref).toBe("bbb222");
+  });
+
+  it("allows start_ref and end_ref to be undefined", () => {
+    addTask(makeTask({ id: 1 }));
+    const { tasks } = getState();
+    expect(tasks[0].start_ref).toBeUndefined();
+    expect(tasks[0].end_ref).toBeUndefined();
+  });
+
+  it("can update start_ref and end_ref via updateTask", () => {
+    addTask(makeTask({ id: 1 }));
+    updateTask(1, { start_ref: "ccc333", end_ref: "ddd444" });
+    const { tasks } = getState();
+    expect(tasks[0].start_ref).toBe("ccc333");
+    expect(tasks[0].end_ref).toBe("ddd444");
+  });
+});
+
+describe("baseline_ref in config state", () => {
+  beforeEach(() => {
+    reset();
+  });
+
+  it("includes baseline_ref in getState config", () => {
+    initDashboard({ title: "t", subtitle: "s", baseline_ref: "ref123" });
+    const { config } = getState();
+    expect(config.baseline_ref).toBe("ref123");
+  });
+});
+
+describe("updateTask progress normalization", () => {
+  beforeEach(() => {
+    reset();
+  });
+
+  it("normalizes progress > 1 by dividing by 100", () => {
+    addTask(makeTask({ id: 1, progress: 0 }));
+    updateTask(1, { progress: 75 });
+    const { tasks } = getState();
+    expect(tasks[0].progress).toBe(0.75);
+  });
+
+  it("leaves progress <= 1 unchanged", () => {
+    addTask(makeTask({ id: 1, progress: 0 }));
+    updateTask(1, { progress: 0.5 });
+    const { tasks } = getState();
+    expect(tasks[0].progress).toBe(0.5);
+  });
+
+  it("leaves progress of exactly 1 unchanged", () => {
+    addTask(makeTask({ id: 1, progress: 0 }));
+    updateTask(1, { progress: 1 });
+    const { tasks } = getState();
+    expect(tasks[0].progress).toBe(1);
+  });
+
+  it("normalizes progress of 100 to 1", () => {
+    addTask(makeTask({ id: 1, progress: 0 }));
+    updateTask(1, { progress: 100 });
+    const { tasks } = getState();
+    expect(tasks[0].progress).toBe(1);
+  });
+});
+
+describe("updateTask auto-calculate progress from subtasks", () => {
+  beforeEach(() => {
+    reset();
+  });
+
+  it("calculates progress from subtasks_done / subtasks", () => {
+    addTask(makeTask({ id: 1, subtasks: ["a", "b", "c", "d"], subtasks_done: ["a"] }));
+    updateTask(1, { subtasks_done: ["a", "b"] });
+    const { tasks } = getState();
+    expect(tasks[0].progress).toBe(0.5);
+  });
+
+  it("sets progress to 0 when subtasks exist but none are done", () => {
+    addTask(makeTask({ id: 1, subtasks: ["a", "b"], subtasks_done: [] }));
+    updateTask(1, { message: "updated" });
+    const { tasks } = getState();
+    expect(tasks[0].progress).toBe(0);
+  });
+
+  it("sets progress to 1 when all subtasks are done", () => {
+    addTask(makeTask({ id: 1, subtasks: ["a", "b"], subtasks_done: ["a"] }));
+    updateTask(1, { subtasks_done: ["a", "b"] });
+    const { tasks } = getState();
+    expect(tasks[0].progress).toBe(1);
+  });
+
+  it("auto-calculated subtask progress takes precedence over manual progress", () => {
+    addTask(makeTask({ id: 1, subtasks: ["a", "b", "c", "d"], subtasks_done: [] }));
+    updateTask(1, { progress: 90, subtasks_done: ["a"] });
+    const { tasks } = getState();
+    expect(tasks[0].progress).toBe(0.25);
+  });
+
+  it("handles missing subtasks_done when subtasks exist", () => {
+    addTask(makeTask({ id: 1, subtasks: ["a", "b"] }));
+    updateTask(1, { message: "no done list" });
+    const { tasks } = getState();
+    expect(tasks[0].progress).toBe(0);
+  });
+
+  it("does not auto-calculate when subtasks array is empty", () => {
+    addTask(makeTask({ id: 1, subtasks: [], progress: 0 }));
+    updateTask(1, { progress: 50 });
+    const { tasks } = getState();
+    expect(tasks[0].progress).toBe(0.5);
+  });
+
+  it("does not auto-calculate when no subtasks field exists", () => {
+    addTask(makeTask({ id: 1, progress: 0 }));
+    updateTask(1, { progress: 80 });
+    const { tasks } = getState();
+    expect(tasks[0].progress).toBe(0.8);
   });
 });

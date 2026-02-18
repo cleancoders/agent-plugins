@@ -128,6 +128,105 @@ describe("GET /api/files", () => {
     expect(status).toBe(200);
     expect(body).toEqual({ error: "Command failed: git diff" });
   });
+
+  it("uses baseline ref when configured to get committed and uncommitted changes", async () => {
+    initDashboard({ title: "t", subtitle: "s", project_dir: "/my/project", baseline_ref: "abc123" });
+    mockExecSync
+      .mockReturnValueOnce("M\tsrc/committed.ts")
+      .mockReturnValueOnce("M\tsrc/uncommitted.ts");
+
+    const { status, body } = await fetchJson(`${baseUrl}/api/files`);
+
+    expect(status).toBe(200);
+    expect(body.files).toHaveLength(2);
+    expect(body.files[0]).toEqual({ path: "src/committed.ts", status: "M", task_ids: [] });
+    expect(body.files[1]).toEqual({ path: "src/uncommitted.ts", status: "M", task_ids: [] });
+    expect(mockExecSync).toHaveBeenCalledWith("git diff --name-status abc123..HEAD", expect.objectContaining({ cwd: "/my/project" }));
+    expect(mockExecSync).toHaveBeenCalledWith("git diff --name-status", expect.objectContaining({ cwd: "/my/project" }));
+  });
+
+  it("deduplicates files when baseline ref produces overlapping committed and uncommitted changes", async () => {
+    initDashboard({ title: "t", subtitle: "s", project_dir: "/my/project", baseline_ref: "abc123" });
+    mockExecSync
+      .mockReturnValueOnce("M\tsrc/shared.ts\nA\tsrc/committed-only.ts")
+      .mockReturnValueOnce("M\tsrc/shared.ts\nM\tsrc/uncommitted-only.ts");
+
+    const { body } = await fetchJson(`${baseUrl}/api/files`);
+
+    expect(body.files).toHaveLength(3);
+    const paths = body.files.map((f: any) => f.path);
+    expect(paths).toContain("src/shared.ts");
+    expect(paths).toContain("src/committed-only.ts");
+    expect(paths).toContain("src/uncommitted-only.ts");
+  });
+
+  it("filters by task files when task_id is provided and task has files array", async () => {
+    initDashboard({ title: "t", subtitle: "s", project_dir: "/my/project" });
+    addTask({
+      id: 1, title: "Task A", agent: "a", agent_color: "#000", status: "in_progress",
+      message: "", progress: 0, files: ["src/foo.ts"],
+    });
+    mockExecSync.mockReturnValue("M\tsrc/foo.ts\nA\tsrc/bar.ts");
+
+    const { body } = await fetchJson(`${baseUrl}/api/files?task_id=1`);
+
+    expect(body.files).toHaveLength(1);
+    expect(body.files[0].path).toBe("src/foo.ts");
+  });
+
+  it("uses task start_ref..end_ref when both are set", async () => {
+    initDashboard({ title: "t", subtitle: "s", project_dir: "/my/project" });
+    addTask({
+      id: 1, title: "Task A", agent: "a", agent_color: "#000", status: "done",
+      message: "", progress: 1, start_ref: "aaa111", end_ref: "bbb222",
+    });
+    mockExecSync.mockReturnValue("M\tsrc/done.ts");
+
+    const { body } = await fetchJson(`${baseUrl}/api/files?task_id=1`);
+
+    expect(body.files).toHaveLength(1);
+    expect(body.files[0].path).toBe("src/done.ts");
+    expect(mockExecSync).toHaveBeenCalledWith("git diff --name-status aaa111..bbb222", expect.objectContaining({ cwd: "/my/project" }));
+  });
+
+  it("uses task start_ref..HEAD when only start_ref is set", async () => {
+    initDashboard({ title: "t", subtitle: "s", project_dir: "/my/project" });
+    addTask({
+      id: 2, title: "Task B", agent: "a", agent_color: "#000", status: "in_progress",
+      message: "", progress: 0.5, start_ref: "ccc333",
+    });
+    mockExecSync.mockReturnValue("A\tsrc/wip.ts");
+
+    const { body } = await fetchJson(`${baseUrl}/api/files?task_id=2`);
+
+    expect(body.files).toHaveLength(1);
+    expect(body.files[0].path).toBe("src/wip.ts");
+    expect(mockExecSync).toHaveBeenCalledWith("git diff --name-status ccc333..HEAD", expect.objectContaining({ cwd: "/my/project" }));
+  });
+
+  it("falls back to default behavior when task_id matches no task", async () => {
+    initDashboard({ title: "t", subtitle: "s", project_dir: "/my/project" });
+    mockExecSync.mockReturnValue("M\tsrc/foo.ts");
+
+    const { body } = await fetchJson(`${baseUrl}/api/files?task_id=999`);
+
+    expect(body.files).toHaveLength(1);
+    expect(body.files[0].path).toBe("src/foo.ts");
+  });
+
+  it("falls back to default when task has no refs or files", async () => {
+    initDashboard({ title: "t", subtitle: "s", project_dir: "/my/project" });
+    addTask({
+      id: 3, title: "Task C", agent: "a", agent_color: "#000", status: "in_progress",
+      message: "", progress: 0,
+    });
+    mockExecSync.mockReturnValue("M\tsrc/all.ts");
+
+    const { body } = await fetchJson(`${baseUrl}/api/files?task_id=3`);
+
+    expect(body.files).toHaveLength(1);
+    expect(body.files[0].path).toBe("src/all.ts");
+  });
 });
 
 describe("GET /api/diff", () => {
@@ -200,6 +299,52 @@ describe("GET /api/diff", () => {
 
     expect(status).toBe(200);
     expect(body).toEqual({ error: "Command failed: git diff" });
+  });
+
+  it("uses baseline ref to concatenate committed and uncommitted diffs", async () => {
+    initDashboard({ title: "t", subtitle: "s", project_dir: "/my/project", baseline_ref: "abc123" });
+    mockExecSync
+      .mockReturnValueOnce("committed diff\n")
+      .mockReturnValueOnce("uncommitted diff\n");
+
+    const { body } = await fetchJson(`${baseUrl}/api/diff?file=src/foo.ts`);
+
+    expect(body.file).toBe("src/foo.ts");
+    expect(body.diff).toBe("committed diff\nuncommitted diff\n");
+    expect(mockExecSync).toHaveBeenCalledWith(
+      'git diff abc123..HEAD -- "src/foo.ts"',
+      expect.objectContaining({ cwd: "/my/project" })
+    );
+    expect(mockExecSync).toHaveBeenCalledWith(
+      'git diff -- "src/foo.ts"',
+      expect.objectContaining({ cwd: "/my/project" })
+    );
+  });
+
+  it("uses start_ref..end_ref when both query params provided", async () => {
+    initDashboard({ title: "t", subtitle: "s", project_dir: "/my/project" });
+    mockExecSync.mockReturnValue("task scoped diff");
+
+    const { body } = await fetchJson(`${baseUrl}/api/diff?file=src/foo.ts&start_ref=aaa&end_ref=bbb`);
+
+    expect(body.diff).toBe("task scoped diff");
+    expect(mockExecSync).toHaveBeenCalledWith(
+      'git diff aaa..bbb -- "src/foo.ts"',
+      expect.objectContaining({ cwd: "/my/project" })
+    );
+  });
+
+  it("uses start_ref..HEAD when only start_ref query param provided", async () => {
+    initDashboard({ title: "t", subtitle: "s", project_dir: "/my/project" });
+    mockExecSync.mockReturnValue("in progress diff");
+
+    const { body } = await fetchJson(`${baseUrl}/api/diff?file=src/foo.ts&start_ref=ccc`);
+
+    expect(body.diff).toBe("in progress diff");
+    expect(mockExecSync).toHaveBeenCalledWith(
+      'git diff ccc..HEAD -- "src/foo.ts"',
+      expect.objectContaining({ cwd: "/my/project" })
+    );
   });
 });
 

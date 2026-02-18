@@ -2,7 +2,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
-import { getState, getLogs, getProjectDir } from "./state.js";
+import { getState, getLogs, getProjectDir, getBaselineRef } from "./state.js";
 
 let server: http.Server | null = null;
 
@@ -12,7 +12,7 @@ const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
-let filesCache: { data: unknown; time: number } | null = null;
+let filesCache: { data: unknown; time: number; key: string } | null = null;
 const FILES_CACHE_TTL = 2000;
 
 function sendJson(
@@ -27,6 +27,56 @@ function sendJson(
     ...CORS_HEADERS,
   });
   res.end(body);
+}
+
+function parseGitNameStatus(
+  output: string,
+  state: ReturnType<typeof getState>
+): { path: string; status: string; task_ids: number[] }[] {
+  return output
+    .split("\n")
+    .filter((line) => line.length > 0)
+    .map((line) => {
+      const [status, ...pathParts] = line.split("\t");
+      const filePath = pathParts.join("\t");
+      const taskIds = state.tasks
+        .filter(
+          (t) => t.files && t.files.some((f) => filePath.endsWith(f) || f.endsWith(filePath))
+        )
+        .map((t) => t.id);
+      return { path: filePath, status, task_ids: taskIds };
+    });
+}
+
+function getFilesWithBaseline(
+  projectDir: string,
+  baselineRef: string | undefined,
+  state: ReturnType<typeof getState>
+): { path: string; status: string; task_ids: number[] }[] {
+  if (baselineRef) {
+    const committedOutput = execSync(`git diff --name-status ${baselineRef}..HEAD`, {
+      cwd: projectDir, encoding: "utf-8", timeout: 5000,
+    }).trim();
+    const uncommittedOutput = execSync("git diff --name-status", {
+      cwd: projectDir, encoding: "utf-8", timeout: 5000,
+    }).trim();
+
+    const fileMap = new Map<string, { path: string; status: string; task_ids: number[] }>();
+    for (const entry of parseGitNameStatus(committedOutput, state)) {
+      fileMap.set(entry.path, entry);
+    }
+    for (const entry of parseGitNameStatus(uncommittedOutput, state)) {
+      if (!fileMap.has(entry.path)) {
+        fileMap.set(entry.path, entry);
+      }
+    }
+    return Array.from(fileMap.values());
+  }
+
+  const output = execSync("git diff --name-status", {
+    cwd: projectDir, encoding: "utf-8", timeout: 5000,
+  }).trim();
+  return parseGitNameStatus(output, state);
 }
 
 function handleRequest(
@@ -83,43 +133,70 @@ function handleRequest(
     return;
   }
 
-  if (method === "GET" && url === "/api/files") {
+  if (method === "GET" && url.startsWith("/api/files")) {
     const projectDir = getProjectDir();
     if (!projectDir) {
       sendJson(res, 200, { error: "No project directory configured" });
       return;
     }
 
+    const params = new URL(url, "http://localhost").searchParams;
+    const taskId = params.get("task_id");
+
     const now = Date.now();
-    if (filesCache && now - filesCache.time < FILES_CACHE_TTL) {
+    const cacheKey = taskId ? `task_${taskId}` : "__all__";
+    if (filesCache && filesCache.key === cacheKey && now - filesCache.time < FILES_CACHE_TTL) {
       sendJson(res, 200, filesCache.data);
       return;
     }
 
     try {
-      const output = execSync("git diff --name-status", {
-        cwd: projectDir,
-        encoding: "utf-8",
-        timeout: 5000,
-      }).trim();
-
       const state = getState();
-      const files = output
-        .split("\n")
-        .filter((line) => line.length > 0)
-        .map((line) => {
-          const [status, ...pathParts] = line.split("\t");
-          const filePath = pathParts.join("\t");
-          const taskIds = state.tasks
-            .filter(
-              (t) => t.files && t.files.some((f) => filePath.endsWith(f) || f.endsWith(filePath))
-            )
-            .map((t) => t.id);
-          return { path: filePath, status, task_ids: taskIds };
-        });
+      const baselineRef = getBaselineRef();
 
+      // If task_id is provided, check for task-scoped refs
+      if (taskId) {
+        const task = state.tasks.find((t) => String(t.id) === taskId);
+        if (task) {
+          // Task has start_ref and end_ref: use that range
+          if (task.start_ref && task.end_ref) {
+            const output = execSync(`git diff --name-status ${task.start_ref}..${task.end_ref}`, {
+              cwd: projectDir, encoding: "utf-8", timeout: 5000,
+            }).trim();
+            const files = parseGitNameStatus(output, state);
+            const data = { files };
+            filesCache = { data, time: now, key: cacheKey };
+            sendJson(res, 200, data);
+            return;
+          }
+          // Task has start_ref only (in progress): diff from start to HEAD
+          if (task.start_ref) {
+            const output = execSync(`git diff --name-status ${task.start_ref}..HEAD`, {
+              cwd: projectDir, encoding: "utf-8", timeout: 5000,
+            }).trim();
+            const files = parseGitNameStatus(output, state);
+            const data = { files };
+            filesCache = { data, time: now, key: cacheKey };
+            sendJson(res, 200, data);
+            return;
+          }
+          // Task has files array: use baseline or unstaged diff, filter by files
+          if (task.files && task.files.length > 0) {
+            const allFiles = getFilesWithBaseline(projectDir, baselineRef, state);
+            const files = allFiles.filter((f) =>
+              task.files!.some((tf) => f.path.endsWith(tf) || tf.endsWith(f.path))
+            );
+            const data = { files };
+            filesCache = { data, time: now, key: cacheKey };
+            sendJson(res, 200, data);
+            return;
+          }
+        }
+      }
+
+      const files = getFilesWithBaseline(projectDir, baselineRef, state);
       const data = { files };
-      filesCache = { data, time: now };
+      filesCache = { data, time: now, key: cacheKey };
       sendJson(res, 200, data);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "git diff failed";
@@ -142,12 +219,32 @@ function handleRequest(
       return;
     }
 
+    const startRef = params.get("start_ref");
+    const endRef = params.get("end_ref");
+
     try {
-      const diff = execSync(`git diff -- ${JSON.stringify(file)}`, {
-        cwd: projectDir,
-        encoding: "utf-8",
-        timeout: 10000,
-      });
+      let diff: string;
+      if (startRef) {
+        const ref = endRef ? `${startRef}..${endRef}` : `${startRef}..HEAD`;
+        diff = execSync(`git diff ${ref} -- ${JSON.stringify(file)}`, {
+          cwd: projectDir, encoding: "utf-8", timeout: 10000,
+        });
+      } else {
+        const baselineRef = getBaselineRef();
+        if (baselineRef) {
+          const committedDiff = execSync(`git diff ${baselineRef}..HEAD -- ${JSON.stringify(file)}`, {
+            cwd: projectDir, encoding: "utf-8", timeout: 10000,
+          });
+          const uncommittedDiff = execSync(`git diff -- ${JSON.stringify(file)}`, {
+            cwd: projectDir, encoding: "utf-8", timeout: 10000,
+          });
+          diff = committedDiff + uncommittedDiff;
+        } else {
+          diff = execSync(`git diff -- ${JSON.stringify(file)}`, {
+            cwd: projectDir, encoding: "utf-8", timeout: 10000,
+          });
+        }
+      }
       sendJson(res, 200, { file, diff });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "git diff failed";

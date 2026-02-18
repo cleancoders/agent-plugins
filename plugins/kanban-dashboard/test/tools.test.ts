@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { registerTools } from "../src/tools.js";
-import { getState, getProjectDir, getLogs, reset } from "../src/state.js";
+import { getState, getProjectDir, getBaselineRef, getLogs, reset } from "../src/state.js";
 
 vi.mock("../src/http-server.js", () => ({
   startServer: vi.fn().mockResolvedValue({ url: "http://localhost:1234", port: 1234 }),
@@ -10,6 +10,7 @@ vi.mock("../src/http-server.js", () => ({
 
 vi.mock("child_process", () => ({
   exec: vi.fn(),
+  execSync: vi.fn(),
 }));
 
 vi.mock("os", () => ({
@@ -17,7 +18,7 @@ vi.mock("os", () => ({
 }));
 
 import { startServer, stopServer, isRunning } from "../src/http-server.js";
-import { exec } from "child_process";
+import { exec, execSync } from "child_process";
 import { platform } from "os";
 
 type ToolHandler = (args: Record<string, unknown>) => Promise<unknown>;
@@ -556,7 +557,8 @@ describe("kanban_update_task", () => {
     const handler = tools.get("kanban_update_task")!.handler;
     await handler({ id: 1, progress: 75 });
 
-    expect(getState().tasks[0].progress).toBe(75);
+    // state normalizes progress to 0-1 range (75 / 100 = 0.75)
+    expect(getState().tasks[0].progress).toBe(0.75);
   });
 
   it("updates subtasks_done", async () => {
@@ -829,5 +831,362 @@ describe("openBrowser", () => {
     });
 
     expect(exec).toHaveBeenCalledWith("xdg-open http://localhost:1234", expect.any(Function));
+  });
+});
+
+describe("kanban_init - baseline commit capture", () => {
+  let tools: Map<string, RegisteredTool>;
+
+  beforeEach(() => {
+    reset();
+    vi.mocked(startServer).mockClear();
+    vi.mocked(startServer).mockResolvedValue({ url: "http://localhost:1234", port: 1234 });
+    vi.mocked(stopServer).mockClear();
+    vi.mocked(isRunning).mockClear();
+    vi.mocked(isRunning).mockReturnValue(false);
+    vi.mocked(exec).mockClear();
+    vi.mocked(execSync).mockClear();
+    vi.mocked(platform).mockReturnValue("darwin");
+    const mock = createMockServer();
+    tools = mock.tools;
+    registerTools(mock.server);
+  });
+
+  it("captures baseline_ref from git when project_dir is provided", async () => {
+    vi.mocked(execSync).mockReturnValue("abc123def456\n");
+    const handler = tools.get("kanban_init")!.handler;
+    await handler({
+      title: "Test",
+      subtitle: "",
+      tasks: [],
+      port: 0,
+      open_browser: false,
+      project_dir: "/my/repo",
+    });
+
+    expect(execSync).toHaveBeenCalledWith("git rev-parse HEAD", {
+      cwd: "/my/repo",
+      encoding: "utf-8",
+      timeout: 5000,
+    });
+    expect(getBaselineRef()).toBe("abc123def456");
+  });
+
+  it("does not call git when project_dir is not provided", async () => {
+    const handler = tools.get("kanban_init")!.handler;
+    await handler({
+      title: "Test",
+      subtitle: "",
+      tasks: [],
+      port: 0,
+      open_browser: false,
+    });
+
+    expect(execSync).not.toHaveBeenCalled();
+    expect(getBaselineRef()).toBeUndefined();
+  });
+
+  it("skips baseline_ref when git fails", async () => {
+    vi.mocked(execSync).mockImplementation(() => {
+      throw new Error("not a git repo");
+    });
+    const handler = tools.get("kanban_init")!.handler;
+    await handler({
+      title: "Test",
+      subtitle: "",
+      tasks: [],
+      port: 0,
+      open_browser: false,
+      project_dir: "/not/a/repo",
+    });
+
+    expect(getBaselineRef()).toBeUndefined();
+  });
+});
+
+describe("kanban_update_task - git checkpoints", () => {
+  let tools: Map<string, RegisteredTool>;
+
+  beforeEach(() => {
+    reset();
+    vi.mocked(startServer).mockClear();
+    vi.mocked(startServer).mockResolvedValue({ url: "http://localhost:1234", port: 1234 });
+    vi.mocked(stopServer).mockClear();
+    vi.mocked(isRunning).mockClear();
+    vi.mocked(isRunning).mockReturnValue(false);
+    vi.mocked(exec).mockClear();
+    vi.mocked(execSync).mockClear();
+    vi.mocked(platform).mockReturnValue("darwin");
+    const mock = createMockServer();
+    tools = mock.tools;
+    registerTools(mock.server);
+  });
+
+  async function initWithTask() {
+    vi.mocked(execSync).mockReturnValue("baseline000\n");
+    await tools.get("kanban_init")!.handler({
+      title: "Test",
+      subtitle: "",
+      tasks: [
+        { id: 1, title: "Task One", agent: "alice", status: "ready" },
+      ],
+      port: 0,
+      open_browser: false,
+      project_dir: "/my/repo",
+    });
+    vi.mocked(execSync).mockClear();
+  }
+
+  it("sets start_ref when status changes to in_progress", async () => {
+    await initWithTask();
+    vi.mocked(execSync).mockReturnValue("start111\n");
+    const handler = tools.get("kanban_update_task")!.handler;
+    await handler({ id: 1, status: "in_progress" });
+
+    expect(execSync).toHaveBeenCalledWith("git rev-parse HEAD", {
+      cwd: "/my/repo",
+      encoding: "utf-8",
+      timeout: 5000,
+    });
+    expect(getState().tasks[0].start_ref).toBe("start111");
+  });
+
+  it("sets end_ref when status changes to done", async () => {
+    await initWithTask();
+    vi.mocked(execSync).mockReturnValue("end222\n");
+    const handler = tools.get("kanban_update_task")!.handler;
+    await handler({ id: 1, status: "done" });
+
+    expect(execSync).toHaveBeenCalledWith("git rev-parse HEAD", {
+      cwd: "/my/repo",
+      encoding: "utf-8",
+      timeout: 5000,
+    });
+    expect(getState().tasks[0].end_ref).toBe("end222");
+  });
+
+  it("does not set refs for other status values", async () => {
+    await initWithTask();
+    const handler = tools.get("kanban_update_task")!.handler;
+    await handler({ id: 1, status: "blocked" });
+
+    expect(execSync).not.toHaveBeenCalled();
+    expect(getState().tasks[0].start_ref).toBeUndefined();
+    expect(getState().tasks[0].end_ref).toBeUndefined();
+  });
+
+  it("does not set refs when no project_dir", async () => {
+    reset();
+    vi.mocked(execSync).mockClear();
+    await tools.get("kanban_init")!.handler({
+      title: "Test",
+      subtitle: "",
+      tasks: [
+        { id: 1, title: "Task One", agent: "alice", status: "ready" },
+      ],
+      port: 0,
+      open_browser: false,
+    });
+    vi.mocked(execSync).mockClear();
+
+    const handler = tools.get("kanban_update_task")!.handler;
+    await handler({ id: 1, status: "in_progress" });
+
+    expect(execSync).not.toHaveBeenCalled();
+    expect(getState().tasks[0].start_ref).toBeUndefined();
+  });
+
+  it("skips refs when git fails", async () => {
+    await initWithTask();
+    vi.mocked(execSync).mockImplementation(() => {
+      throw new Error("git error");
+    });
+    const handler = tools.get("kanban_update_task")!.handler;
+    await handler({ id: 1, status: "in_progress" });
+
+    expect(getState().tasks[0].start_ref).toBeUndefined();
+  });
+
+  it("does not call git when status is not provided", async () => {
+    await initWithTask();
+    const handler = tools.get("kanban_update_task")!.handler;
+    await handler({ id: 1, message: "just a message update" });
+
+    expect(execSync).not.toHaveBeenCalled();
+  });
+});
+
+describe("kanban_update_task - auto log entries", () => {
+  let tools: Map<string, RegisteredTool>;
+
+  beforeEach(() => {
+    reset();
+    vi.mocked(startServer).mockClear();
+    vi.mocked(startServer).mockResolvedValue({ url: "http://localhost:1234", port: 1234 });
+    vi.mocked(stopServer).mockClear();
+    vi.mocked(isRunning).mockClear();
+    vi.mocked(isRunning).mockReturnValue(false);
+    vi.mocked(exec).mockClear();
+    vi.mocked(execSync).mockClear();
+    vi.mocked(platform).mockReturnValue("darwin");
+    const mock = createMockServer();
+    tools = mock.tools;
+    registerTools(mock.server);
+  });
+
+  async function initWithTask(taskOverrides: Record<string, unknown> = {}) {
+    await tools.get("kanban_init")!.handler({
+      title: "Test",
+      subtitle: "",
+      tasks: [
+        {
+          id: 1,
+          title: "Task One",
+          agent: "alice",
+          status: "ready",
+          message: "initial",
+          subtasks: ["step1", "step2", "step3"],
+          subtasks_done: [],
+          ...taskOverrides,
+        },
+      ],
+      port: 0,
+      open_browser: false,
+    });
+  }
+
+  it("logs 'Started working on' when status changes to in_progress", async () => {
+    await initWithTask();
+    const handler = tools.get("kanban_update_task")!.handler;
+    await handler({ id: 1, status: "in_progress" });
+
+    const logs = getLogs();
+    expect(logs.entries).toHaveLength(1);
+    expect(logs.entries[0].message).toBe("Started working on: Task One");
+    expect(logs.entries[0].agent).toBe("alice");
+  });
+
+  it("logs 'Completed' when status changes to done", async () => {
+    await initWithTask();
+    const handler = tools.get("kanban_update_task")!.handler;
+    await handler({ id: 1, status: "done" });
+
+    const logs = getLogs();
+    expect(logs.entries).toHaveLength(1);
+    expect(logs.entries[0].message).toBe("Completed: Task One");
+  });
+
+  it("logs 'Blocked' when status changes to blocked", async () => {
+    await initWithTask();
+    const handler = tools.get("kanban_update_task")!.handler;
+    await handler({ id: 1, status: "blocked" });
+
+    const logs = getLogs();
+    expect(logs.entries).toHaveLength(1);
+    expect(logs.entries[0].message).toBe("Blocked: Task One");
+  });
+
+  it("logs 'Ready' when status changes to ready", async () => {
+    await initWithTask({ status: "blocked" });
+    const handler = tools.get("kanban_update_task")!.handler;
+    await handler({ id: 1, status: "ready" });
+
+    const logs = getLogs();
+    expect(logs.entries).toHaveLength(1);
+    expect(logs.entries[0].message).toBe("Ready: Task One");
+  });
+
+  it("does not log status when status has not changed", async () => {
+    await initWithTask();
+    const handler = tools.get("kanban_update_task")!.handler;
+    await handler({ id: 1, status: "ready" });
+
+    const logs = getLogs();
+    expect(logs.entries).toHaveLength(0);
+  });
+
+  it("uses task agent and color for log entries", async () => {
+    await initWithTask();
+    const handler = tools.get("kanban_update_task")!.handler;
+    await handler({ id: 1, status: "in_progress" });
+
+    const logs = getLogs();
+    expect(logs.entries[0].agent).toBe("alice");
+    expect(logs.entries[0].color).toBe("#ff6b6b");
+  });
+
+  it("logs newly completed subtasks", async () => {
+    await initWithTask({ subtasks_done: ["step1"] });
+    const handler = tools.get("kanban_update_task")!.handler;
+    await handler({ id: 1, subtasks_done: ["step1", "step2", "step3"] });
+
+    const logs = getLogs();
+    const subtaskLogs = logs.entries.filter(e => e.message.startsWith("Completed subtask:"));
+    expect(subtaskLogs).toHaveLength(2);
+    expect(subtaskLogs[0].message).toBe("Completed subtask: step2");
+    expect(subtaskLogs[1].message).toBe("Completed subtask: step3");
+  });
+
+  it("does not log already-completed subtasks", async () => {
+    await initWithTask({ subtasks_done: ["step1", "step2"] });
+    const handler = tools.get("kanban_update_task")!.handler;
+    await handler({ id: 1, subtasks_done: ["step1", "step2", "step3"] });
+
+    const logs = getLogs();
+    const subtaskLogs = logs.entries.filter(e => e.message.startsWith("Completed subtask:"));
+    expect(subtaskLogs).toHaveLength(1);
+    expect(subtaskLogs[0].message).toBe("Completed subtask: step3");
+  });
+
+  it("logs message change when status did not change", async () => {
+    await initWithTask();
+    const handler = tools.get("kanban_update_task")!.handler;
+    await handler({ id: 1, message: "new status update" });
+
+    const logs = getLogs();
+    expect(logs.entries).toHaveLength(1);
+    expect(logs.entries[0].message).toBe("new status update");
+  });
+
+  it("does not log message when status also changed", async () => {
+    await initWithTask();
+    const handler = tools.get("kanban_update_task")!.handler;
+    await handler({ id: 1, status: "in_progress", message: "started" });
+
+    const logs = getLogs();
+    // Should only have the status change log, not the message log
+    expect(logs.entries).toHaveLength(1);
+    expect(logs.entries[0].message).toBe("Started working on: Task One");
+  });
+
+  it("does not log message when it has not changed", async () => {
+    await initWithTask();
+    const handler = tools.get("kanban_update_task")!.handler;
+    await handler({ id: 1, message: "initial" });
+
+    const logs = getLogs();
+    expect(logs.entries).toHaveLength(0);
+  });
+
+  it("logs both status change and new subtasks in same update", async () => {
+    await initWithTask({ subtasks_done: [] });
+    const handler = tools.get("kanban_update_task")!.handler;
+    await handler({ id: 1, status: "in_progress", subtasks_done: ["step1"] });
+
+    const logs = getLogs();
+    expect(logs.entries).toHaveLength(2);
+    expect(logs.entries[0].message).toBe("Started working on: Task One");
+    expect(logs.entries[1].message).toBe("Completed subtask: step1");
+  });
+
+  it("sets time on auto-generated log entries", async () => {
+    await initWithTask();
+    const handler = tools.get("kanban_update_task")!.handler;
+    await handler({ id: 1, status: "in_progress" });
+
+    const logs = getLogs();
+    expect(logs.entries[0].time).toBeDefined();
+    expect(typeof logs.entries[0].time).toBe("string");
+    expect(logs.entries[0].time.length).toBeGreaterThan(0);
   });
 });

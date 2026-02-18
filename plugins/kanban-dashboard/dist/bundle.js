@@ -34947,6 +34947,7 @@ var require_state = __commonJS({
     exports2.getState = getState;
     exports2.getLogs = getLogs;
     exports2.getProjectDir = getProjectDir;
+    exports2.getBaselineRef = getBaselineRef;
     exports2.reset = reset;
     var defaultConfig = { title: "Dashboard", subtitle: "" };
     var tasks = [];
@@ -34963,6 +34964,13 @@ var require_state = __commonJS({
       if (index === -1)
         return;
       tasks[index] = { ...tasks[index], ...updates };
+      if (updates.progress !== void 0 && updates.progress > 1) {
+        tasks[index].progress = updates.progress / 100;
+      }
+      const subtasks = tasks[index].subtasks;
+      if (subtasks && subtasks.length > 0) {
+        tasks[index].progress = (tasks[index].subtasks_done?.length || 0) / subtasks.length;
+      }
       if (updates.status === "done") {
         unblockDependents();
       }
@@ -34992,6 +35000,9 @@ var require_state = __commonJS({
     }
     function getProjectDir() {
       return config.project_dir;
+    }
+    function getBaselineRef() {
+      return config.baseline_ref;
     }
     function reset() {
       tasks = [];
@@ -35034,6 +35045,44 @@ var require_http_server = __commonJS({
         ...CORS_HEADERS
       });
       res.end(body);
+    }
+    function parseGitNameStatus(output, state) {
+      return output.split("\n").filter((line) => line.length > 0).map((line) => {
+        const [status, ...pathParts] = line.split("	");
+        const filePath = pathParts.join("	");
+        const taskIds = state.tasks.filter((t) => t.files && t.files.some((f) => filePath.endsWith(f) || f.endsWith(filePath))).map((t) => t.id);
+        return { path: filePath, status, task_ids: taskIds };
+      });
+    }
+    function getFilesWithBaseline(projectDir, baselineRef, state) {
+      if (baselineRef) {
+        const committedOutput = (0, node_child_process_1.execSync)(`git diff --name-status ${baselineRef}..HEAD`, {
+          cwd: projectDir,
+          encoding: "utf-8",
+          timeout: 5e3
+        }).trim();
+        const uncommittedOutput = (0, node_child_process_1.execSync)("git diff --name-status", {
+          cwd: projectDir,
+          encoding: "utf-8",
+          timeout: 5e3
+        }).trim();
+        const fileMap = /* @__PURE__ */ new Map();
+        for (const entry of parseGitNameStatus(committedOutput, state)) {
+          fileMap.set(entry.path, entry);
+        }
+        for (const entry of parseGitNameStatus(uncommittedOutput, state)) {
+          if (!fileMap.has(entry.path)) {
+            fileMap.set(entry.path, entry);
+          }
+        }
+        return Array.from(fileMap.values());
+      }
+      const output = (0, node_child_process_1.execSync)("git diff --name-status", {
+        cwd: projectDir,
+        encoding: "utf-8",
+        timeout: 5e3
+      }).trim();
+      return parseGitNameStatus(output, state);
     }
     function handleRequest(req, res) {
       const method = req.method ?? "GET";
@@ -35081,32 +35130,63 @@ var require_http_server = __commonJS({
         });
         return;
       }
-      if (method === "GET" && url === "/api/files") {
+      if (method === "GET" && url.startsWith("/api/files")) {
         const projectDir = (0, state_js_12.getProjectDir)();
         if (!projectDir) {
           sendJson(res, 200, { error: "No project directory configured" });
           return;
         }
+        const params = new URL(url, "http://localhost").searchParams;
+        const taskId = params.get("task_id");
         const now = Date.now();
-        if (filesCache && now - filesCache.time < FILES_CACHE_TTL) {
+        const cacheKey = taskId ? `task_${taskId}` : "__all__";
+        if (filesCache && filesCache.key === cacheKey && now - filesCache.time < FILES_CACHE_TTL) {
           sendJson(res, 200, filesCache.data);
           return;
         }
         try {
-          const output = (0, node_child_process_1.execSync)("git diff --name-status", {
-            cwd: projectDir,
-            encoding: "utf-8",
-            timeout: 5e3
-          }).trim();
           const state = (0, state_js_12.getState)();
-          const files = output.split("\n").filter((line) => line.length > 0).map((line) => {
-            const [status, ...pathParts] = line.split("	");
-            const filePath = pathParts.join("	");
-            const taskIds = state.tasks.filter((t) => t.files && t.files.some((f) => filePath.endsWith(f) || f.endsWith(filePath))).map((t) => t.id);
-            return { path: filePath, status, task_ids: taskIds };
-          });
+          const baselineRef = (0, state_js_12.getBaselineRef)();
+          if (taskId) {
+            const task = state.tasks.find((t) => String(t.id) === taskId);
+            if (task) {
+              if (task.start_ref && task.end_ref) {
+                const output = (0, node_child_process_1.execSync)(`git diff --name-status ${task.start_ref}..${task.end_ref}`, {
+                  cwd: projectDir,
+                  encoding: "utf-8",
+                  timeout: 5e3
+                }).trim();
+                const files2 = parseGitNameStatus(output, state);
+                const data2 = { files: files2 };
+                filesCache = { data: data2, time: now, key: cacheKey };
+                sendJson(res, 200, data2);
+                return;
+              }
+              if (task.start_ref) {
+                const output = (0, node_child_process_1.execSync)(`git diff --name-status ${task.start_ref}..HEAD`, {
+                  cwd: projectDir,
+                  encoding: "utf-8",
+                  timeout: 5e3
+                }).trim();
+                const files2 = parseGitNameStatus(output, state);
+                const data2 = { files: files2 };
+                filesCache = { data: data2, time: now, key: cacheKey };
+                sendJson(res, 200, data2);
+                return;
+              }
+              if (task.files && task.files.length > 0) {
+                const allFiles = getFilesWithBaseline(projectDir, baselineRef, state);
+                const files2 = allFiles.filter((f) => task.files.some((tf) => f.path.endsWith(tf) || tf.endsWith(f.path)));
+                const data2 = { files: files2 };
+                filesCache = { data: data2, time: now, key: cacheKey };
+                sendJson(res, 200, data2);
+                return;
+              }
+            }
+          }
+          const files = getFilesWithBaseline(projectDir, baselineRef, state);
           const data = { files };
-          filesCache = { data, time: now };
+          filesCache = { data, time: now, key: cacheKey };
           sendJson(res, 200, data);
         } catch (err) {
           const message = err instanceof Error ? err.message : "git diff failed";
@@ -35126,12 +35206,39 @@ var require_http_server = __commonJS({
           sendJson(res, 400, { error: "Invalid file path" });
           return;
         }
+        const startRef = params.get("start_ref");
+        const endRef = params.get("end_ref");
         try {
-          const diff = (0, node_child_process_1.execSync)(`git diff -- ${JSON.stringify(file)}`, {
-            cwd: projectDir,
-            encoding: "utf-8",
-            timeout: 1e4
-          });
+          let diff;
+          if (startRef) {
+            const ref = endRef ? `${startRef}..${endRef}` : `${startRef}..HEAD`;
+            diff = (0, node_child_process_1.execSync)(`git diff ${ref} -- ${JSON.stringify(file)}`, {
+              cwd: projectDir,
+              encoding: "utf-8",
+              timeout: 1e4
+            });
+          } else {
+            const baselineRef = (0, state_js_12.getBaselineRef)();
+            if (baselineRef) {
+              const committedDiff = (0, node_child_process_1.execSync)(`git diff ${baselineRef}..HEAD -- ${JSON.stringify(file)}`, {
+                cwd: projectDir,
+                encoding: "utf-8",
+                timeout: 1e4
+              });
+              const uncommittedDiff = (0, node_child_process_1.execSync)(`git diff -- ${JSON.stringify(file)}`, {
+                cwd: projectDir,
+                encoding: "utf-8",
+                timeout: 1e4
+              });
+              diff = committedDiff + uncommittedDiff;
+            } else {
+              diff = (0, node_child_process_1.execSync)(`git diff -- ${JSON.stringify(file)}`, {
+                cwd: projectDir,
+                encoding: "utf-8",
+                timeout: 1e4
+              });
+            }
+          }
           sendJson(res, 200, { file, diff });
         } catch (err) {
           const message = err instanceof Error ? err.message : "git diff failed";
@@ -35275,7 +35382,14 @@ var require_tools = __commonJS({
         (0, state_js_12.reset)();
         agentColors.clear();
         colorIndex = 0;
-        (0, state_js_12.initDashboard)({ title, subtitle: subtitle || "", project_dir });
+        let baseline_ref;
+        if (project_dir) {
+          try {
+            baseline_ref = (0, child_process_1.execSync)("git rev-parse HEAD", { cwd: project_dir, encoding: "utf-8", timeout: 5e3 }).trim();
+          } catch {
+          }
+        }
+        (0, state_js_12.initDashboard)({ title, subtitle: subtitle || "", project_dir, baseline_ref });
         for (const t of tasks) {
           const color = getAgentColor(t.agent, t.agent_color);
           const task = {
@@ -35377,7 +35491,52 @@ var require_tools = __commonJS({
           updates.low = low;
         if (files !== void 0)
           updates.files = files;
+        if (status === "in_progress" || status === "done") {
+          const projectDir = (0, state_js_12.getProjectDir)();
+          if (projectDir) {
+            try {
+              const ref = (0, child_process_1.execSync)("git rev-parse HEAD", { cwd: projectDir, encoding: "utf-8", timeout: 5e3 }).trim();
+              if (status === "in_progress") {
+                updates.start_ref = ref;
+              } else {
+                updates.end_ref = ref;
+              }
+            } catch {
+            }
+          }
+        }
+        const existingState = (0, state_js_12.getState)();
+        const existingTask = existingState.tasks.find((t) => t.id === id);
         (0, state_js_12.updateTask)(id, updates);
+        const updatedState = (0, state_js_12.getState)();
+        const updatedTask = updatedState.tasks.find((t) => t.id === id);
+        if (updatedTask) {
+          const logAgent = updatedTask.agent;
+          const logColor = updatedTask.agent_color;
+          if (status !== void 0 && (!existingTask || existingTask.status !== status)) {
+            const statusMessages = {
+              "in_progress": `Started working on: ${updatedTask.title}`,
+              "done": `Completed: ${updatedTask.title}`,
+              "blocked": `Blocked: ${updatedTask.title}`,
+              "ready": `Ready: ${updatedTask.title}`
+            };
+            const msg = statusMessages[status];
+            if (msg) {
+              (0, state_js_12.addLog)({ time: (/* @__PURE__ */ new Date()).toLocaleTimeString(), agent: logAgent, color: logColor, message: msg });
+            }
+          }
+          if (subtasks_done !== void 0 && existingTask) {
+            const oldDone = new Set(existingTask.subtasks_done || []);
+            for (const st of subtasks_done) {
+              if (!oldDone.has(st)) {
+                (0, state_js_12.addLog)({ time: (/* @__PURE__ */ new Date()).toLocaleTimeString(), agent: logAgent, color: logColor, message: `Completed subtask: ${st}` });
+              }
+            }
+          }
+          if (message !== void 0 && status === void 0 && existingTask && existingTask.message !== message) {
+            (0, state_js_12.addLog)({ time: (/* @__PURE__ */ new Date()).toLocaleTimeString(), agent: logAgent, color: logColor, message });
+          }
+        }
         return { content: [{ type: "text", text: JSON.stringify({ success: true, task_id: id }) }] };
       });
       server2.tool("kanban_log", "Add a log entry to the KanBan dashboard activity log.", {
