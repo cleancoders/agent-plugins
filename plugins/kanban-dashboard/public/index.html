@@ -546,6 +546,225 @@
     color: var(--text-muted);
     font-size: 12px;
   }
+
+  /* Task Detail Modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 500;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-overlay.open {
+    display: flex;
+  }
+
+  .modal-content {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: 100%;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+    animation: card-enter 0.2s ease;
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--bg-secondary);
+    z-index: 1;
+  }
+
+  .modal-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .modal-id {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  .modal-status {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+  }
+
+  .modal-status.in_progress { background: rgba(77,171,247,0.15); color: var(--blue); }
+  .modal-status.done { background: rgba(105,219,124,0.15); color: var(--green); }
+  .modal-status.blocked { background: rgba(72,79,88,0.3); color: var(--text-dim); }
+  .modal-status.ready { background: rgba(255,212,59,0.15); color: var(--yellow); }
+
+  .modal-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  .modal-close:hover {
+    background: rgba(255,255,255,0.08);
+    color: var(--text);
+  }
+
+  .modal-title {
+    font-size: 16px;
+    font-weight: 600;
+    padding: 16px 20px 0;
+    line-height: 1.4;
+  }
+
+  .modal-body {
+    padding: 12px 20px 20px;
+  }
+
+  .modal-section {
+    margin-bottom: 16px;
+  }
+
+  .modal-section-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .modal-agent {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .modal-agent-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .modal-progress-bar {
+    height: 6px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 6px;
+  }
+
+  .modal-progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+  }
+
+  .modal-progress-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .modal-badges {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .modal-badges .badge {
+    font-size: 11px;
+    padding: 2px 8px;
+  }
+
+  .modal-files {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .modal-files .file-tag {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+
+  .modal-message {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    padding: 8px 10px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 4px;
+    word-break: break-word;
+  }
+
+  .modal-blocked-by {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .modal-subtask-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .modal-subtask {
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .modal-subtask.done { text-decoration: line-through; opacity: 0.6; }
+  .modal-subtask-icon { font-size: 11px; flex-shrink: 0; }
+  .modal-subtask.done .modal-subtask-icon { color: var(--green); }
+  .modal-subtask:not(.done) .modal-subtask-icon { color: var(--text-dim); }
+
+  .modal-log-entry {
+    font-size: 11px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: var(--text-muted);
+    padding: 3px 0;
+    display: flex;
+    gap: 12px;
+  }
+
+  .modal-log-entry .log-time { color: var(--text-dim); min-width: 80px; flex-shrink: 0; }
+  .modal-log-entry .log-msg { word-break: break-word; }
+
+  .modal-empty {
+    font-size: 12px;
+    color: var(--text-dim);
+    font-style: italic;
+  }
 </style>
 </head>
 <body>
@@ -637,9 +856,25 @@
   <div id="log-entries"></div>
 </div>
 
+<div class="modal-overlay" id="task-modal" onclick="if(event.target===this)closeModal()">
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-header-left">
+        <span class="modal-id" id="modal-id"></span>
+        <span class="modal-status" id="modal-status"></span>
+      </div>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-title" id="modal-title"></div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
 <script>
 const startTime = Date.now();
 let prevTaskMap = {};
+let allTasks = [];
+let allLogEntries = [];
 
 function elapsed() {
   const s = Math.floor((Date.now() - startTime) / 1000);
@@ -674,7 +909,8 @@ function renderCard(task) {
   const progress = task.progress || 0;
   const isNew = !prevTaskMap[task.id] || prevTaskMap[task.id].status !== task.status;
   return `<div class="card ${task.status} ${isNew ? 'card-new' : ''}" id="card-${task.id}"
-               style="--agent-color: ${task.agent_color}">
+               style="--agent-color: ${task.agent_color}; cursor:pointer"
+               onclick="openModal('${task.id}')">
     <div class="card-top">
       <span class="card-id">#${task.id}</span>
       <div class="severity-badges">${renderBadges(task)}</div>
@@ -712,6 +948,7 @@ function renderAgentBar(tasks) {
 }
 
 function renderBoard(tasks) {
+  allTasks = tasks;
   const columns = { blocked: [], ready: [], in_progress: [], done: [] };
   tasks.forEach(t => {
     const col = columns[t.status] || columns.ready;
@@ -771,6 +1008,7 @@ async function fetchLog() {
     const res = await fetch('/api/log');
     const data = await res.json();
     const el = document.getElementById('log-entries');
+    if (data.entries) allLogEntries = data.entries;
     if (data.entries && data.entries.length > 0) {
       el.innerHTML = data.entries.slice(-20).reverse().map(e =>
         `<div class="log-entry">
@@ -809,6 +1047,116 @@ async function poll() {
   }
   document.getElementById('elapsed').textContent = elapsed();
 }
+
+function openModal(taskId) {
+  const task = allTasks.find(t => String(t.id) === String(taskId));
+  if (!task) return;
+
+  document.getElementById('modal-id').textContent = '#' + task.id;
+  const statusEl = document.getElementById('modal-status');
+  statusEl.textContent = task.status.replace('_', ' ');
+  statusEl.className = 'modal-status ' + task.status;
+  document.getElementById('modal-title').textContent = task.title;
+
+  let html = '';
+
+  // Agent
+  html += `<div class="modal-section">
+    <div class="modal-section-title">Agent</div>
+    <div class="modal-agent">
+      <span class="modal-agent-dot" style="background:${task.agent_color}"></span>
+      ${task.agent}
+    </div>
+  </div>`;
+
+  // Progress
+  const progress = task.progress || 0;
+  html += `<div class="modal-section">
+    <div class="modal-section-title">Progress</div>
+    <div class="modal-progress-bar">
+      <div class="modal-progress-fill" style="width:${Math.round(progress * 100)}%;background:${task.agent_color}"></div>
+    </div>
+    <div class="modal-progress-label">${Math.round(progress * 100)}% complete</div>
+  </div>`;
+
+  // Severity
+  if ((task.high || 0) + (task.medium || 0) + (task.low || 0) > 0) {
+    html += `<div class="modal-section">
+      <div class="modal-section-title">Findings</div>
+      <div class="modal-badges">${renderBadges(task)}</div>
+    </div>`;
+  }
+
+  // Current message
+  if (task.message) {
+    html += `<div class="modal-section">
+      <div class="modal-section-title">Current Message</div>
+      <div class="modal-message">${task.message}</div>
+    </div>`;
+  }
+
+  // Files
+  if (task.files && task.files.length > 0) {
+    html += `<div class="modal-section">
+      <div class="modal-section-title">Files</div>
+      <div class="modal-files">
+        ${task.files.map(f => `<span class="file-tag">${f}</span>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  // Subtasks
+  if (task.subtasks && task.subtasks.length > 0) {
+    const doneSubs = task.subtasks_done || [];
+    html += `<div class="modal-section">
+      <div class="modal-section-title">Subtasks</div>
+      <div class="modal-subtask-list">
+        ${task.subtasks.map(st => {
+          const isDone = doneSubs.includes(st);
+          return `<div class="modal-subtask ${isDone ? 'done' : ''}">
+            <span class="modal-subtask-icon">${isDone ? '&#10003;' : '&#9675;'}</span>
+            <span>${st}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+
+  // Blocked by
+  if (task.blocked_by && task.blocked_by.length > 0) {
+    html += `<div class="modal-section">
+      <div class="modal-section-title">Blocked By</div>
+      <div class="modal-blocked-by">${task.blocked_by.map(b => '#' + b).join(', ')}</div>
+    </div>`;
+  }
+
+  // Agent activity log
+  const agentLogs = allLogEntries.filter(e => e.agent === task.agent);
+  html += `<div class="modal-section">
+    <div class="modal-section-title">Agent Activity</div>`;
+  if (agentLogs.length > 0) {
+    html += agentLogs.slice(-30).reverse().map(e =>
+      `<div class="modal-log-entry">
+        <span class="log-time">${e.time || ''}</span>
+        <span class="log-msg">${e.message || ''}</span>
+      </div>`
+    ).join('');
+  } else {
+    html += `<div class="modal-empty">No activity recorded yet</div>`;
+  }
+  html += `</div>`;
+
+  document.getElementById('modal-body').innerHTML = html;
+  document.getElementById('task-modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('task-modal').classList.remove('open');
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+});
 
 // Initial render
 poll();
