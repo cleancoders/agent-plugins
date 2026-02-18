@@ -45,13 +45,14 @@ function openModal(taskId) {
     </div>`;
   }
 
-  // Files
+  // Files & Diffs
   if (task.files && task.files.length > 0) {
     html += `<div class="modal-section">
       <div class="modal-section-title">Files</div>
-      <div class="modal-files">
-        ${task.files.map(f => `<span class="file-tag">${f}</span>`).join('')}
+      <div class="diff-file-list" id="modal-file-list">
+        <div class="diff-loading">Loading file changes...</div>
       </div>
+      <div id="modal-diff-view"></div>
     </div>`;
   }
 
@@ -72,12 +73,53 @@ function openModal(taskId) {
     </div>`;
   }
 
-  // Blocked by
-  if (task.blocked_by && task.blocked_by.length > 0) {
+  // Dependencies
+  const blockedBy = (task.blocked_by || [])
+    .map(id => allTasks.find(t => t.id === id))
+    .filter(Boolean);
+  const blocks = allTasks.filter(t =>
+    t.blocked_by && t.blocked_by.includes(task.id)
+  );
+
+  if (blockedBy.length > 0 || blocks.length > 0) {
     html += `<div class="modal-section">
-      <div class="modal-section-title">Blocked By</div>
-      <div class="modal-blocked-by">${task.blocked_by.map(b => '#' + b).join(', ')}</div>
-    </div>`;
+      <div class="modal-section-title">Dependencies</div>`;
+
+    if (blockedBy.length > 0) {
+      html += `<div class="dep-group">
+        <span class="dep-label">Blocked by</span>`;
+      html += blockedBy.map(dep =>
+        `<span class="dep-chip ${dep.status}" onclick="openModal('${dep.id}')">
+          <span class="dep-chip-id">#${dep.id}</span>
+          <span class="dep-chip-title">${dep.title}</span>
+        </span>`
+      ).join('<span class="dep-arrow">&#8594;</span>');
+      html += `<span class="dep-arrow">&#8594;</span>
+        <span class="dep-chip ${task.status}">
+          <span class="dep-chip-id">#${task.id}</span>
+          <span class="dep-chip-title">${task.title}</span>
+        </span>`;
+      html += `</div>`;
+    }
+
+    if (blocks.length > 0) {
+      html += `<div class="dep-group">
+        <span class="dep-chip ${task.status}">
+          <span class="dep-chip-id">#${task.id}</span>
+          <span class="dep-chip-title">${task.title}</span>
+        </span>
+        <span class="dep-arrow">&#8594;</span>`;
+      html += blocks.map(dep =>
+        `<span class="dep-chip ${dep.status}" onclick="openModal('${dep.id}')">
+          <span class="dep-chip-id">#${dep.id}</span>
+          <span class="dep-chip-title">${dep.title}</span>
+        </span>`
+      ).join('');
+      html += `<span class="dep-label" style="margin-left:4px">blocked by this</span>`;
+      html += `</div>`;
+    }
+
+    html += `</div>`;
   }
 
   // Agent activity log
@@ -98,6 +140,71 @@ function openModal(taskId) {
 
   document.getElementById('modal-body').innerHTML = html;
   document.getElementById('task-modal').classList.add('open');
+
+  // Load file diffs async after modal is open
+  if (task.files && task.files.length > 0) {
+    loadFileDiffs(task.files);
+  }
+}
+
+async function loadFileDiffs(taskFiles) {
+  const fileListEl = document.getElementById('modal-file-list');
+  const diffViewEl = document.getElementById('modal-diff-view');
+  if (!fileListEl) return;
+
+  try {
+    const res = await fetch('/api/files');
+    const data = await res.json();
+
+    if (data.error) {
+      fileListEl.innerHTML = `<div class="modal-empty">${escapeHtml(data.error)}</div>`;
+      return;
+    }
+
+    // Filter to files relevant to this task
+    const relevant = (data.files || []).filter(f =>
+      taskFiles.some(tf => f.path.endsWith(tf) || tf.endsWith(f.path))
+    );
+
+    if (relevant.length === 0) {
+      fileListEl.innerHTML = '<div class="modal-empty">No changed files detected</div>';
+      return;
+    }
+
+    fileListEl.innerHTML = relevant.map(f =>
+      `<div class="diff-file-row" data-file="${escapeHtml(f.path)}" onclick="loadSingleDiff(this, '${escapeHtml(f.path)}')">
+        <span class="diff-file-status ${f.status}">${f.status}</span>
+        <span class="diff-file-path">${escapeHtml(f.path)}</span>
+      </div>`
+    ).join('');
+  } catch (e) {
+    fileListEl.innerHTML = '<div class="modal-empty">Failed to load file list</div>';
+  }
+}
+
+async function loadSingleDiff(rowEl, filePath) {
+  const diffViewEl = document.getElementById('modal-diff-view');
+  if (!diffViewEl) return;
+
+  // Toggle active state
+  document.querySelectorAll('.diff-file-row.active').forEach(el => el.classList.remove('active'));
+  rowEl.classList.add('active');
+
+  diffViewEl.innerHTML = '<div class="diff-loading">Loading diff...</div>';
+
+  try {
+    const res = await fetch('/api/diff?file=' + encodeURIComponent(filePath));
+    const data = await res.json();
+
+    if (data.error) {
+      diffViewEl.innerHTML = `<div class="diff-error">${escapeHtml(data.error)}</div>`;
+      return;
+    }
+
+    diffViewEl.innerHTML = renderDiff(data.diff);
+  } catch (e) {
+    diffViewEl.innerHTML = '<div class="diff-error">Failed to load diff</div>';
+  }
 }
 
 function closeModal() {
