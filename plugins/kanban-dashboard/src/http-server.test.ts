@@ -129,3 +129,76 @@ describe("GET /api/files", () => {
     expect(body).toEqual({ error: "Command failed: git diff" });
   });
 });
+
+describe("GET /api/diff", () => {
+  let baseUrl: string;
+
+  beforeEach(async () => {
+    reset();
+    resetFilesCache();
+    mockExecSync.mockReset();
+    const info = await startServer(0);
+    baseUrl = info.url;
+  });
+
+  afterEach(async () => {
+    await stopServer();
+  });
+
+  it("returns error JSON when no project_dir configured", async () => {
+    initDashboard({ title: "t", subtitle: "s" });
+
+    const { status, body } = await fetchJson(`${baseUrl}/api/diff?file=src/foo.ts`);
+
+    expect(status).toBe(200);
+    expect(body).toEqual({ error: "No project directory configured" });
+    expect(mockExecSync).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 for missing file parameter", async () => {
+    initDashboard({ title: "t", subtitle: "s", project_dir: "/my/project" });
+
+    const { status, body } = await fetchJson(`${baseUrl}/api/diff?other=value`);
+
+    expect(status).toBe(400);
+    expect(body).toEqual({ error: "Invalid file path" });
+    expect(mockExecSync).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 for paths containing '..'", async () => {
+    initDashboard({ title: "t", subtitle: "s", project_dir: "/my/project" });
+
+    const { status, body } = await fetchJson(`${baseUrl}/api/diff?file=../etc/passwd`);
+
+    expect(status).toBe(400);
+    expect(body).toEqual({ error: "Invalid file path" });
+    expect(mockExecSync).not.toHaveBeenCalled();
+  });
+
+  it("returns diff for valid file path", async () => {
+    initDashboard({ title: "t", subtitle: "s", project_dir: "/my/project" });
+    const fakeDiff = "diff --git a/src/foo.ts b/src/foo.ts\n--- a/src/foo.ts\n+++ b/src/foo.ts\n@@ -1 +1 @@\n-old\n+new";
+    mockExecSync.mockReturnValue(fakeDiff);
+
+    const { status, body } = await fetchJson(`${baseUrl}/api/diff?file=src/foo.ts`);
+
+    expect(status).toBe(200);
+    expect(body).toEqual({ file: "src/foo.ts", diff: fakeDiff });
+    expect(mockExecSync).toHaveBeenCalledWith(
+      'git diff -- "src/foo.ts"',
+      { cwd: "/my/project", encoding: "utf-8", timeout: 10000 }
+    );
+  });
+
+  it("handles git errors gracefully", async () => {
+    initDashboard({ title: "t", subtitle: "s", project_dir: "/my/project" });
+    mockExecSync.mockImplementation(() => {
+      throw new Error("Command failed: git diff");
+    });
+
+    const { status, body } = await fetchJson(`${baseUrl}/api/diff?file=src/foo.ts`);
+
+    expect(status).toBe(200);
+    expect(body).toEqual({ error: "Command failed: git diff" });
+  });
+});

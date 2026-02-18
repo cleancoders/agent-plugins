@@ -128,6 +128,34 @@ function handleRequest(
     return;
   }
 
+  if (method === "GET" && url.startsWith("/api/diff?")) {
+    const projectDir = getProjectDir();
+    if (!projectDir) {
+      sendJson(res, 200, { error: "No project directory configured" });
+      return;
+    }
+
+    const params = new URL(url, "http://localhost").searchParams;
+    const file = params.get("file");
+    if (!file || file.includes("..")) {
+      sendJson(res, 400, { error: "Invalid file path" });
+      return;
+    }
+
+    try {
+      const diff = execSync(`git diff -- ${JSON.stringify(file)}`, {
+        cwd: projectDir,
+        encoding: "utf-8",
+        timeout: 10000,
+      });
+      sendJson(res, 200, { file, diff });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "git diff failed";
+      sendJson(res, 200, { error: message });
+    }
+    return;
+  }
+
   if (method === "GET" && url === "/api/status") {
     sendJson(res, 200, getState());
     return;
