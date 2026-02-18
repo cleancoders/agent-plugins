@@ -1,0 +1,222 @@
+/* File list in modal */
+.diff-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.diff-file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: var(--text-muted);
+  transition: background 0.15s ease;
+}
+
+.diff-file-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.diff-file-row.active {
+  background: rgba(88, 166, 255, 0.1);
+  color: var(--text);
+}
+
+.diff-file-status {
+  font-size: 10px;
+  font-weight: 700;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.diff-file-status.M { color: var(--yellow); }
+.diff-file-status.A { color: var(--green); }
+.diff-file-status.D { color: var(--red); }
+.diff-file-status.R { color: var(--blue); }
+
+.diff-file-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+/* Side-by-side diff container */
+.diff-container {
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.diff-loading {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.diff-error {
+  padding: 16px;
+  color: var(--red);
+  font-size: 12px;
+}
+
+.diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.diff-hunk-header {
+  background: rgba(88, 166, 255, 0.08);
+  color: var(--text-dim);
+  padding: 4px 12px;
+  font-size: 11px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.diff-hunk-header td {
+  padding: 4px 12px;
+}
+
+.diff-row {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.diff-line-num {
+  width: 48px;
+  min-width: 48px;
+  padding: 0 8px;
+  text-align: right;
+  color: var(--text-dim);
+  user-select: none;
+  vertical-align: top;
+  border-right: 1px solid var(--border);
+}
+
+.diff-line-content {
+  padding: 0 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-wrap: break-word;
+  vertical-align: top;
+}
+
+.diff-side-left {
+  border-right: 1px solid var(--border);
+}
+
+/* Line highlighting */
+.diff-row.added .diff-line-content.diff-side-right {
+  background: rgba(105, 219, 124, 0.1);
+}
+
+.diff-row.added .diff-line-num.diff-side-right {
+  background: rgba(105, 219, 124, 0.08);
+}
+
+.diff-row.removed .diff-line-content.diff-side-left {
+  background: rgba(255, 107, 107, 0.1);
+}
+
+.diff-row.removed .diff-line-num.diff-side-left {
+  background: rgba(255, 107, 107, 0.08);
+}
+
+.diff-row.modified .diff-line-content.diff-side-left {
+  background: rgba(255, 107, 107, 0.1);
+}
+
+.diff-row.modified .diff-line-content.diff-side-right {
+  background: rgba(105, 219, 124, 0.1);
+}
+
+.diff-row.modified .diff-line-num.diff-side-left {
+  background: rgba(255, 107, 107, 0.08);
+}
+
+.diff-row.modified .diff-line-num.diff-side-right {
+  background: rgba(105, 219, 124, 0.08);
+}
+
+.diff-empty-cell {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* Dependencies section */
+.dep-graph {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.dep-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+  max-width: 200px;
+}
+
+.dep-chip:hover {
+  border-color: var(--accent);
+}
+
+.dep-chip-id {
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.dep-chip-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+.dep-chip.blocked { border-left: 3px solid var(--text-dim); }
+.dep-chip.ready { border-left: 3px solid var(--yellow); }
+.dep-chip.in_progress { border-left: 3px solid var(--blue); }
+.dep-chip.done { border-left: 3px solid var(--green); }
+
+.dep-arrow {
+  color: var(--text-dim);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.dep-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  font-weight: 600;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.dep-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
