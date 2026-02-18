@@ -26,6 +26,7 @@ export interface LogEntry {
 export interface DashboardConfig {
   title: string;
   subtitle: string;
+  project_dir?: string;
 }
 
 const defaultConfig: DashboardConfig = { title: "Dashboard", subtitle: "" };
@@ -90,6 +91,10 @@ export function getLogs(): { entries: LogEntry[] } {
   return {
     entries: logs.map((e) => ({ ...e })),
   };
+}
+
+export function getProjectDir(): string | undefined {
+  return config.project_dir;
 }
 
 export function reset(): void {
