@@ -213,35 +213,83 @@ describe('openModal', () => {
     expect(body).not.toContain('Findings');
   });
 
-  it('shows message section when task has message', () => {
+  it('shows messages log when task has messages array', () => {
+    const task = makeTask({
+      messages: [
+        { time: '10:00', text: 'Starting work' },
+        { time: '10:05', text: 'Tests passing' },
+      ],
+    });
+    const { openModal, elements } = loadModal({ tasks: [task] });
+
+    openModal('T-1');
+
+    const body = elements['modal-body'].innerHTML;
+    expect(body).toContain('Messages');
+    expect(body).toContain('modal-messages-log');
+    expect(body).toContain('Starting work');
+    expect(body).toContain('Tests passing');
+  });
+
+  it('shows messages in reverse chronological order', () => {
+    const task = makeTask({
+      messages: [
+        { time: '10:00', text: 'First' },
+        { time: '10:05', text: 'Second' },
+      ],
+    });
+    const { openModal, elements } = loadModal({ tasks: [task] });
+
+    openModal('T-1');
+
+    const body = elements['modal-body'].innerHTML;
+    const firstIdx = body.indexOf('First');
+    const secondIdx = body.indexOf('Second');
+    expect(secondIdx).toBeLessThan(firstIdx);
+  });
+
+  it('shows timestamps in messages log', () => {
+    const task = makeTask({
+      messages: [{ time: '14:30:00', text: 'Update' }],
+    });
+    const { openModal, elements } = loadModal({ tasks: [task] });
+
+    openModal('T-1');
+
+    const body = elements['modal-body'].innerHTML;
+    expect(body).toContain('14:30:00');
+  });
+
+  it('falls back to single message display when no messages array', () => {
     const task = makeTask({ message: 'Working on tests' });
     const { openModal, elements } = loadModal({ tasks: [task] });
 
     openModal('T-1');
 
     const body = elements['modal-body'].innerHTML;
-    expect(body).toContain('Current Message');
+    expect(body).toContain('Messages');
     expect(body).toContain('Working on tests');
+    expect(body).toContain('modal-message');
   });
 
-  it('hides message section when task.message is empty', () => {
+  it('hides message section when no messages array and message is empty', () => {
     const task = makeTask({ message: '' });
     const { openModal, elements } = loadModal({ tasks: [task] });
 
     openModal('T-1');
 
     const body = elements['modal-body'].innerHTML;
-    expect(body).not.toContain('Current Message');
+    expect(body).not.toContain('Messages');
   });
 
-  it('hides message section when task.message is falsy', () => {
+  it('hides message section when no messages array and message is falsy', () => {
     const task = makeTask({ message: null });
     const { openModal, elements } = loadModal({ tasks: [task] });
 
     openModal('T-1');
 
     const body = elements['modal-body'].innerHTML;
-    expect(body).not.toContain('Current Message');
+    expect(body).not.toContain('Messages');
   });
 
   it('shows files section for in_progress tasks regardless of files array', () => {

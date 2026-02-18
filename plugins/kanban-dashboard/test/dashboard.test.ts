@@ -357,6 +357,33 @@ describe('renderCard(task)', () => {
     expect(result).not.toContain('card-new');
   });
 
+  it('shows blocked-by ids when task has blocked_by', () => {
+    const result = ctx.renderCard({
+      id: 'T-013', title: 'X', agent: 'A', status: 'blocked',
+      agent_color: '#000', progress: 0, blocked_by: [1, 3],
+    });
+    expect(result).toContain('card-blocked-by');
+    expect(result).toContain('Blocked by:');
+    expect(result).toContain('#1');
+    expect(result).toContain('#3');
+  });
+
+  it('does not show blocked-by when blocked_by is empty', () => {
+    const result = ctx.renderCard({
+      id: 'T-014', title: 'X', agent: 'A', status: 'ready',
+      agent_color: '#000', progress: 0, blocked_by: [],
+    });
+    expect(result).not.toContain('card-blocked-by');
+  });
+
+  it('does not show blocked-by when blocked_by is missing', () => {
+    const result = ctx.renderCard({
+      id: 'T-015', title: 'X', agent: 'A', status: 'ready',
+      agent_color: '#000', progress: 0,
+    });
+    expect(result).not.toContain('card-blocked-by');
+  });
+
   it('handles missing message gracefully', () => {
     const result = ctx.renderCard({
       id: 'T-011', title: 'X', agent: 'A', status: 'ready',

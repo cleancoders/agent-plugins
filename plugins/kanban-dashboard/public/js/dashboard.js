@@ -47,6 +47,7 @@ function renderCard(task) {
       <span class="card-agent-dot" style="background:${task.agent_color}"></span>
       ${task.agent}
     </div>
+    ${task.blocked_by && task.blocked_by.length > 0 ? `<div class="card-blocked-by">Blocked by: ${task.blocked_by.map(id => '#' + id).join(', ')}</div>` : ''}
     <div class="card-message">${task.message || ''}</div>
     <div class="card-progress-bar">
       <div class="card-progress-fill" style="width:${Math.round(progress * 100)}%;background:${task.agent_color}"></div>

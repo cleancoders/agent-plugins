@@ -34964,6 +34964,15 @@ var require_state = __commonJS({
       if (index === -1)
         return;
       tasks[index] = { ...tasks[index], ...updates };
+      if (updates.message !== void 0 && updates.message !== "") {
+        if (!tasks[index].messages) {
+          tasks[index].messages = [];
+        }
+        tasks[index].messages.push({
+          time: (/* @__PURE__ */ new Date()).toLocaleTimeString(),
+          text: updates.message
+        });
+      }
       if (updates.progress !== void 0 && updates.progress > 1) {
         tasks[index].progress = updates.progress / 100;
       }

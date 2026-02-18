@@ -434,3 +434,54 @@ describe("updateTask auto-calculate progress from subtasks", () => {
     expect(tasks[0].progress).toBe(0.8);
   });
 });
+
+describe("updateTask message accumulation", () => {
+  beforeEach(() => {
+    reset();
+  });
+
+  it("appends message to messages array on update", () => {
+    addTask(makeTask({ id: 1 }));
+    updateTask(1, { message: "first update" });
+    const { tasks } = getState();
+    expect(tasks[0].messages).toHaveLength(1);
+    expect(tasks[0].messages![0].text).toBe("first update");
+  });
+
+  it("accumulates multiple messages in order", () => {
+    addTask(makeTask({ id: 1 }));
+    updateTask(1, { message: "first" });
+    updateTask(1, { message: "second" });
+    updateTask(1, { message: "third" });
+    const { tasks } = getState();
+    expect(tasks[0].messages).toHaveLength(3);
+    expect(tasks[0].messages!.map((m) => m.text)).toEqual([
+      "first",
+      "second",
+      "third",
+    ]);
+  });
+
+  it("sets time on each message entry", () => {
+    addTask(makeTask({ id: 1 }));
+    updateTask(1, { message: "timed" });
+    const { tasks } = getState();
+    expect(tasks[0].messages![0].time).toBeDefined();
+    expect(typeof tasks[0].messages![0].time).toBe("string");
+    expect(tasks[0].messages![0].time.length).toBeGreaterThan(0);
+  });
+
+  it("does not append empty messages", () => {
+    addTask(makeTask({ id: 1 }));
+    updateTask(1, { message: "" });
+    const { tasks } = getState();
+    expect(tasks[0].messages).toBeUndefined();
+  });
+
+  it("does not create messages array when message is not in update", () => {
+    addTask(makeTask({ id: 1 }));
+    updateTask(1, { progress: 50 });
+    const { tasks } = getState();
+    expect(tasks[0].messages).toBeUndefined();
+  });
+});

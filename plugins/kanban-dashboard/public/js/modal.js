@@ -37,10 +37,23 @@ function openModal(taskId) {
     </div>`;
   }
 
-  // Current message
-  if (task.message) {
+  // Messages log
+  const messages = task.messages || [];
+  if (messages.length > 0) {
     html += `<div class="modal-section">
-      <div class="modal-section-title">Current Message</div>
+      <div class="modal-section-title">Messages</div>
+      <div class="modal-messages-log">
+        ${messages.slice().reverse().map(m =>
+          `<div class="modal-message-entry">
+            <span class="log-time">${m.time || ''}</span>
+            <span class="log-msg">${m.text || ''}</span>
+          </div>`
+        ).join('')}
+      </div>
+    </div>`;
+  } else if (task.message) {
+    html += `<div class="modal-section">
+      <div class="modal-section-title">Messages</div>
       <div class="modal-message">${task.message}</div>
     </div>`;
   }
