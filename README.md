@@ -1,13 +1,13 @@
 # Clean Coders Agent Plugins
 
-A Claude Code plugin marketplace providing tools for AI agent teams.
+A Claude Code plugin marketplace providing tools for AI agents.
 
 ## Installation
 
 Add this marketplace to Claude Code:
 
 ```
-/plugin marketplace add AlexRoot-Roatch/cleancoders-agent-plugins
+/plugin marketplace add cleancoders/agent-plugins
 ```
 
 Then install individual plugins:
@@ -26,7 +26,7 @@ To enable plugins for all team members on a project, add to `.claude/settings.js
     "cleancoders-agent-plugins": {
       "source": {
         "source": "github",
-        "repo": "AlexRoot-Roatch/cleancoders-agent-plugins"
+        "repo": "cleancoders/agent-plugins"
       }
     }
   },
