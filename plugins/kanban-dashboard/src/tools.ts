@@ -67,13 +67,14 @@ export function registerTools(server: McpServer): void {
       })).describe('Initial task list'),
       port: z.number().optional().describe('Fixed port (0 for auto)'),
       open_browser: z.boolean().optional().default(true).describe('Open browser automatically'),
+      project_dir: z.string().optional().describe('Absolute path to the project git repository for file diff inspection'),
     },
-    async ({ title, subtitle, tasks, port, open_browser }) => {
+    async ({ title, subtitle, tasks, port, open_browser, project_dir }) => {
       reset();
       agentColors.clear();
       colorIndex = 0;
 
-      initDashboard({ title, subtitle: subtitle || '' });
+      initDashboard({ title, subtitle: subtitle || '', project_dir });
 
       for (const t of tasks) {
         const color = getAgentColor(t.agent, t.agent_color);
