@@ -35364,7 +35364,7 @@ var require_tools = __commonJS({
       });
     }
     function registerTools(server2) {
-      server2.tool("kanban_init", "Initialize the KanBan dashboard with a title and task list. Opens a browser to the live dashboard.", {
+      server2.tool("kanban_init", "Initialize the KanBan dashboard with a title and task list. Opens a browser to the live dashboard. IMPORTANT: Only use this tool when coordinating an agent Team created with TeamCreate. Do NOT use when dispatching parallel subagents without a Team.", {
         title: zod_1.z.string().describe("Dashboard title"),
         subtitle: zod_1.z.string().optional().describe("Dashboard subtitle"),
         tasks: zod_1.z.array(zod_1.z.object({

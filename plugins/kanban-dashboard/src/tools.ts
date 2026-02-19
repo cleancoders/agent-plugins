@@ -44,7 +44,7 @@ export function registerTools(server: McpServer): void {
   // 1. kanban_init
   server.tool(
     'kanban_init',
-    'Initialize the KanBan dashboard with a title and task list. Opens a browser to the live dashboard.',
+    'Initialize the KanBan dashboard with a title and task list. Opens a browser to the live dashboard. IMPORTANT: Only use this tool when coordinating an agent Team created with TeamCreate. Do NOT use when dispatching parallel subagents without a Team.',
     {
       title: z.string().describe('Dashboard title'),
       subtitle: z.string().optional().describe('Dashboard subtitle'),
