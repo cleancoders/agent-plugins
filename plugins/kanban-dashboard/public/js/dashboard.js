@@ -52,9 +52,6 @@ function renderCard(task) {
     <div class="card-progress-bar">
       <div class="card-progress-fill" style="width:${Math.round(progress * 100)}%;background:${task.agent_color}"></div>
     </div>
-    <div class="card-files">
-      ${(task.files || []).map(f => `<span class="file-tag">${f}</span>`).join('')}
-    </div>
     ${task.status === 'in_progress' ? renderSubtasks(task) : ''}
   </div>`;
 }

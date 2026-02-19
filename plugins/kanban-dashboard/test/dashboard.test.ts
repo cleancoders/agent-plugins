@@ -297,14 +297,13 @@ describe('renderCard(task)', () => {
     expect(result).toContain('width:75%');
   });
 
-  it('renders file tags', () => {
+  it('does not render file tags on card', () => {
     const result = ctx.renderCard({
       id: 'T-005', title: 'X', agent: 'A', status: 'ready',
       agent_color: '#000', progress: 0, files: ['src/main.ts', 'README.md'],
     });
-    expect(result).toContain('file-tag');
-    expect(result).toContain('src/main.ts');
-    expect(result).toContain('README.md');
+    expect(result).not.toContain('file-tag');
+    expect(result).not.toContain('card-files');
   });
 
   it('includes onclick handler with task id', () => {
@@ -394,12 +393,12 @@ describe('renderCard(task)', () => {
     expect(result).toContain('<div class="card-message"></div>');
   });
 
-  it('handles missing files gracefully', () => {
+  it('does not render files section on card even when no files', () => {
     const result = ctx.renderCard({
       id: 'T-012', title: 'X', agent: 'A', status: 'ready',
       agent_color: '#000', progress: 0,
     });
-    expect(result).toContain('card-files');
+    expect(result).not.toContain('card-files');
     expect(result).not.toContain('file-tag');
   });
 });

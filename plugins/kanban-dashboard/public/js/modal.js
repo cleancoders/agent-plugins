@@ -1,3 +1,5 @@
+let currentModalTask = null;
+
 function openModal(taskId) {
   const task = allTasks.find(t => String(t.id) === String(taskId));
   if (!task) return;
@@ -59,7 +61,7 @@ function openModal(taskId) {
   }
 
   // Files & Diffs
-  if (task.status === 'in_progress' || task.status === 'done') {
+  if (task.files && task.files.length > 0) {
     html += `<div class="modal-section">
       <div class="modal-section-title">Files</div>
       <div class="diff-file-list" id="modal-file-list">
@@ -155,40 +157,39 @@ function openModal(taskId) {
   document.getElementById('task-modal').classList.add('open');
 
   // Load file diffs async after modal is open
-  if (task.status === 'in_progress' || task.status === 'done') {
-    loadFileDiffs(task.id);
+  if (task.files && task.files.length > 0) {
+    loadFileDiffs(task);
   }
 }
 
-async function loadFileDiffs(taskId) {
+async function loadFileDiffs(task) {
+  currentModalTask = task;
   const fileListEl = document.getElementById('modal-file-list');
-  const diffViewEl = document.getElementById('modal-diff-view');
   if (!fileListEl) return;
 
-  try {
-    const res = await fetch('/api/files?task_id=' + encodeURIComponent(taskId));
-    const data = await res.json();
+  const taskFiles = task.files || [];
 
-    if (data.error) {
-      fileListEl.innerHTML = `<div class="modal-empty">${escapeHtml(data.error)}</div>`;
-      return;
-    }
-
-    const files = data.files || [];
-
-    if (files.length === 0) {
-      fileListEl.innerHTML = '<div class="modal-empty">No changed files detected</div>';
-      return;
-    }
-
+  function renderFileList(files) {
     fileListEl.innerHTML = files.map(f =>
       `<div class="diff-file-row" data-file="${escapeHtml(f.path)}" onclick="loadSingleDiff(this, '${escapeHtml(f.path)}')">
-        <span class="diff-file-status ${f.status}">${f.status}</span>
+        ${f.status ? `<span class="diff-file-status ${f.status}">${f.status}</span>` : ''}
         <span class="diff-file-path">${escapeHtml(f.path)}</span>
       </div>`
     ).join('');
+  }
+
+  try {
+    const res = await fetch('/api/files?task_id=' + encodeURIComponent(task.id));
+    const data = await res.json();
+    const apiFiles = (!data.error && data.files && data.files.length > 0) ? data.files : null;
+
+    if (apiFiles) {
+      renderFileList(apiFiles);
+    } else {
+      renderFileList(taskFiles.map(f => ({ path: f })));
+    }
   } catch (e) {
-    fileListEl.innerHTML = '<div class="modal-empty">Failed to load file list</div>';
+    renderFileList(taskFiles.map(f => ({ path: f })));
   }
 }
 
@@ -203,7 +204,12 @@ async function loadSingleDiff(rowEl, filePath) {
   diffViewEl.innerHTML = '<div class="diff-loading">Loading diff...</div>';
 
   try {
-    const res = await fetch('/api/diff?file=' + encodeURIComponent(filePath));
+    let url = '/api/diff?file=' + encodeURIComponent(filePath);
+    if (currentModalTask) {
+      if (currentModalTask.start_ref) url += '&start_ref=' + encodeURIComponent(currentModalTask.start_ref);
+      if (currentModalTask.end_ref) url += '&end_ref=' + encodeURIComponent(currentModalTask.end_ref);
+    }
+    const res = await fetch(url);
     const data = await res.json();
 
     if (data.error) {

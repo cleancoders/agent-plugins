@@ -94,7 +94,7 @@ function loadModal(options?: {
     keydownHandler: () => keydownHandler,
     setQuerySelectorResult: (result: any[]) => { querySelectorAllResult = result; },
     openModal: context.openModal as (taskId: string) => void,
-    loadFileDiffs: context.loadFileDiffs as (taskId: string | number) => Promise<void>,
+    loadFileDiffs: context.loadFileDiffs as (task: any) => Promise<void>,
     loadSingleDiff: context.loadSingleDiff as (rowEl: any, filePath: string) => Promise<void>,
     closeModal: context.closeModal as () => void,
   };
@@ -292,8 +292,8 @@ describe('openModal', () => {
     expect(body).not.toContain('Messages');
   });
 
-  it('shows files section for in_progress tasks regardless of files array', () => {
-    const task = makeTask({ status: 'in_progress', files: [] });
+  it('shows files section when task has files', () => {
+    const task = makeTask({ status: 'in_progress', files: ['src/app.ts'] });
     const { openModal, elements } = loadModal({ tasks: [task] });
 
     openModal('T-1');
@@ -304,19 +304,8 @@ describe('openModal', () => {
     expect(body).toContain('modal-diff-view');
   });
 
-  it('shows files section for done tasks', () => {
-    const task = makeTask({ status: 'done', files: [] });
-    const { openModal, elements } = loadModal({ tasks: [task] });
-
-    openModal('T-1');
-
-    const body = elements['modal-body'].innerHTML;
-    expect(body).toContain('Files');
-    expect(body).toContain('modal-file-list');
-  });
-
-  it('hides files section for ready tasks', () => {
-    const task = makeTask({ status: 'ready', files: [] });
+  it('hides files section when task has empty files array', () => {
+    const task = makeTask({ status: 'in_progress', files: [] });
     const { openModal, elements } = loadModal({ tasks: [task] });
 
     openModal('T-1');
@@ -325,8 +314,9 @@ describe('openModal', () => {
     expect(body).not.toContain('modal-file-list');
   });
 
-  it('hides files section for blocked tasks', () => {
-    const task = makeTask({ status: 'blocked', files: [] });
+  it('hides files section when task has no files field', () => {
+    const task = makeTask({ status: 'done' });
+    delete task.files;
     const { openModal, elements } = loadModal({ tasks: [task] });
 
     openModal('T-1');
@@ -481,8 +471,8 @@ describe('openModal', () => {
 });
 
 describe('loadFileDiffs', () => {
-  it('renders file rows from API response', async () => {
-    const task = makeTask({ files: ['src/app.ts'] });
+  it('renders file rows from API response with status badges', async () => {
+    const task = makeTask({ id: 1, files: ['src/app.ts'] });
     const apiResponse = {
       files: [
         { path: 'src/app.ts', status: 'modified' },
@@ -494,7 +484,7 @@ describe('loadFileDiffs', () => {
       fetchResponse: apiResponse,
     });
 
-    await loadFileDiffs(1);
+    await loadFileDiffs(task);
 
     const fileListHtml = elements['modal-file-list'].innerHTML;
     expect(fileListHtml).toContain('diff-file-row');
@@ -505,50 +495,63 @@ describe('loadFileDiffs', () => {
   });
 
   it('fetches with task_id query param', async () => {
+    const task = makeTask({ id: 42, files: ['src/app.ts'] });
     const { loadFileDiffs, fetchMock } = loadModal({
+      tasks: [task],
       fetchResponse: { files: [] },
     });
 
-    await loadFileDiffs(42);
+    await loadFileDiffs(task);
 
     expect(fetchMock).toHaveBeenCalledWith('/api/files?task_id=42');
   });
 
-  it('shows error message from API error response', async () => {
+  it('falls back to task files when API returns error', async () => {
+    const task = makeTask({ id: 1, files: ['src/app.ts', 'src/utils.ts'] });
     const { loadFileDiffs, elements } = loadModal({
+      tasks: [task],
       fetchResponse: { error: 'Git not available' },
     });
 
-    await loadFileDiffs(1);
+    await loadFileDiffs(task);
 
     const fileListHtml = elements['modal-file-list'].innerHTML;
-    expect(fileListHtml).toContain('Git not available');
+    expect(fileListHtml).toContain('diff-file-row');
+    expect(fileListHtml).toContain('src/app.ts');
+    expect(fileListHtml).toContain('src/utils.ts');
   });
 
-  it('shows "No changed files detected" when API returns empty files', async () => {
+  it('falls back to task files when API returns empty files', async () => {
+    const task = makeTask({ id: 1, files: ['src/app.ts'] });
     const { loadFileDiffs, elements } = loadModal({
+      tasks: [task],
       fetchResponse: { files: [] },
     });
 
-    await loadFileDiffs(1);
+    await loadFileDiffs(task);
 
     const fileListHtml = elements['modal-file-list'].innerHTML;
-    expect(fileListHtml).toContain('No changed files detected');
+    expect(fileListHtml).toContain('diff-file-row');
+    expect(fileListHtml).toContain('src/app.ts');
   });
 
-  it('handles fetch failure gracefully', async () => {
-    const { loadFileDiffs, elements } = loadModal({ fetchError: true });
+  it('falls back to task files on fetch failure', async () => {
+    const task = makeTask({ id: 1, files: ['src/app.ts'] });
+    const { loadFileDiffs, elements } = loadModal({
+      tasks: [task],
+      fetchError: true,
+    });
 
-    await loadFileDiffs(1);
+    await loadFileDiffs(task);
 
     const fileListHtml = elements['modal-file-list'].innerHTML;
-    expect(fileListHtml).toContain('Failed to load file list');
+    expect(fileListHtml).toContain('diff-file-row');
+    expect(fileListHtml).toContain('src/app.ts');
   });
 
   it('returns early when modal-file-list element is missing', async () => {
     const code = readFileSync(resolve(__dirname, '../public/js/modal.js'), 'utf-8');
 
-    let keydownHandler: ((e: any) => void) | null = null;
     const fetchMock = vi.fn();
 
     const context: Record<string, unknown> = {
@@ -559,9 +562,7 @@ describe('loadFileDiffs', () => {
       renderDiff: (text: string) => text || '',
       document: {
         getElementById: (_id: string) => null,
-        addEventListener: (event: string, handler: Function) => {
-          if (event === 'keydown') keydownHandler = handler as any;
-        },
+        addEventListener: (event: string, handler: Function) => {},
         querySelectorAll: () => [],
       },
       fetch: fetchMock,
@@ -575,8 +576,8 @@ describe('loadFileDiffs', () => {
 
     runInNewContext(code, context);
 
-    const loadFileDiffs = context.loadFileDiffs as (taskId: number) => Promise<void>;
-    await loadFileDiffs(1);
+    const loadFileDiffs = context.loadFileDiffs as (task: any) => Promise<void>;
+    await loadFileDiffs({ id: 1, files: ['src/app.ts'] });
 
     // fetch should never have been called since fileListEl is null
     expect(fetchMock).not.toHaveBeenCalled();
@@ -661,6 +662,27 @@ describe('loadSingleDiff', () => {
     await loadSingleDiff(rowEl, 'src/my file.ts');
 
     expect(fetchMock).toHaveBeenCalledWith('/api/diff?file=' + encodeURIComponent('src/my file.ts'));
+  });
+
+  it('includes start_ref and end_ref from current task in URL', async () => {
+    const task = makeTask({ id: 1, files: ['src/app.ts'], start_ref: 'abc123', end_ref: 'def456' });
+    const { openModal, loadSingleDiff, fetchMock } = loadModal({
+      tasks: [task],
+      fetchResponse: { diff: 'some diff' },
+    });
+
+    // Open modal to set currentModalTask
+    openModal('1');
+    // Reset fetch mock after openModal's API calls
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue({ json: () => Promise.resolve({ diff: 'some diff' }) });
+
+    const rowEl = { classList: { add: vi.fn() } };
+    await loadSingleDiff(rowEl, 'src/app.ts');
+
+    const calledUrl = fetchMock.mock.calls[0][0];
+    expect(calledUrl).toContain('start_ref=' + encodeURIComponent('abc123'));
+    expect(calledUrl).toContain('end_ref=' + encodeURIComponent('def456'));
   });
 });
 
