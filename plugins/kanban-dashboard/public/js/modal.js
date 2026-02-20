@@ -1,4 +1,5 @@
 let currentModalTask = null;
+let diffModalFiles = [];
 
 function openModal(taskId) {
   const task = allTasks.find(t => String(t.id) === String(taskId));
@@ -165,8 +166,6 @@ function openModal(taskId) {
   }
 }
 
-let diffModalFiles = [];
-
 async function loadFileDiffs(task) {
   currentModalTask = task;
   const fileListEl = document.getElementById('modal-file-list');
@@ -265,19 +264,14 @@ function closeDiffModal() {
   document.getElementById('task-modal').style.display = '';
 }
 
-function closeDiffModalFull() {
-  // Close both modals entirely
+function closeModal() {
   document.getElementById('diff-modal').classList.remove('open');
   document.getElementById('task-modal').style.display = '';
   document.getElementById('task-modal').classList.remove('open');
 }
 
-function closeModal() {
-  // If diff modal is open, close it too
-  document.getElementById('diff-modal').classList.remove('open');
-  document.getElementById('task-modal').style.display = '';
-  document.getElementById('task-modal').classList.remove('open');
-}
+// Alias used by diff modal overlay and close button
+const closeDiffModalFull = closeModal;
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
