@@ -3,6 +3,8 @@ let prevTaskMap = {};
 let allTasks = [];
 let allLogEntries = [];
 
+//region Active Subtask Detection
+
 const STOP_WORDS = new Set(['the','and','for','with','that','this','from','are','was','has','have','will','been','into','than','its','all','but','not','can','did','get','got','set','use','new','now','also','each','when','then','them','they','what','which','where','how','our','out','one','two']);
 
 function tokenize(text) {
@@ -34,6 +36,8 @@ function findActiveSubtask(message, subtasks, subtasksDone) {
 
   return bestIdx;
 }
+
+//endregion
 
 function elapsed() {
   const s = Math.floor((Date.now() - startTime) / 1000);
