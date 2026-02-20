@@ -6,7 +6,7 @@ import { reset } from './state.js';
 
 const server = new McpServer({
   name: 'kanban-dashboard',
-  version: '1.2.0',
+  version: '1.2.1',
 });
 
 async function cleanup() {

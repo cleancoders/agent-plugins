@@ -9,7 +9,7 @@
       "name": "kanban-dashboard",
       "source": "./plugins/kanban-dashboard",
       "description": "Live KanBan dashboard for monitoring Claude Code agent teams in real-time",
-      "version": "1.2.0"
+      "version": "1.2.1"
     }
   ]
 }
