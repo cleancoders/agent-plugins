@@ -6,6 +6,7 @@ on:
     paths:
       - 'plugins/*/src/**'
       - 'plugins/*/test/**'
+      - 'plugins/*/hooks/**'
       - 'plugins/*/tsconfig.json'
       - 'plugins/*/package.json'
       - 'plugins/*/package-lock.json'
