@@ -5,7 +5,9 @@
   "mcpServers": {
     "kanban-dashboard": {
       "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/dist/bundle.js"],
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/dist/bundle.js"
+      ],
       "cwd": "${CLAUDE_PLUGIN_ROOT}"
     }
   }
