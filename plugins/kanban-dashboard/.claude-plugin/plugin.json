@@ -1,7 +1,7 @@
 {
   "name": "kanban-dashboard",
   "description": "Live KanBan dashboard MCP server for Claude Code agent teams",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "mcpServers": {
     "kanban-dashboard": {
       "command": "node",
