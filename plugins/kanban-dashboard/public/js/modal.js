@@ -206,8 +206,16 @@ async function loadSingleDiff(rowEl, filePath) {
   try {
     let url = '/api/diff?file=' + encodeURIComponent(filePath);
     if (currentModalTask) {
-      if (currentModalTask.start_ref) url += '&start_ref=' + encodeURIComponent(currentModalTask.start_ref);
-      if (currentModalTask.end_ref) url += '&end_ref=' + encodeURIComponent(currentModalTask.end_ref);
+      const sr = currentModalTask.start_ref;
+      const er = currentModalTask.end_ref;
+      // Only pass refs when they bracket meaningful changes (different commits)
+      if (sr && er && sr !== er) {
+        url += '&start_ref=' + encodeURIComponent(sr);
+        url += '&end_ref=' + encodeURIComponent(er);
+      } else if (sr && !er) {
+        url += '&start_ref=' + encodeURIComponent(sr);
+      }
+      // When start_ref == end_ref (no commits during task), omit refs so server uses baseline
     }
     const res = await fetch(url);
     const data = await res.json();

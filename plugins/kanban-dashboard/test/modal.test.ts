@@ -664,7 +664,7 @@ describe('loadSingleDiff', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/diff?file=' + encodeURIComponent('src/my file.ts'));
   });
 
-  it('includes start_ref and end_ref from current task in URL', async () => {
+  it('includes start_ref and end_ref when they differ', async () => {
     const task = makeTask({ id: 1, files: ['src/app.ts'], start_ref: 'abc123', end_ref: 'def456' });
     const { openModal, loadSingleDiff, fetchMock } = loadModal({
       tasks: [task],
@@ -683,6 +683,67 @@ describe('loadSingleDiff', () => {
     const calledUrl = fetchMock.mock.calls[0][0];
     expect(calledUrl).toContain('start_ref=' + encodeURIComponent('abc123'));
     expect(calledUrl).toContain('end_ref=' + encodeURIComponent('def456'));
+  });
+
+  it('omits refs when start_ref equals end_ref', async () => {
+    const task = makeTask({ id: 1, files: ['src/app.ts'], start_ref: 'same111', end_ref: 'same111' });
+    const { openModal, loadSingleDiff, fetchMock } = loadModal({
+      tasks: [task],
+      fetchResponse: { diff: 'some diff' },
+    });
+
+    openModal('1');
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue({ json: () => Promise.resolve({ diff: 'some diff' }) });
+
+    const rowEl = { classList: { add: vi.fn() } };
+    await loadSingleDiff(rowEl, 'src/app.ts');
+
+    const calledUrl = fetchMock.mock.calls[0][0];
+    expect(calledUrl).not.toContain('start_ref');
+    expect(calledUrl).not.toContain('end_ref');
+    expect(calledUrl).toBe('/api/diff?file=' + encodeURIComponent('src/app.ts'));
+  });
+
+  it('includes only start_ref when end_ref is absent', async () => {
+    const task = makeTask({ id: 1, files: ['src/app.ts'], start_ref: 'abc123' });
+    delete task.end_ref;
+    const { openModal, loadSingleDiff, fetchMock } = loadModal({
+      tasks: [task],
+      fetchResponse: { diff: 'some diff' },
+    });
+
+    openModal('1');
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue({ json: () => Promise.resolve({ diff: 'some diff' }) });
+
+    const rowEl = { classList: { add: vi.fn() } };
+    await loadSingleDiff(rowEl, 'src/app.ts');
+
+    const calledUrl = fetchMock.mock.calls[0][0];
+    expect(calledUrl).toContain('start_ref=' + encodeURIComponent('abc123'));
+    expect(calledUrl).not.toContain('end_ref');
+  });
+
+  it('omits all refs when task has no refs', async () => {
+    const task = makeTask({ id: 1, files: ['src/app.ts'] });
+    delete task.start_ref;
+    delete task.end_ref;
+    const { openModal, loadSingleDiff, fetchMock } = loadModal({
+      tasks: [task],
+      fetchResponse: { diff: 'some diff' },
+    });
+
+    openModal('1');
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue({ json: () => Promise.resolve({ diff: 'some diff' }) });
+
+    const rowEl = { classList: { add: vi.fn() } };
+    await loadSingleDiff(rowEl, 'src/app.ts');
+
+    const calledUrl = fetchMock.mock.calls[0][0];
+    expect(calledUrl).not.toContain('start_ref');
+    expect(calledUrl).not.toContain('end_ref');
   });
 });
 

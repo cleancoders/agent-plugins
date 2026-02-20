@@ -49,6 +49,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+.card-top-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .severity-badges {
   display: flex;
   gap: 4px;
@@ -92,12 +98,12 @@
   flex-shrink: 0;
 }
 
-.card-blocked-by {
-  font-size: 11px;
-  color: var(--text-dim);
-  margin-bottom: 6px;
-  opacity: 0.7;
+.blocked-badges {
+  display: flex;
+  gap: 4px;
 }
+
+.badge-blocked { background: rgba(255,107,107,0.15); color: var(--red); }
 
 .card-message {
   font-size: 11px;

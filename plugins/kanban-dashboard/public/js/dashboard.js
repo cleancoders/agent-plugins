@@ -40,14 +40,16 @@ function renderCard(task) {
                onclick="openModal('${task.id}')">
     <div class="card-top">
       <span class="card-id">#${task.id}</span>
-      <div class="severity-badges">${renderBadges(task)}</div>
+      <div class="card-top-right">
+        ${task.blocked_by && task.blocked_by.length > 0 ? `<div class="blocked-badges">${task.blocked_by.map(id => `<span class="badge badge-blocked">#${id}</span>`).join('')}</div>` : ''}
+        <div class="severity-badges">${renderBadges(task)}</div>
+      </div>
     </div>
     <div class="card-title">${task.title}</div>
     <div class="card-agent">
       <span class="card-agent-dot" style="background:${task.agent_color}"></span>
       ${task.agent}
     </div>
-    ${task.blocked_by && task.blocked_by.length > 0 ? `<div class="card-blocked-by">Blocked by: ${task.blocked_by.map(id => '#' + id).join(', ')}</div>` : ''}
     <div class="card-message">${task.message || ''}</div>
     <div class="card-progress-bar">
       <div class="card-progress-fill" style="width:${Math.round(progress * 100)}%;background:${task.agent_color}"></div>

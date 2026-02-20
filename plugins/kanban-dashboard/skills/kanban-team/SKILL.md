@@ -44,23 +44,45 @@ kanban_init({
 | in_progress | `in_progress` |
 | completed | `done` |
 
-### 2. Update tasks as teammates report progress
+### 2. Tell teammates their subtasks when dispatching
 
-Each time a teammate sends you a message or goes idle after completing work, update the dashboard. Ask teammates to report which files they modified so you can include them in updates.
+**This is critical for live progress tracking.** When you spawn or message a teammate with their task assignment, include the exact subtask names from the kanban so they can report progress against them.
 
-**When a teammate starts work:**
+Include this in every task dispatch message:
+
 ```
-kanban_update_task({ id: <task-id>, status: "in_progress", message: "Working on it" })
+As you work, send me a progress message after completing each of these subtasks:
+- Subtask A
+- Subtask B
+- Subtask C
+
+For each update, tell me:
+1. Which subtask you just finished
+2. Which files you have created or modified so far
+3. Which subtask you are starting next
 ```
+
+This way, when a teammate messages you with "Finished Subtask A, modified src/foo.ts and src/bar.ts, starting Subtask B," you have everything needed to update the dashboard.
+
+**Set the task to `in_progress` BEFORE spawning the teammate:**
+```
+kanban_update_task({ id: <task-id>, status: "in_progress", message: "Starting work" })
+```
+Then spawn the teammate. This ensures the dashboard reflects active work immediately.
+
+### 3. Update the dashboard after EVERY teammate interaction
+
+**Every time you receive a message from a teammate — whether it is a progress report, a question, an idle notification, or a completion message — update the kanban board.** Do not batch updates. Do not wait. The user is watching the dashboard in real time.
 
 **When a teammate reports completing a subtask:**
 
-Update `subtasks_done` with the full list of completed subtask strings. Progress is auto-calculated from the ratio of done subtasks to total subtasks.
+Update `subtasks_done` with the cumulative list of completed subtask strings, include files reported so far, and set the message. Progress is auto-calculated from the ratio of done subtasks to total subtasks.
 
 ```
 kanban_update_task({
   id: <task-id>,
   subtasks_done: ["Subtask A"],
+  files: ["src/foo.ts", "src/bar.ts"],
   message: "Finished Subtask A, starting Subtask B"
 })
 ```
@@ -71,13 +93,23 @@ As more subtasks complete, send the cumulative list:
 kanban_update_task({
   id: <task-id>,
   subtasks_done: ["Subtask A", "Subtask B"],
+  files: ["src/foo.ts", "src/bar.ts", "src/baz.ts"],
   message: "Subtask B done, moving to Subtask C"
+})
+```
+
+**When a teammate sends a message but hasn't completed a subtask yet** (e.g., asking a question or reporting an issue), still update the message field:
+
+```
+kanban_update_task({
+  id: <task-id>,
+  message: "Investigating issue with API endpoint"
 })
 ```
 
 **When a teammate completes a task:**
 
-Include the final `subtasks_done` array and the `files` array listing all files the teammate modified. This enables per-task file diff inspection in the dashboard modal.
+Include the final `subtasks_done` array and the full `files` array. This enables per-task file diff inspection in the dashboard modal.
 
 ```
 kanban_update_task({
@@ -93,7 +125,7 @@ Blocked tasks whose dependencies are all done will automatically move to `ready`
 
 **Fallback for tasks without subtasks:** If a task has no `subtasks` array, you can set `progress` directly as a float from `0.0` to `1.0`. Prefer subtask tracking whenever possible.
 
-### 3. Log notable events
+### 4. Log notable events
 
 Status changes, subtask completions, and message updates are automatically logged to the dashboard activity feed. Use `kanban_log` only for supplementary context that is not captured by task updates:
 
@@ -101,7 +133,7 @@ Status changes, subtask completions, and message updates are automatically logge
 kanban_log({ agent: "<agent-name>", message: "<what happened>" })
 ```
 
-### 4. Stop the dashboard when done
+### 5. Stop the dashboard when done
 
 After all tasks are complete and you are shutting down the team:
 
@@ -111,7 +143,9 @@ kanban_stop()
 
 ## Tips
 
+- **Update immediately, every time.** The dashboard polls every 1.5 seconds. If you don't call `kanban_update_task`, the card will appear frozen to the user. Update on every teammate message.
+- **Tell teammates their subtask names.** Teammates cannot report subtask progress if they don't know the names. Always include the subtask list in your dispatch message.
+- **Track files incrementally.** Include all files modified so far in every update, not just at completion. The `files` array is replaced on each update (not appended), so always send the full list.
 - Use the task's `message` field to show the latest status from each teammate -- it appears on the card.
-- Always ask teammates to report which files they modified. Include them in the `files` array so the dashboard can show git diffs.
 - Break every task into `subtasks` at init time. Update `subtasks_done` incrementally as teammates report progress -- this drives the progress bar automatically.
 - The dashboard auto-opens in the browser on init. The user can refresh anytime to see current state.

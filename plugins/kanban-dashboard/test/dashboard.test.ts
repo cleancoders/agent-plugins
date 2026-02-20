@@ -361,10 +361,20 @@ describe('renderCard(task)', () => {
       id: 'T-013', title: 'X', agent: 'A', status: 'blocked',
       agent_color: '#000', progress: 0, blocked_by: [1, 3],
     });
-    expect(result).toContain('card-blocked-by');
-    expect(result).toContain('Blocked by:');
+    expect(result).toContain('badge-blocked');
     expect(result).toContain('#1');
     expect(result).toContain('#3');
+  });
+
+  it('renders blocked-by as badges inside card-top-right', () => {
+    const result = ctx.renderCard({
+      id: 'T-013b', title: 'X', agent: 'A', status: 'blocked',
+      agent_color: '#000', progress: 0, blocked_by: [2, 5],
+    });
+    expect(result).toContain('blocked-badges');
+    expect(result).toContain('<span class="badge badge-blocked">#2</span>');
+    expect(result).toContain('<span class="badge badge-blocked">#5</span>');
+    expect(result).toContain('card-top-right');
   });
 
   it('does not show blocked-by when blocked_by is empty', () => {
@@ -372,7 +382,7 @@ describe('renderCard(task)', () => {
       id: 'T-014', title: 'X', agent: 'A', status: 'ready',
       agent_color: '#000', progress: 0, blocked_by: [],
     });
-    expect(result).not.toContain('card-blocked-by');
+    expect(result).not.toContain('badge-blocked');
   });
 
   it('does not show blocked-by when blocked_by is missing', () => {
@@ -380,7 +390,7 @@ describe('renderCard(task)', () => {
       id: 'T-015', title: 'X', agent: 'A', status: 'ready',
       agent_color: '#000', progress: 0,
     });
-    expect(result).not.toContain('card-blocked-by');
+    expect(result).not.toContain('badge-blocked');
   });
 
   it('handles missing message gracefully', () => {

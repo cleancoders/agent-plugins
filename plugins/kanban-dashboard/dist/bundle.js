@@ -35174,13 +35174,29 @@ var require_http_server = __commonJS({
                 sendJson(res, 200, data2);
                 return;
               }
-              if (task.start_ref) {
-                const output = (0, node_child_process_1.execSync)(`git diff --name-status ${task.start_ref}..HEAD`, {
+              if (task.start_ref && !task.end_ref) {
+                const committedOutput = (0, node_child_process_1.execSync)(`git diff --name-status ${task.start_ref}..HEAD`, {
                   cwd: projectDir,
                   encoding: "utf-8",
                   timeout: 5e3
                 }).trim();
-                const files2 = parseGitNameStatus(output, state);
+                const uncommittedOutput = (0, node_child_process_1.execSync)("git diff --name-status", {
+                  cwd: projectDir,
+                  encoding: "utf-8",
+                  timeout: 5e3
+                }).trim();
+                const fileMap = /* @__PURE__ */ new Map();
+                for (const entry of parseGitNameStatus(committedOutput, state)) {
+                  fileMap.set(entry.path, entry);
+                }
+                for (const entry of parseGitNameStatus(uncommittedOutput, state)) {
+                  if (!fileMap.has(entry.path))
+                    fileMap.set(entry.path, entry);
+                }
+                let files2 = Array.from(fileMap.values());
+                if (task.files && task.files.length > 0) {
+                  files2 = files2.filter((f) => task.files.some((tf) => f.path.endsWith(tf) || tf.endsWith(f.path)));
+                }
                 const data2 = { files: files2 };
                 filesCache = { data: data2, time: now, key: cacheKey };
                 sendJson(res, 200, data2);

@@ -158,7 +158,7 @@ function handleRequest(
       if (taskId) {
         const task = state.tasks.find((t) => String(t.id) === taskId);
         if (task) {
-          // Task has start_ref and end_ref: use that range
+          // Task has start_ref and end_ref that differ: use that range
           if (task.start_ref && task.end_ref && task.start_ref !== task.end_ref) {
             const output = execSync(`git diff --name-status ${task.start_ref}..${task.end_ref}`, {
               cwd: projectDir, encoding: "utf-8", timeout: 5000,
@@ -169,18 +169,33 @@ function handleRequest(
             sendJson(res, 200, data);
             return;
           }
-          // Task has start_ref only (in progress): diff from start to HEAD
-          if (task.start_ref) {
-            const output = execSync(`git diff --name-status ${task.start_ref}..HEAD`, {
+          // Task has start_ref only (in progress, no end_ref yet): diff from start to HEAD + uncommitted
+          if (task.start_ref && !task.end_ref) {
+            const committedOutput = execSync(`git diff --name-status ${task.start_ref}..HEAD`, {
               cwd: projectDir, encoding: "utf-8", timeout: 5000,
             }).trim();
-            const files = parseGitNameStatus(output, state);
+            const uncommittedOutput = execSync("git diff --name-status", {
+              cwd: projectDir, encoding: "utf-8", timeout: 5000,
+            }).trim();
+            const fileMap = new Map<string, { path: string; status: string; task_ids: number[] }>();
+            for (const entry of parseGitNameStatus(committedOutput, state)) {
+              fileMap.set(entry.path, entry);
+            }
+            for (const entry of parseGitNameStatus(uncommittedOutput, state)) {
+              if (!fileMap.has(entry.path)) fileMap.set(entry.path, entry);
+            }
+            let files = Array.from(fileMap.values());
+            if (task.files && task.files.length > 0) {
+              files = files.filter(f =>
+                task.files!.some(tf => f.path.endsWith(tf) || tf.endsWith(f.path))
+              );
+            }
             const data = { files };
             filesCache = { data, time: now, key: cacheKey };
             sendJson(res, 200, data);
             return;
           }
-          // Task has files array: use baseline or unstaged diff, filter by files
+          // Task has files array (or start_ref == end_ref with no meaningful diff): filter baseline
           if (task.files && task.files.length > 0) {
             const allFiles = getFilesWithBaseline(projectDir, baselineRef, state);
             const files = allFiles.filter((f) =>
