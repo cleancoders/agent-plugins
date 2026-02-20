@@ -4,14 +4,16 @@ import { resolve } from 'path';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 function createMockElement() {
+  const _classes = new Set<string>();
   return {
     innerHTML: '',
     textContent: '',
     className: '',
     style: {} as Record<string, string>,
     classList: {
-      add: vi.fn(),
-      remove: vi.fn(),
+      add: vi.fn((cls: string) => _classes.add(cls)),
+      remove: vi.fn((cls: string) => _classes.delete(cls)),
+      contains: vi.fn((cls: string) => _classes.has(cls)),
     },
   };
 }
@@ -29,7 +31,8 @@ function loadModal(options?: {
   const elements: Record<string, MockElement> = {};
   const elementIds = [
     'modal-id', 'modal-status', 'modal-title', 'modal-body', 'task-modal',
-    'modal-file-list', 'modal-diff-view',
+    'modal-file-list', 'diff-modal', 'diff-modal-main', 'diff-modal-filename',
+    'diff-modal-sidebar',
   ];
   for (const id of elementIds) {
     elements[id] = createMockElement();
@@ -55,6 +58,7 @@ function loadModal(options?: {
       if (task.low > 0) html += `<span class="badge badge-low">L:${task.low}</span>`;
       return html;
     },
+    findActiveSubtask: () => -1,
     // Globals from diff.js
     escapeHtml: (s: string) =>
       String(s || '')
@@ -95,8 +99,11 @@ function loadModal(options?: {
     setQuerySelectorResult: (result: any[]) => { querySelectorAllResult = result; },
     openModal: context.openModal as (taskId: string) => void,
     loadFileDiffs: context.loadFileDiffs as (task: any) => Promise<void>,
-    loadSingleDiff: context.loadSingleDiff as (rowEl: any, filePath: string) => Promise<void>,
+    openDiffModal: context.openDiffModal as (filePath: string) => void,
+    loadDiffInModal: context.loadDiffInModal as (filePath: string) => Promise<void>,
+    switchDiffFile: context.switchDiffFile as (rowEl: any, filePath: string) => void,
     closeModal: context.closeModal as () => void,
+    closeDiffModal: context.closeDiffModal as () => void,
   };
 }
 
@@ -301,7 +308,6 @@ describe('openModal', () => {
     const body = elements['modal-body'].innerHTML;
     expect(body).toContain('Files');
     expect(body).toContain('modal-file-list');
-    expect(body).toContain('modal-diff-view');
   });
 
   it('hides files section when task has empty files array', () => {
@@ -558,6 +564,7 @@ describe('loadFileDiffs', () => {
       allTasks: [],
       allLogEntries: [],
       renderBadges: () => '',
+      findActiveSubtask: () => -1,
       escapeHtml: (s: string) => String(s || ''),
       renderDiff: (text: string) => text || '',
       document: {
@@ -584,101 +591,158 @@ describe('loadFileDiffs', () => {
   });
 });
 
-describe('loadSingleDiff', () => {
-  it('adds active class to clicked row', async () => {
-    const rowEl = {
-      classList: { add: vi.fn(), remove: vi.fn() },
-    };
-    const existingActive = {
-      classList: { remove: vi.fn() },
-    };
-    const { loadSingleDiff, setQuerySelectorResult } = loadModal({
-      fetchResponse: { diff: '@@ -1,1 +1,1 @@\n-old\n+new' },
+describe('openDiffModal', () => {
+  it('hides task modal and shows diff modal', async () => {
+    const task = makeTask({ id: 1, files: ['src/app.ts'] });
+    const { loadFileDiffs, openDiffModal, elements } = loadModal({
+      tasks: [task],
+      fetchResponse: { files: [{ path: 'src/app.ts', status: 'M' }] },
     });
-    setQuerySelectorResult([existingActive]);
 
-    await loadSingleDiff(rowEl, 'src/app.ts');
+    await loadFileDiffs(task);
+    openDiffModal('src/app.ts');
 
-    expect(existingActive.classList.remove).toHaveBeenCalledWith('active');
-    expect(rowEl.classList.add).toHaveBeenCalledWith('active');
+    expect(elements['task-modal'].style.display).toBe('none');
+    expect(elements['diff-modal'].classList.add).toHaveBeenCalledWith('open');
   });
 
-  it('shows loading state initially then renders diff content', async () => {
-    const rowEl = { classList: { add: vi.fn() } };
-    const diffText = '@@ -1,1 +1,1 @@\n-old\n+new';
-    const { loadSingleDiff, elements } = loadModal({
-      fetchResponse: { diff: diffText },
+  it('populates sidebar with file list', async () => {
+    const task = makeTask({ id: 1, files: ['src/app.ts', 'src/utils.ts'] });
+    const { loadFileDiffs, openDiffModal, elements, fetchMock } = loadModal({
+      tasks: [task],
+      fetchResponse: { files: [{ path: 'src/app.ts', status: 'M' }, { path: 'src/utils.ts', status: 'A' }] },
     });
 
-    await loadSingleDiff(rowEl, 'src/app.ts');
+    await loadFileDiffs(task);
+    // Reset fetch mock to capture the diff fetch
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue({ json: () => Promise.resolve({ diff: 'some diff' }) });
 
-    // After resolution, the diff-view should contain the rendered diff
-    const diffHtml = elements['modal-diff-view'].innerHTML;
-    expect(diffHtml).toContain('diff-container');
+    openDiffModal('src/app.ts');
+
+    const sidebar = elements['diff-modal-sidebar'].innerHTML;
+    expect(sidebar).toContain('src/app.ts');
+    expect(sidebar).toContain('src/utils.ts');
+  });
+
+  it('marks selected file as active in sidebar', async () => {
+    const task = makeTask({ id: 1, files: ['src/app.ts', 'src/utils.ts'] });
+    const { loadFileDiffs, openDiffModal, elements, fetchMock } = loadModal({
+      tasks: [task],
+      fetchResponse: { files: [{ path: 'src/app.ts', status: 'M' }, { path: 'src/utils.ts', status: 'A' }] },
+    });
+
+    await loadFileDiffs(task);
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue({ json: () => Promise.resolve({ diff: 'some diff' }) });
+
+    openDiffModal('src/app.ts');
+
+    const sidebar = elements['diff-modal-sidebar'].innerHTML;
+    // The first file should have 'active' class
+    expect(sidebar).toMatch(/diff-file-row active.*src\/app\.ts/);
+    // The second file should NOT have 'active' class
+    expect(sidebar).not.toMatch(/diff-file-row active.*src\/utils\.ts/);
+  });
+});
+
+describe('loadDiffInModal', () => {
+  it('sets filename in header', async () => {
+    const task = makeTask({ id: 1, files: ['src/app.ts'] });
+    const { openModal, loadDiffInModal, elements, fetchMock } = loadModal({
+      tasks: [task],
+      fetchResponse: { diff: 'some diff' },
+    });
+
+    openModal('1');
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue({ json: () => Promise.resolve({ diff: 'some diff' }) });
+
+    await loadDiffInModal('src/app.ts');
+
+    expect(elements['diff-modal-filename'].textContent).toBe('src/app.ts');
   });
 
   it('renders diff content from API', async () => {
-    const rowEl = { classList: { add: vi.fn() } };
-    const diffText = 'some diff text';
-    const { loadSingleDiff, elements } = loadModal({
-      fetchResponse: { diff: diffText },
+    const task = makeTask({ id: 1, files: ['src/app.ts'] });
+    const { openModal, loadDiffInModal, elements, fetchMock } = loadModal({
+      tasks: [task],
+      fetchResponse: { diff: 'some diff text' },
     });
 
-    await loadSingleDiff(rowEl, 'src/app.ts');
+    openModal('1');
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue({ json: () => Promise.resolve({ diff: 'some diff text' }) });
 
-    const diffHtml = elements['modal-diff-view'].innerHTML;
+    await loadDiffInModal('src/app.ts');
+
+    const diffHtml = elements['diff-modal-main'].innerHTML;
+    expect(diffHtml).toContain('diff-container');
     expect(diffHtml).toContain('some diff text');
   });
 
   it('shows error from API error response', async () => {
-    const rowEl = { classList: { add: vi.fn() } };
-    const { loadSingleDiff, elements } = loadModal({
+    const task = makeTask({ id: 1, files: ['src/app.ts'] });
+    const { openModal, loadDiffInModal, elements, fetchMock } = loadModal({
+      tasks: [task],
       fetchResponse: { error: 'File not found' },
     });
 
-    await loadSingleDiff(rowEl, 'src/missing.ts');
+    openModal('1');
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue({ json: () => Promise.resolve({ error: 'File not found' }) });
 
-    const diffHtml = elements['modal-diff-view'].innerHTML;
+    await loadDiffInModal('src/missing.ts');
+
+    const diffHtml = elements['diff-modal-main'].innerHTML;
     expect(diffHtml).toContain('diff-error');
     expect(diffHtml).toContain('File not found');
   });
 
   it('shows "Failed to load diff" on fetch failure', async () => {
-    const rowEl = { classList: { add: vi.fn() } };
-    const { loadSingleDiff, elements } = loadModal({ fetchError: true });
+    const task = makeTask({ id: 1, files: ['src/app.ts'] });
+    const { openModal, loadDiffInModal, elements, fetchMock } = loadModal({
+      tasks: [task],
+    });
 
-    await loadSingleDiff(rowEl, 'src/app.ts');
+    openModal('1');
+    fetchMock.mockClear();
+    fetchMock.mockRejectedValue(new Error('Network error'));
 
-    const diffHtml = elements['modal-diff-view'].innerHTML;
+    await loadDiffInModal('src/app.ts');
+
+    const diffHtml = elements['diff-modal-main'].innerHTML;
     expect(diffHtml).toContain('Failed to load diff');
   });
 
   it('calls fetch with the correct URL', async () => {
-    const rowEl = { classList: { add: vi.fn() } };
-    const { loadSingleDiff, fetchMock } = loadModal({
+    const task = makeTask({ id: 1, files: ['src/app.ts'] });
+    const { openModal, loadDiffInModal, fetchMock } = loadModal({
+      tasks: [task],
       fetchResponse: { diff: 'some diff' },
     });
 
-    await loadSingleDiff(rowEl, 'src/my file.ts');
+    openModal('1');
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue({ json: () => Promise.resolve({ diff: 'some diff' }) });
+
+    await loadDiffInModal('src/my file.ts');
 
     expect(fetchMock).toHaveBeenCalledWith('/api/diff?file=' + encodeURIComponent('src/my file.ts'));
   });
 
   it('includes start_ref and end_ref when they differ', async () => {
     const task = makeTask({ id: 1, files: ['src/app.ts'], start_ref: 'abc123', end_ref: 'def456' });
-    const { openModal, loadSingleDiff, fetchMock } = loadModal({
+    const { openModal, loadDiffInModal, fetchMock } = loadModal({
       tasks: [task],
       fetchResponse: { diff: 'some diff' },
     });
 
-    // Open modal to set currentModalTask
     openModal('1');
-    // Reset fetch mock after openModal's API calls
     fetchMock.mockClear();
     fetchMock.mockResolvedValue({ json: () => Promise.resolve({ diff: 'some diff' }) });
 
-    const rowEl = { classList: { add: vi.fn() } };
-    await loadSingleDiff(rowEl, 'src/app.ts');
+    await loadDiffInModal('src/app.ts');
 
     const calledUrl = fetchMock.mock.calls[0][0];
     expect(calledUrl).toContain('start_ref=' + encodeURIComponent('abc123'));
@@ -687,7 +751,7 @@ describe('loadSingleDiff', () => {
 
   it('omits refs when start_ref equals end_ref', async () => {
     const task = makeTask({ id: 1, files: ['src/app.ts'], start_ref: 'same111', end_ref: 'same111' });
-    const { openModal, loadSingleDiff, fetchMock } = loadModal({
+    const { openModal, loadDiffInModal, fetchMock } = loadModal({
       tasks: [task],
       fetchResponse: { diff: 'some diff' },
     });
@@ -696,8 +760,7 @@ describe('loadSingleDiff', () => {
     fetchMock.mockClear();
     fetchMock.mockResolvedValue({ json: () => Promise.resolve({ diff: 'some diff' }) });
 
-    const rowEl = { classList: { add: vi.fn() } };
-    await loadSingleDiff(rowEl, 'src/app.ts');
+    await loadDiffInModal('src/app.ts');
 
     const calledUrl = fetchMock.mock.calls[0][0];
     expect(calledUrl).not.toContain('start_ref');
@@ -708,7 +771,7 @@ describe('loadSingleDiff', () => {
   it('includes only start_ref when end_ref is absent', async () => {
     const task = makeTask({ id: 1, files: ['src/app.ts'], start_ref: 'abc123' });
     delete task.end_ref;
-    const { openModal, loadSingleDiff, fetchMock } = loadModal({
+    const { openModal, loadDiffInModal, fetchMock } = loadModal({
       tasks: [task],
       fetchResponse: { diff: 'some diff' },
     });
@@ -717,8 +780,7 @@ describe('loadSingleDiff', () => {
     fetchMock.mockClear();
     fetchMock.mockResolvedValue({ json: () => Promise.resolve({ diff: 'some diff' }) });
 
-    const rowEl = { classList: { add: vi.fn() } };
-    await loadSingleDiff(rowEl, 'src/app.ts');
+    await loadDiffInModal('src/app.ts');
 
     const calledUrl = fetchMock.mock.calls[0][0];
     expect(calledUrl).toContain('start_ref=' + encodeURIComponent('abc123'));
@@ -729,7 +791,7 @@ describe('loadSingleDiff', () => {
     const task = makeTask({ id: 1, files: ['src/app.ts'] });
     delete task.start_ref;
     delete task.end_ref;
-    const { openModal, loadSingleDiff, fetchMock } = loadModal({
+    const { openModal, loadDiffInModal, fetchMock } = loadModal({
       tasks: [task],
       fetchResponse: { diff: 'some diff' },
     });
@@ -738,8 +800,7 @@ describe('loadSingleDiff', () => {
     fetchMock.mockClear();
     fetchMock.mockResolvedValue({ json: () => Promise.resolve({ diff: 'some diff' }) });
 
-    const rowEl = { classList: { add: vi.fn() } };
-    await loadSingleDiff(rowEl, 'src/app.ts');
+    await loadDiffInModal('src/app.ts');
 
     const calledUrl = fetchMock.mock.calls[0][0];
     expect(calledUrl).not.toContain('start_ref');
@@ -747,18 +808,71 @@ describe('loadSingleDiff', () => {
   });
 });
 
+describe('switchDiffFile', () => {
+  it('updates active class in sidebar and calls loadDiffInModal', async () => {
+    const rowEl = {
+      classList: { add: vi.fn(), remove: vi.fn() },
+    };
+    const existingActive = {
+      classList: { remove: vi.fn() },
+    };
+    const { switchDiffFile, setQuerySelectorResult, fetchMock } = loadModal({
+      fetchResponse: { diff: 'some diff' },
+    });
+    setQuerySelectorResult([existingActive]);
+
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue({ json: () => Promise.resolve({ diff: 'some diff' }) });
+
+    switchDiffFile(rowEl, 'src/app.ts');
+
+    expect(existingActive.classList.remove).toHaveBeenCalledWith('active');
+    expect(rowEl.classList.add).toHaveBeenCalledWith('active');
+  });
+});
+
 describe('closeModal', () => {
-  it('removes "open" class from task-modal', () => {
+  it('removes "open" class from task-modal and diff-modal', () => {
     const { closeModal, elements } = loadModal();
 
     closeModal();
 
     expect(elements['task-modal'].classList.remove).toHaveBeenCalledWith('open');
+    expect(elements['diff-modal'].classList.remove).toHaveBeenCalledWith('open');
+    expect(elements['task-modal'].style.display).toBe('');
+  });
+});
+
+describe('closeDiffModal', () => {
+  it('hides diff modal and restores task modal', () => {
+    const { closeDiffModal, elements } = loadModal();
+
+    closeDiffModal();
+
+    expect(elements['diff-modal'].classList.remove).toHaveBeenCalledWith('open');
+    expect(elements['task-modal'].style.display).toBe('');
   });
 });
 
 describe('Escape key handler', () => {
-  it('calls closeModal when Escape is pressed', () => {
+  it('calls closeDiffModal when diff modal is open and Escape is pressed', () => {
+    const { keydownHandler, elements } = loadModal();
+
+    // Simulate diff modal being open
+    elements['diff-modal'].classList.add('open');
+
+    const handler = keydownHandler();
+    expect(handler).not.toBeNull();
+
+    handler!({ key: 'Escape' });
+
+    // Should close diff modal (remove 'open') but NOT close task modal
+    expect(elements['diff-modal'].classList.remove).toHaveBeenCalledWith('open');
+    // task-modal display should be restored
+    expect(elements['task-modal'].style.display).toBe('');
+  });
+
+  it('calls closeModal when only task modal is open and Escape is pressed', () => {
     const { keydownHandler, elements } = loadModal();
 
     const handler = keydownHandler();
@@ -767,6 +881,7 @@ describe('Escape key handler', () => {
     handler!({ key: 'Escape' });
 
     expect(elements['task-modal'].classList.remove).toHaveBeenCalledWith('open');
+    expect(elements['diff-modal'].classList.remove).toHaveBeenCalledWith('open');
   });
 
   it('does not call closeModal for non-Escape keys', () => {
