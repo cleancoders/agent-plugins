@@ -72,6 +72,10 @@ export function updateTask(id: number, updates: Partial<Task>): void {
     tasks[index].progress = (tasks[index].subtasks_done?.length || 0) / subtasks.length;
   }
 
+  if (tasks[index].status === 'in_progress' && tasks[index].progress === 0) {
+    tasks[index].progress = 0.02;
+  }
+
   if (updates.status === "done") {
     unblockDependents();
   }

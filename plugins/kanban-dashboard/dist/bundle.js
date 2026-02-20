@@ -34980,6 +34980,9 @@ var require_state = __commonJS({
       if (subtasks && subtasks.length > 0) {
         tasks[index].progress = (tasks[index].subtasks_done?.length || 0) / subtasks.length;
       }
+      if (tasks[index].status === "in_progress" && tasks[index].progress === 0) {
+        tasks[index].progress = 0.02;
+      }
       if (updates.status === "done") {
         unblockDependents();
       }
@@ -35159,7 +35162,7 @@ var require_http_server = __commonJS({
           if (taskId) {
             const task = state.tasks.find((t) => String(t.id) === taskId);
             if (task) {
-              if (task.start_ref && task.end_ref) {
+              if (task.start_ref && task.end_ref && task.start_ref !== task.end_ref) {
                 const output = (0, node_child_process_1.execSync)(`git diff --name-status ${task.start_ref}..${task.end_ref}`, {
                   cwd: projectDir,
                   encoding: "utf-8",
@@ -35219,7 +35222,7 @@ var require_http_server = __commonJS({
         const endRef = params.get("end_ref");
         try {
           let diff;
-          if (startRef) {
+          if (startRef && (!endRef || startRef !== endRef)) {
             const ref = endRef ? `${startRef}..${endRef}` : `${startRef}..HEAD`;
             diff = (0, node_child_process_1.execSync)(`git diff ${ref} -- ${JSON.stringify(file)}`, {
               cwd: projectDir,

@@ -159,7 +159,7 @@ function handleRequest(
         const task = state.tasks.find((t) => String(t.id) === taskId);
         if (task) {
           // Task has start_ref and end_ref: use that range
-          if (task.start_ref && task.end_ref) {
+          if (task.start_ref && task.end_ref && task.start_ref !== task.end_ref) {
             const output = execSync(`git diff --name-status ${task.start_ref}..${task.end_ref}`, {
               cwd: projectDir, encoding: "utf-8", timeout: 5000,
             }).trim();
@@ -224,7 +224,7 @@ function handleRequest(
 
     try {
       let diff: string;
-      if (startRef) {
+      if (startRef && (!endRef || startRef !== endRef)) {
         const ref = endRef ? `${startRef}..${endRef}` : `${startRef}..HEAD`;
         diff = execSync(`git diff ${ref} -- ${JSON.stringify(file)}`, {
           cwd: projectDir, encoding: "utf-8", timeout: 10000,
