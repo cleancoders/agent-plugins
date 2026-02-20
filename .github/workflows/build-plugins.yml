@@ -6,7 +6,7 @@ on:
     paths:
       - 'plugins/*/src/**'
       - 'plugins/*/test/**'
-      - 'plugins/*/hooks/**'
+      - 'plugins/*/VERSION'
       - 'plugins/*/tsconfig.json'
       - 'plugins/*/package.json'
       - 'plugins/*/package-lock.json'
@@ -16,10 +16,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      - name: Run bash tests
+        run: |
+          for test_file in test/*_test.sh; do
+            echo "Running ${test_file}"
+            bash "${test_file}"
+          done
+
+      - name: Sync versions
+        run: |
+          MARKETPLACE_JSON=".claude-plugin/marketplace.json"
+          for plugin_dir in plugins/*/; do
+            if [ -f "${plugin_dir}VERSION" ]; then
+              echo "Syncing version for ${plugin_dir}"
+              bash scripts/sync-versions.sh "${plugin_dir%/}" "${MARKETPLACE_JSON}"
+            fi
+          done
 
       - name: Test and build plugins
         run: |
@@ -34,14 +53,29 @@ jobs:
             fi
           done
 
-      - name: Commit dist if changed
+      - name: Commit changes if any
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add plugins/*/dist/bundle.js
+          git add plugins/*/dist/bundle.js plugins/*/.claude-plugin/plugin.json plugins/*/package.json plugins/*/src/index.ts .claude-plugin/marketplace.json
           if git diff --cached --quiet; then
-            echo "No dist changes to commit"
+            echo "No changes to commit"
           else
-            git commit -m "Build plugin dist [skip ci]"
+            git commit -m "Sync versions and build plugins [skip ci]"
             git push
           fi
+
+      - name: Tag new versions
+        run: |
+          for plugin_dir in plugins/*/; do
+            if [ -f "${plugin_dir}VERSION" ]; then
+              name="$(basename "${plugin_dir}")"
+              version="$(cat "${plugin_dir}VERSION" | tr -d '[:space:]')"
+              tag="${name}/v${version}"
+              if ! git rev-parse "${tag}" >/dev/null 2>&1; then
+                echo "Creating tag ${tag}"
+                git tag "${tag}"
+              fi
+            fi
+          done
+          git push --tags
