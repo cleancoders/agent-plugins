@@ -114,6 +114,22 @@
   </div>
 </div>
 
+<div class="diff-modal-overlay" id="diff-modal" onclick="if(event.target===this)closeDiffModalFull()">
+  <div class="diff-modal-content">
+    <div class="diff-modal-header">
+      <button class="diff-modal-back" onclick="closeDiffModal()">&#8592; Back to Task</button>
+      <span class="diff-modal-filename" id="diff-modal-filename"></span>
+      <button class="modal-close" onclick="closeDiffModalFull()">&times;</button>
+    </div>
+    <div class="diff-modal-body">
+      <div class="diff-modal-sidebar" id="diff-modal-sidebar"></div>
+      <div class="diff-modal-main" id="diff-modal-main">
+        <div class="diff-loading">Select a file to view changes</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="/js/dashboard.js"></script>
 <script src="/js/diff.js"></script>
 <script src="/js/modal.js"></script>

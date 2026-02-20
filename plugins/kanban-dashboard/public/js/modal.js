@@ -60,14 +60,13 @@ function openModal(taskId) {
     </div>`;
   }
 
-  // Files & Diffs
+  // Files
   if (task.files && task.files.length > 0) {
     html += `<div class="modal-section">
       <div class="modal-section-title">Files</div>
       <div class="diff-file-list" id="modal-file-list">
         <div class="diff-loading">Loading file changes...</div>
       </div>
-      <div id="modal-diff-view"></div>
     </div>`;
   }
 
@@ -166,6 +165,8 @@ function openModal(taskId) {
   }
 }
 
+let diffModalFiles = [];
+
 async function loadFileDiffs(task) {
   currentModalTask = task;
   const fileListEl = document.getElementById('modal-file-list');
@@ -174,8 +175,9 @@ async function loadFileDiffs(task) {
   const taskFiles = task.files || [];
 
   function renderFileList(files) {
+    diffModalFiles = files;
     fileListEl.innerHTML = files.map(f =>
-      `<div class="diff-file-row" data-file="${escapeHtml(f.path)}" onclick="loadSingleDiff(this, '${escapeHtml(f.path)}')">
+      `<div class="diff-file-row" data-file="${escapeHtml(f.path)}" onclick="openDiffModal('${escapeHtml(f.path)}')">
         ${f.status ? `<span class="diff-file-status ${f.status}">${f.status}</span>` : ''}
         <span class="diff-file-path">${escapeHtml(f.path)}</span>
       </div>`
@@ -197,48 +199,93 @@ async function loadFileDiffs(task) {
   }
 }
 
-async function loadSingleDiff(rowEl, filePath) {
-  const diffViewEl = document.getElementById('modal-diff-view');
-  if (!diffViewEl) return;
+function openDiffModal(filePath) {
+  // Hide task modal, show diff modal
+  document.getElementById('task-modal').style.display = 'none';
+  const diffModal = document.getElementById('diff-modal');
+  diffModal.classList.add('open');
 
-  // Toggle active state
-  document.querySelectorAll('.diff-file-row.active').forEach(el => el.classList.remove('active'));
-  rowEl.classList.add('active');
+  // Populate sidebar with file list
+  const sidebar = document.getElementById('diff-modal-sidebar');
+  sidebar.innerHTML = diffModalFiles.map(f =>
+    `<div class="diff-file-row ${f.path === filePath ? 'active' : ''}" data-file="${escapeHtml(f.path)}" onclick="switchDiffFile(this, '${escapeHtml(f.path)}')">
+      ${f.status ? `<span class="diff-file-status ${f.status}">${f.status}</span>` : ''}
+      <span class="diff-file-path">${escapeHtml(f.path)}</span>
+    </div>`
+  ).join('');
 
-  diffViewEl.innerHTML = '<div class="diff-loading">Loading diff...</div>';
+  // Load the selected file's diff
+  loadDiffInModal(filePath);
+}
+
+async function loadDiffInModal(filePath) {
+  const mainEl = document.getElementById('diff-modal-main');
+  const filenameEl = document.getElementById('diff-modal-filename');
+  if (!mainEl) return;
+
+  filenameEl.textContent = filePath;
+  mainEl.innerHTML = '<div class="diff-loading">Loading diff...</div>';
 
   try {
     let url = '/api/diff?file=' + encodeURIComponent(filePath);
     if (currentModalTask) {
       const sr = currentModalTask.start_ref;
       const er = currentModalTask.end_ref;
-      // Only pass refs when they bracket meaningful changes (different commits)
       if (sr && er && sr !== er) {
         url += '&start_ref=' + encodeURIComponent(sr);
         url += '&end_ref=' + encodeURIComponent(er);
       } else if (sr && !er) {
         url += '&start_ref=' + encodeURIComponent(sr);
       }
-      // When start_ref == end_ref (no commits during task), omit refs so server uses baseline
     }
     const res = await fetch(url);
     const data = await res.json();
 
     if (data.error) {
-      diffViewEl.innerHTML = `<div class="diff-error">${escapeHtml(data.error)}</div>`;
+      mainEl.innerHTML = `<div class="diff-error">${escapeHtml(data.error)}</div>`;
       return;
     }
 
-    diffViewEl.innerHTML = renderDiff(data.diff);
+    mainEl.innerHTML = renderDiff(data.diff);
   } catch (e) {
-    diffViewEl.innerHTML = '<div class="diff-error">Failed to load diff</div>';
+    mainEl.innerHTML = '<div class="diff-error">Failed to load diff</div>';
   }
 }
 
+function switchDiffFile(rowEl, filePath) {
+  // Update active state in sidebar
+  document.querySelectorAll('#diff-modal-sidebar .diff-file-row.active').forEach(el => el.classList.remove('active'));
+  rowEl.classList.add('active');
+  loadDiffInModal(filePath);
+}
+
+function closeDiffModal() {
+  // Back to task modal
+  document.getElementById('diff-modal').classList.remove('open');
+  document.getElementById('task-modal').style.display = '';
+}
+
+function closeDiffModalFull() {
+  // Close both modals entirely
+  document.getElementById('diff-modal').classList.remove('open');
+  document.getElementById('task-modal').style.display = '';
+  document.getElementById('task-modal').classList.remove('open');
+}
+
 function closeModal() {
+  // If diff modal is open, close it too
+  document.getElementById('diff-modal').classList.remove('open');
+  document.getElementById('task-modal').style.display = '';
   document.getElementById('task-modal').classList.remove('open');
 }
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeModal();
+  if (e.key === 'Escape') {
+    const diffModal = document.getElementById('diff-modal');
+    if (diffModal.classList.contains('open')) {
+      closeDiffModal();
+    } else {
+      closeModal();
+    }
+  }
 });
