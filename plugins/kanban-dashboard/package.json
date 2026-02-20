@@ -1,6 +1,6 @@
 {
   "name": "kanban-dashboard",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "Live KanBan dashboard MCP server for Claude Code agent teams",
   "main": "dist/index.js",
