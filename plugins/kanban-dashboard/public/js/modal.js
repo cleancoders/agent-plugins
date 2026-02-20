@@ -74,13 +74,17 @@ function openModal(taskId) {
   // Subtasks
   if (task.subtasks && task.subtasks.length > 0) {
     const doneSubs = task.subtasks_done || [];
+    const activeIdx = task.status === 'in_progress' ? findActiveSubtask(task.message, task.subtasks, doneSubs) : -1;
     html += `<div class="modal-section">
       <div class="modal-section-title">Subtasks</div>
       <div class="modal-subtask-list">
-        ${task.subtasks.map(st => {
+        ${task.subtasks.map((st, i) => {
           const isDone = doneSubs.includes(st);
-          return `<div class="modal-subtask ${isDone ? 'done' : ''}">
-            <span class="modal-subtask-icon">${isDone ? '&#10003;' : '&#9675;'}</span>
+          const isActive = i === activeIdx;
+          const cls = isDone ? 'done' : (isActive ? 'active' : '');
+          const icon = isDone ? '&#10003;' : (isActive ? '<span class="active-dot"></span>' : '&#9675;');
+          return `<div class="modal-subtask ${cls}">
+            <span class="modal-subtask-icon">${icon}</span>
             <span>${st}</span>
           </div>`;
         }).join('')}

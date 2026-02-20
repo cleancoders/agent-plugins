@@ -175,6 +175,32 @@
 .subtask.done .subtask-icon { color: var(--green); }
 .subtask:not(.done) .subtask-icon { color: var(--text-dim); }
 
+/* Active subtask (currently being worked on) */
+.subtask.active {
+  color: var(--text);
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(0,0,0,0.2) 25%, rgba(88,166,255,0.08) 50%, rgba(0,0,0,0.2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 3s infinite linear;
+}
+
+.subtask.active .subtask-icon { color: var(--blue); }
+
+.active-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--blue);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(77,171,247,0.7); }
+  50% { opacity: 0.7; box-shadow: 0 0 0 4px rgba(77,171,247,0); }
+}
+
 /* Card animations */
 @keyframes shimmer {
   0% { background-position: -200% 0; }

@@ -3,6 +3,38 @@ let prevTaskMap = {};
 let allTasks = [];
 let allLogEntries = [];
 
+const STOP_WORDS = new Set(['the','and','for','with','that','this','from','are','was','has','have','will','been','into','than','its','all','but','not','can','did','get','got','set','use','new','now','also','each','when','then','them','they','what','which','where','how','our','out','one','two']);
+
+function tokenize(text) {
+  if (!text) return [];
+  return text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length >= 3 && !STOP_WORDS.has(w));
+}
+
+function findActiveSubtask(message, subtasks, subtasksDone) {
+  if (!message || !subtasks || subtasks.length === 0) return -1;
+  const doneSubs = subtasksDone || [];
+  const msgTokens = new Set(tokenize(message));
+  if (msgTokens.size === 0) return -1;
+
+  let bestIdx = -1;
+  let bestScore = 0;
+  const threshold = 0.3;
+
+  for (let i = 0; i < subtasks.length; i++) {
+    if (doneSubs.includes(subtasks[i])) continue;
+    const subTokens = tokenize(subtasks[i]);
+    if (subTokens.length === 0) continue;
+    const matches = subTokens.filter(t => msgTokens.has(t)).length;
+    const score = matches / subTokens.length;
+    if (score > bestScore && score >= threshold) {
+      bestScore = score;
+      bestIdx = i;
+    }
+  }
+
+  return bestIdx;
+}
+
 function elapsed() {
   const s = Math.floor((Date.now() - startTime) / 1000);
   const h = String(Math.floor(s / 3600)).padStart(2, '0');
@@ -22,10 +54,14 @@ function renderBadges(task) {
 function renderSubtasks(task) {
   if (!task.subtasks || task.subtasks.length === 0) return '';
   const doneSubs = task.subtasks_done || [];
-  const items = task.subtasks.map(st => {
+  const activeIdx = task.status === 'in_progress' ? findActiveSubtask(task.message, task.subtasks, doneSubs) : -1;
+  const items = task.subtasks.map((st, i) => {
     const isDone = doneSubs.includes(st);
-    return `<div class="subtask ${isDone ? 'done' : ''}">
-      <span class="subtask-icon">${isDone ? '&#10003;' : '&#9675;'}</span>
+    const isActive = i === activeIdx;
+    const cls = isDone ? 'done' : (isActive ? 'active' : '');
+    const icon = isDone ? '&#10003;' : (isActive ? '<span class="active-dot"></span>' : '&#9675;');
+    return `<div class="subtask ${cls}">
+      <span class="subtask-icon">${icon}</span>
       <span>${st}</span>
     </div>`;
   }).join('');
