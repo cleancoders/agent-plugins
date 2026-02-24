@@ -159,6 +159,7 @@ function renderDiff(diffText) {
 
   const rows = buildSideBySide(hunks);
   let html = '<div class="diff-container"><table class="diff-table">';
+  html += '<colgroup><col style="width:48px"><col><col style="width:48px"><col></colgroup>';
 
   for (const row of rows) {
     if (row.type === 'hunk') {

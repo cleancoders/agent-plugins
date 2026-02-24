@@ -420,6 +420,24 @@ describe('renderDiff', () => {
     expect(result).not.toContain('<div>old</div>');
   });
 
+  it('includes colgroup with narrow line-number columns', () => {
+    const diff = [
+      '@@ -1,1 +1,1 @@',
+      '-old',
+      '+new',
+    ].join('\n');
+
+    const result = renderDiff(diff);
+    expect(result).toContain('<colgroup>');
+    expect(result).toContain('</colgroup>');
+    // Line number cols should have a fixed narrow width; content cols should expand
+    const colMatches = result.match(/<col\b[^>]*>/g);
+    expect(colMatches).toHaveLength(4);
+    // Line number columns (1st and 3rd) should have a width style
+    expect(colMatches![0]).toContain('width');
+    expect(colMatches![2]).toContain('width');
+  });
+
   it('marks empty cells with diff-empty-cell class', () => {
     const diff = [
       '@@ -1,1 +1,0 @@',
