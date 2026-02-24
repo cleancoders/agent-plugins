@@ -35624,7 +35624,7 @@ var http_server_js_1 = require_http_server();
 var state_js_1 = require_state();
 var server = new mcp_js_1.McpServer({
   name: "kanban-dashboard",
-  version: "1.3.1"
+  version: "1.4.0"
 });
 async function cleanup() {
   await (0, http_server_js_1.stopServer)();
