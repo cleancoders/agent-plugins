@@ -155,6 +155,11 @@
   background: rgba(255, 255, 255, 0.02);
 }
 
+/* Syntax highlighting overrides — prevent hljs theme from overriding diff backgrounds */
+.diff-line-content [class^="hljs"] {
+  background: transparent;
+}
+
 /* Dependencies section */
 .dep-graph {
   display: flex;

@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { runInNewContext } from 'vm';
 import { resolve } from 'path';
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 
 interface DiffLine {
   type: 'context' | 'added' | 'removed';
@@ -28,15 +28,28 @@ let parseDiff: (diffText: string) => Hunk[];
 let buildSideBySide: (hunks: Hunk[]) => SideBySideRow[];
 let escapeHtml: (text: string) => string;
 let renderDiff: (diffText: string) => string;
+let getLanguageForFile: (filePath: string) => string | null;
+let highlightDiffContent: (filePath: string, containerEl: any) => void;
+let hljsHighlightMock: ReturnType<typeof vi.fn>;
 
 beforeAll(() => {
   const code = readFileSync(resolve(__dirname, '../public/js/diff.js'), 'utf-8');
-  const context: Record<string, unknown> = {};
+  hljsHighlightMock = vi.fn((codeStr: string, opts: any) => ({
+    value: `<span class="hljs-highlighted">${codeStr}</span>`,
+  }));
+  const context: Record<string, unknown> = {
+    hljs: {
+      highlight: hljsHighlightMock,
+      getLanguage: vi.fn((lang: string) => lang ? {} : null),
+    },
+  };
   runInNewContext(code, context);
   parseDiff = context.parseDiff as typeof parseDiff;
   buildSideBySide = context.buildSideBySide as typeof buildSideBySide;
   escapeHtml = context.escapeHtml as typeof escapeHtml;
   renderDiff = context.renderDiff as typeof renderDiff;
+  getLanguageForFile = context.getLanguageForFile as typeof getLanguageForFile;
+  highlightDiffContent = context.highlightDiffContent as typeof highlightDiffContent;
 });
 
 describe('parseDiff', () => {
@@ -446,5 +459,142 @@ describe('renderDiff', () => {
 
     const result = renderDiff(diff);
     expect(result).toContain('diff-empty-cell');
+  });
+});
+
+describe('getLanguageForFile', () => {
+  it('returns "clojure" for .clj files', () => {
+    expect(getLanguageForFile('src/core.clj')).toBe('clojure');
+  });
+
+  it('returns "clojure" for .cljs files', () => {
+    expect(getLanguageForFile('src/app.cljs')).toBe('clojure');
+  });
+
+  it('returns "clojure" for .cljc files', () => {
+    expect(getLanguageForFile('src/shared.cljc')).toBe('clojure');
+  });
+
+  it('returns "javascript" for .js files', () => {
+    expect(getLanguageForFile('public/js/modal.js')).toBe('javascript');
+  });
+
+  it('returns "typescript" for .ts files', () => {
+    expect(getLanguageForFile('src/server.ts')).toBe('typescript');
+  });
+
+  it('returns "typescript" for .tsx files', () => {
+    expect(getLanguageForFile('src/App.tsx')).toBe('typescript');
+  });
+
+  it('returns "python" for .py files', () => {
+    expect(getLanguageForFile('scripts/build.py')).toBe('python');
+  });
+
+  it('returns "css" for .css files', () => {
+    expect(getLanguageForFile('styles/main.css')).toBe('css');
+  });
+
+  it('returns "json" for .json files', () => {
+    expect(getLanguageForFile('package.json')).toBe('json');
+  });
+
+  it('returns "yaml" for .yml files', () => {
+    expect(getLanguageForFile('.github/workflows/ci.yml')).toBe('yaml');
+  });
+
+  it('returns "bash" for .sh files', () => {
+    expect(getLanguageForFile('scripts/deploy.sh')).toBe('bash');
+  });
+
+  it('returns "xml" for .html files', () => {
+    expect(getLanguageForFile('public/index.html')).toBe('xml');
+  });
+
+  it('returns null for unknown extensions', () => {
+    expect(getLanguageForFile('README.txt')).toBeNull();
+  });
+
+  it('returns null for files with no extension', () => {
+    expect(getLanguageForFile('Makefile')).toBeNull();
+  });
+
+  it('handles paths with multiple dots', () => {
+    expect(getLanguageForFile('src/app.spec.ts')).toBe('typescript');
+  });
+});
+
+describe('highlightDiffContent', () => {
+  beforeEach(() => {
+    hljsHighlightMock.mockClear();
+  });
+
+  it('calls hljs.highlight on each non-empty diff-line-content cell', () => {
+    const cells = [
+      { textContent: 'const x = 1;', innerHTML: 'const x = 1;', className: 'diff-line-content diff-side-left' },
+      { textContent: 'const x = 2;', innerHTML: 'const x = 2;', className: 'diff-line-content diff-side-right' },
+    ];
+    const container = {
+      querySelectorAll: vi.fn(() => cells),
+    };
+
+    highlightDiffContent('src/app.js', container);
+
+    expect(hljsHighlightMock).toHaveBeenCalledTimes(2);
+    expect(hljsHighlightMock).toHaveBeenCalledWith('const x = 1;', { language: 'javascript', ignoreIllegals: true });
+    expect(cells[0].innerHTML).toContain('hljs-highlighted');
+  });
+
+  it('skips empty cells', () => {
+    const cells = [
+      { textContent: '', innerHTML: '', className: 'diff-line-content diff-side-left diff-empty-cell' },
+      { textContent: 'code', innerHTML: 'code', className: 'diff-line-content diff-side-right' },
+    ];
+    const container = { querySelectorAll: vi.fn(() => cells) };
+
+    highlightDiffContent('src/app.js', container);
+
+    expect(hljsHighlightMock).toHaveBeenCalledTimes(1);
+    expect(hljsHighlightMock).toHaveBeenCalledWith('code', { language: 'javascript', ignoreIllegals: true });
+  });
+
+  it('does nothing for unknown file extensions', () => {
+    const cells = [
+      { textContent: 'some text', innerHTML: 'some text', className: 'diff-line-content' },
+    ];
+    const container = { querySelectorAll: vi.fn(() => cells) };
+
+    highlightDiffContent('README.txt', container);
+
+    expect(hljsHighlightMock).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when hljs is not available', () => {
+    const code = readFileSync(resolve(__dirname, '../public/js/diff.js'), 'utf-8');
+    const ctx: Record<string, unknown> = {};
+    runInNewContext(code, ctx);
+    const fn = ctx.highlightDiffContent as typeof highlightDiffContent;
+
+    const cells = [{ textContent: 'code', innerHTML: 'code', className: 'diff-line-content' }];
+    const container = { querySelectorAll: vi.fn(() => cells) };
+
+    expect(() => fn('src/app.js', container)).not.toThrow();
+    expect(cells[0].innerHTML).toBe('code');
+  });
+
+  it('uses textContent for input and sets innerHTML to highlighted result', () => {
+    hljsHighlightMock.mockImplementation((codeStr: string, _opts: any) => ({
+      value: `<span class="hljs-tag">${codeStr}</span>`,
+    }));
+
+    const cells = [
+      { textContent: 'const x = a > b ? a : b;', innerHTML: 'const x = a &gt; b ? a : b;', className: 'diff-line-content diff-side-left' },
+    ];
+    const container = { querySelectorAll: vi.fn(() => cells) };
+
+    highlightDiffContent('src/app.ts', container);
+
+    expect(hljsHighlightMock).toHaveBeenCalledWith('const x = a > b ? a : b;', { language: 'typescript', ignoreIllegals: true });
+    expect(cells[0].innerHTML).toContain('hljs-tag');
   });
 });

@@ -520,6 +520,50 @@ describe("GET /css/* and GET /js/* static files", () => {
   });
 });
 
+describe("GET /vendor/* static files", () => {
+  let baseUrl: string;
+
+  beforeEach(async () => {
+    reset();
+    resetFilesCache();
+    mockExecSync.mockReset();
+    const info = await startServer(0);
+    baseUrl = info.url;
+  });
+
+  afterEach(async () => {
+    await stopServer();
+  });
+
+  it("serves vendor JS file with application/javascript content-type", async () => {
+    const res = await fetch(`${baseUrl}/vendor/highlight.min.js`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("application/javascript");
+  });
+
+  it("serves vendor CSS file with text/css content-type", async () => {
+    const res = await fetch(`${baseUrl}/vendor/highlight-theme.css`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("text/css");
+  });
+
+  it("returns 404 for nonexistent vendor file", async () => {
+    const { status, body } = await fetchJson(`${baseUrl}/vendor/nope.js`);
+
+    expect(status).toBe(404);
+    expect(body).toEqual({ error: "Not found" });
+  });
+
+  it("rejects paths with .. traversal", async () => {
+    const { status, body } = await fetchJson(`${baseUrl}/vendor/../../../etc/passwd`);
+
+    expect(status).toBe(404);
+    expect(body).toEqual({ error: "Not found" });
+  });
+});
+
 describe("GET /api/status", () => {
   let baseUrl: string;
 

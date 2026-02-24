@@ -145,6 +145,57 @@ function escapeHtml(text) {
 
 //endregion
 
+//region Syntax Highlighting
+
+var EXT_TO_LANG = {
+  '.clj': 'clojure', '.cljs': 'clojure', '.cljc': 'clojure', '.edn': 'clojure',
+  '.js': 'javascript', '.mjs': 'javascript', '.jsx': 'javascript',
+  '.ts': 'typescript', '.tsx': 'typescript',
+  '.py': 'python', '.rb': 'ruby', '.go': 'go', '.rs': 'rust',
+  '.java': 'java', '.kt': 'kotlin', '.scala': 'scala',
+  '.css': 'css', '.scss': 'scss', '.less': 'less',
+  '.html': 'xml', '.xml': 'xml', '.svg': 'xml',
+  '.json': 'json', '.yaml': 'yaml', '.yml': 'yaml', '.toml': 'ini',
+  '.md': 'markdown', '.sql': 'sql',
+  '.sh': 'bash', '.bash': 'bash', '.zsh': 'bash',
+  '.c': 'c', '.h': 'c', '.cpp': 'cpp', '.hpp': 'cpp', '.cc': 'cpp',
+  '.cs': 'csharp', '.swift': 'swift', '.r': 'r',
+  '.ex': 'elixir', '.exs': 'elixir', '.erl': 'erlang',
+  '.hs': 'haskell', '.lua': 'lua', '.php': 'php', '.pl': 'perl',
+  '.dockerfile': 'dockerfile', '.tf': 'hcl',
+  '.graphql': 'graphql', '.gql': 'graphql',
+  '.proto': 'protobuf',
+};
+
+function getLanguageForFile(filePath) {
+  if (!filePath) return null;
+  var dot = filePath.lastIndexOf('.');
+  if (dot === -1) return null;
+  var ext = filePath.slice(dot).toLowerCase();
+  return EXT_TO_LANG[ext] || null;
+}
+
+function highlightDiffContent(filePath, containerEl) {
+  if (typeof hljs === 'undefined') return;
+  var lang = getLanguageForFile(filePath);
+  if (!lang) return;
+
+  var cells = containerEl.querySelectorAll('.diff-line-content');
+  for (var i = 0; i < cells.length; i++) {
+    var cell = cells[i];
+    var text = cell.textContent;
+    if (!text) continue;
+    try {
+      var result = hljs.highlight(text, { language: lang, ignoreIllegals: true });
+      cell.innerHTML = result.value;
+    } catch (e) {
+      // If highlighting fails for a line, leave it as-is
+    }
+  }
+}
+
+//endregion
+
 //region Diff Renderer
 
 function renderDiff(diffText) {

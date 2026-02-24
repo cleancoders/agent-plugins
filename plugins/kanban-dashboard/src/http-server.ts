@@ -106,7 +106,7 @@ function handleRequest(
   }
 
   // Serve static CSS and JS files
-  if (method === "GET" && (url.startsWith("/css/") || url.startsWith("/js/"))) {
+  if (method === "GET" && (url.startsWith("/css/") || url.startsWith("/js/") || url.startsWith("/vendor/"))) {
     const mimeTypes: Record<string, string> = {
       ".css": "text/css",
       ".js": "application/javascript",

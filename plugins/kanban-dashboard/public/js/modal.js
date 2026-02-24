@@ -246,6 +246,7 @@ async function loadDiffInModal(filePath) {
     }
 
     mainEl.innerHTML = renderDiff(data.diff);
+    highlightDiffContent(filePath, mainEl);
   } catch (e) {
     mainEl.innerHTML = '<div class="diff-error">Failed to load diff</div>';
   }

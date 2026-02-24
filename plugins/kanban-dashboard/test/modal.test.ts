@@ -68,6 +68,7 @@ function loadModal(options?: {
         .replace(/"/g, '&quot;'),
     renderDiff: (text: string) =>
       `<div class="diff-container">${text || 'No changes'}</div>`,
+    highlightDiffContent: vi.fn(),
     // DOM
     document: {
       getElementById: (id: string) => {
@@ -95,6 +96,7 @@ function loadModal(options?: {
     context,
     elements,
     fetchMock,
+    highlightDiffContentMock: context.highlightDiffContent as ReturnType<typeof vi.fn>,
     keydownHandler: () => keydownHandler,
     setQuerySelectorResult: (result: any[]) => { querySelectorAllResult = result; },
     openModal: context.openModal as (taskId: string) => void,
@@ -805,6 +807,52 @@ describe('loadDiffInModal', () => {
     const calledUrl = fetchMock.mock.calls[0][0];
     expect(calledUrl).not.toContain('start_ref');
     expect(calledUrl).not.toContain('end_ref');
+  });
+
+  it('calls highlightDiffContent after rendering diff', async () => {
+    const task = makeTask({ id: 1, files: ['src/app.ts'] });
+    const { openModal, loadDiffInModal, elements, fetchMock, highlightDiffContentMock } = loadModal({
+      tasks: [task],
+      fetchResponse: { diff: 'some diff' },
+    });
+
+    openModal('1');
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue({ json: () => Promise.resolve({ diff: 'some diff text' }) });
+
+    await loadDiffInModal('src/app.ts');
+
+    expect(highlightDiffContentMock).toHaveBeenCalledWith('src/app.ts', elements['diff-modal-main']);
+  });
+
+  it('does not call highlightDiffContent on API error', async () => {
+    const task = makeTask({ id: 1, files: ['src/app.ts'] });
+    const { openModal, loadDiffInModal, fetchMock, highlightDiffContentMock } = loadModal({
+      tasks: [task],
+    });
+
+    openModal('1');
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue({ json: () => Promise.resolve({ error: 'File not found' }) });
+
+    await loadDiffInModal('src/app.ts');
+
+    expect(highlightDiffContentMock).not.toHaveBeenCalled();
+  });
+
+  it('does not call highlightDiffContent on fetch failure', async () => {
+    const task = makeTask({ id: 1, files: ['src/app.ts'] });
+    const { openModal, loadDiffInModal, fetchMock, highlightDiffContentMock } = loadModal({
+      tasks: [task],
+    });
+
+    openModal('1');
+    fetchMock.mockClear();
+    fetchMock.mockRejectedValue(new Error('Network error'));
+
+    await loadDiffInModal('src/app.ts');
+
+    expect(highlightDiffContentMock).not.toHaveBeenCalled();
   });
 });
 
