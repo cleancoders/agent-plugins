@@ -196,6 +196,14 @@ function highlightDiffContent(filePath, containerEl) {
 
 //endregion
 
+//region New File Banner
+
+function renderNewFileBanner() {
+  return '<div class="diff-new-file-banner">New File</div>';
+}
+
+//endregion
+
 //region Diff Renderer
 
 function renderDiff(diffText) {

@@ -237,6 +237,10 @@ async function loadDiffInModal(filePath) {
         url += '&start_ref=' + encodeURIComponent(sr);
       }
     }
+    const fileEntry = diffModalFiles.find(f => f.path === filePath);
+    if (fileEntry && fileEntry.status) {
+      url += '&status=' + encodeURIComponent(fileEntry.status);
+    }
     const res = await fetch(url);
     const data = await res.json();
 
@@ -245,7 +249,11 @@ async function loadDiffInModal(filePath) {
       return;
     }
 
-    mainEl.innerHTML = renderDiff(data.diff);
+    let bannerHtml = '';
+    if (data.is_new) {
+      bannerHtml = renderNewFileBanner();
+    }
+    mainEl.innerHTML = bannerHtml + renderDiff(data.diff);
     highlightDiffContent(filePath, mainEl);
   } catch (e) {
     mainEl.innerHTML = '<div class="diff-error">Failed to load diff</div>';

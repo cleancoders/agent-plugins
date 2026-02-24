@@ -35032,6 +35032,7 @@ var require_http_server = __commonJS({
       return mod && mod.__esModule ? mod : { "default": mod };
     };
     Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.buildNewFileDiff = buildNewFileDiff;
     exports2.startServer = startServer;
     exports2.stopServer = stopServer;
     exports2.isRunning = isRunning;
@@ -35049,6 +35050,22 @@ var require_http_server = __commonJS({
     };
     var filesCache = null;
     var FILES_CACHE_TTL = 2e3;
+    function buildNewFileDiff(filePath, content) {
+      const lines = content.split("\n");
+      if (lines.length > 0 && lines[lines.length - 1] === "") {
+        lines.pop();
+      }
+      const lineCount = lines.length;
+      let diff = `--- /dev/null
++++ b/${filePath}
+@@ -0,0 +1,${lineCount} @@
+`;
+      for (const line of lines) {
+        diff += `+${line}
+`;
+      }
+      return diff;
+    }
     function sendJson(res, statusCode, data) {
       const body = JSON.stringify(data);
       res.writeHead(statusCode, {
@@ -35116,7 +35133,7 @@ var require_http_server = __commonJS({
         });
         return;
       }
-      if (method === "GET" && (url.startsWith("/css/") || url.startsWith("/js/"))) {
+      if (method === "GET" && (url.startsWith("/css/") || url.startsWith("/js/") || url.startsWith("/vendor/"))) {
         const mimeTypes = {
           ".css": "text/css",
           ".js": "application/javascript"
@@ -35236,6 +35253,7 @@ var require_http_server = __commonJS({
         }
         const startRef = params.get("start_ref");
         const endRef = params.get("end_ref");
+        const status = params.get("status");
         try {
           let diff;
           if (startRef && (!endRef || startRef !== endRef)) {
@@ -35266,6 +35284,13 @@ var require_http_server = __commonJS({
                 timeout: 1e4
               });
             }
+          }
+          if (!diff.trim() && status === "A") {
+            const filePath = node_path_1.default.join(projectDir, file);
+            const content = node_fs_1.default.readFileSync(filePath, "utf-8");
+            const syntheticDiff = buildNewFileDiff(file, content);
+            sendJson(res, 200, { file, diff: syntheticDiff, is_new: true });
+            return;
           }
           sendJson(res, 200, { file, diff });
         } catch (err) {

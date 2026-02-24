@@ -28,6 +28,7 @@ let parseDiff: (diffText: string) => Hunk[];
 let buildSideBySide: (hunks: Hunk[]) => SideBySideRow[];
 let escapeHtml: (text: string) => string;
 let renderDiff: (diffText: string) => string;
+let renderNewFileBanner: () => string;
 let getLanguageForFile: (filePath: string) => string | null;
 let highlightDiffContent: (filePath: string, containerEl: any) => void;
 let hljsHighlightMock: ReturnType<typeof vi.fn>;
@@ -48,6 +49,7 @@ beforeAll(() => {
   buildSideBySide = context.buildSideBySide as typeof buildSideBySide;
   escapeHtml = context.escapeHtml as typeof escapeHtml;
   renderDiff = context.renderDiff as typeof renderDiff;
+  renderNewFileBanner = context.renderNewFileBanner as typeof renderNewFileBanner;
   getLanguageForFile = context.getLanguageForFile as typeof getLanguageForFile;
   highlightDiffContent = context.highlightDiffContent as typeof highlightDiffContent;
 });
@@ -459,6 +461,24 @@ describe('renderDiff', () => {
 
     const result = renderDiff(diff);
     expect(result).toContain('diff-empty-cell');
+  });
+});
+
+describe('renderNewFileBanner', () => {
+  it('returns a div with diff-new-file-banner class', () => {
+    const html = renderNewFileBanner();
+    expect(html).toContain('diff-new-file-banner');
+  });
+
+  it('contains "New File" text', () => {
+    const html = renderNewFileBanner();
+    expect(html).toContain('New File');
+  });
+
+  it('returns an HTML string (not empty)', () => {
+    const html = renderNewFileBanner();
+    expect(html.length).toBeGreaterThan(0);
+    expect(html).toMatch(/^<div/);
   });
 });
 

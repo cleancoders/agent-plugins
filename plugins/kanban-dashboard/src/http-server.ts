@@ -15,6 +15,20 @@ const CORS_HEADERS: Record<string, string> = {
 let filesCache: { data: unknown; time: number; key: string } | null = null;
 const FILES_CACHE_TTL = 2000;
 
+export function buildNewFileDiff(filePath: string, content: string): string {
+  const lines = content.split("\n");
+  // Remove trailing empty line from split if file ends with newline
+  if (lines.length > 0 && lines[lines.length - 1] === "") {
+    lines.pop();
+  }
+  const lineCount = lines.length;
+  let diff = `--- /dev/null\n+++ b/${filePath}\n@@ -0,0 +1,${lineCount} @@\n`;
+  for (const line of lines) {
+    diff += `+${line}\n`;
+  }
+  return diff;
+}
+
 function sendJson(
   res: http.ServerResponse,
   statusCode: number,
@@ -236,6 +250,7 @@ function handleRequest(
 
     const startRef = params.get("start_ref");
     const endRef = params.get("end_ref");
+    const status = params.get("status");
 
     try {
       let diff: string;
@@ -260,6 +275,15 @@ function handleRequest(
           });
         }
       }
+
+      if (!diff.trim() && status === "A") {
+        const filePath = path.join(projectDir, file);
+        const content = fs.readFileSync(filePath, "utf-8");
+        const syntheticDiff = buildNewFileDiff(file, content);
+        sendJson(res, 200, { file, diff: syntheticDiff, is_new: true });
+        return;
+      }
+
       sendJson(res, 200, { file, diff });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "git diff failed";

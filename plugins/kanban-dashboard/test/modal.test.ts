@@ -68,6 +68,7 @@ function loadModal(options?: {
         .replace(/"/g, '&quot;'),
     renderDiff: (text: string) =>
       `<div class="diff-container">${text || 'No changes'}</div>`,
+    renderNewFileBanner: () => '<div class="diff-new-file-banner">New File</div>',
     highlightDiffContent: vi.fn(),
     // DOM
     document: {
@@ -838,6 +839,80 @@ describe('loadDiffInModal', () => {
     await loadDiffInModal('src/app.ts');
 
     expect(highlightDiffContentMock).not.toHaveBeenCalled();
+  });
+
+  it('includes file status in diff API URL when available', async () => {
+    const task = makeTask({ id: 1, files: ['src/new.ts'] });
+    const { openModal, loadFileDiffs, loadDiffInModal, fetchMock } = loadModal({
+      tasks: [task],
+      fetchResponse: { files: [{ path: 'src/new.ts', status: 'A' }] },
+    });
+
+    openModal('1');
+    await loadFileDiffs(task);
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue({ json: () => Promise.resolve({ diff: 'some diff' }) });
+
+    await loadDiffInModal('src/new.ts');
+
+    const calledUrl = fetchMock.mock.calls[0][0];
+    expect(calledUrl).toContain('status=' + encodeURIComponent('A'));
+  });
+
+  it('does not include status when file has no status', async () => {
+    const task = makeTask({ id: 1, files: ['src/app.ts'] });
+    const { openModal, loadFileDiffs, loadDiffInModal, fetchMock } = loadModal({
+      tasks: [task],
+      fetchResponse: { files: [{ path: 'src/app.ts' }] },
+    });
+
+    openModal('1');
+    await loadFileDiffs(task);
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue({ json: () => Promise.resolve({ diff: 'some diff' }) });
+
+    await loadDiffInModal('src/app.ts');
+
+    const calledUrl = fetchMock.mock.calls[0][0];
+    expect(calledUrl).not.toContain('status=');
+  });
+
+  it('renders new file banner when API returns is_new', async () => {
+    const task = makeTask({ id: 1, files: ['src/new.ts'] });
+    const { openModal, loadFileDiffs, loadDiffInModal, elements, fetchMock } = loadModal({
+      tasks: [task],
+      fetchResponse: { files: [{ path: 'src/new.ts', status: 'A' }] },
+    });
+
+    openModal('1');
+    await loadFileDiffs(task);
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue({ json: () => Promise.resolve({ diff: '+new content', is_new: true }) });
+
+    await loadDiffInModal('src/new.ts');
+
+    const html = elements['diff-modal-main'].innerHTML;
+    expect(html).toContain('diff-new-file-banner');
+    expect(html).toContain('New File');
+    expect(html).toContain('diff-container');
+  });
+
+  it('does not render banner when is_new is absent', async () => {
+    const task = makeTask({ id: 1, files: ['src/app.ts'] });
+    const { openModal, loadDiffInModal, elements, fetchMock } = loadModal({
+      tasks: [task],
+      fetchResponse: { diff: 'some diff' },
+    });
+
+    openModal('1');
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue({ json: () => Promise.resolve({ diff: 'normal diff' }) });
+
+    await loadDiffInModal('src/app.ts');
+
+    const html = elements['diff-modal-main'].innerHTML;
+    expect(html).not.toContain('diff-new-file-banner');
+    expect(html).toContain('diff-container');
   });
 
   it('does not call highlightDiffContent on fetch failure', async () => {

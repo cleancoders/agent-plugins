@@ -189,9 +189,11 @@ class ProductionConfig(Config):
 git("add -A");
 git('commit -m "Initial commit"');
 
+const baselineCommit = execSync("git rev-parse HEAD", { cwd: tmpDir, encoding: "utf-8" }).trim();
+
 //endregion
 
-//region Modified files (unstaged changes that produce diffs)
+//region Modified and new files (committed changes from baseline)
 
 write("src/auth/service.ts", `import { sign, verify } from "jsonwebtoken";
 import { db } from "../db";
@@ -509,12 +511,103 @@ class ProductionConfig(Config):
 
 //endregion
 
+//region New files (not in initial commit — demonstrate new-file diffs)
+
+write("src/components/UserMenu.tsx", `import React, { useState } from "react";
+
+interface UserMenuProps {
+  name: string;
+  onLogout?: () => void;
+}
+
+export function UserMenu({ name, onLogout }: UserMenuProps) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="user-menu">
+      <button className="user-menu-trigger" onClick={() => setOpen(!open)}>
+        <span className="user-avatar">{name[0]}</span>
+        <span className="user-name">{name}</span>
+      </button>
+      {open && (
+        <div className="user-menu-dropdown">
+          <a href="/profile">Profile</a>
+          <a href="/preferences">Preferences</a>
+          <button onClick={onLogout}>Logout</button>
+        </div>
+      )}
+    </div>
+  );
+}
+`);
+
+write("src/auth/rate-limit.ts", `interface RateLimitConfig {
+  windowMs: number;
+  maxRequests: number;
+}
+
+const DEFAULT_CONFIG: RateLimitConfig = {
+  windowMs: 15 * 60 * 1000,
+  maxRequests: 100,
+};
+
+const hitCounts = new Map<string, { count: number; resetAt: number }>();
+
+export function checkRateLimit(
+  clientId: string,
+  config: RateLimitConfig = DEFAULT_CONFIG
+): { allowed: boolean; remaining: number; resetAt: number } {
+  const now = Date.now();
+  const entry = hitCounts.get(clientId);
+
+  if (!entry || now >= entry.resetAt) {
+    hitCounts.set(clientId, { count: 1, resetAt: now + config.windowMs });
+    return { allowed: true, remaining: config.maxRequests - 1, resetAt: now + config.windowMs };
+  }
+
+  entry.count++;
+  const remaining = Math.max(0, config.maxRequests - entry.count);
+  return {
+    allowed: entry.count <= config.maxRequests,
+    remaining,
+    resetAt: entry.resetAt,
+  };
+}
+
+export function resetRateLimit(clientId: string): void {
+  hitCounts.delete(clientId);
+}
+`);
+
+write("Dockerfile", `FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --production=false
+COPY . .
+RUN npm run build
+
+FROM node:20-alpine
+WORKDIR /app
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY package*.json ./
+EXPOSE 3000
+USER node
+CMD ["node", "dist/index.js"]
+`);
+
+git("add -A");
+git('commit -m "Implement features"');
+
+//endregion
+
 // --- Dashboard state ---
 
 initDashboard({
   title: "Acme Feature Sprint",
   subtitle: "Demo Dashboard",
   project_dir: tmpDir,
+  baseline_ref: baselineCommit,
 });
 
 addTask({
@@ -529,7 +622,7 @@ addTask({
   id: 2, title: "Implement auth service (TypeScript)", agent: "backend-dev",
   agent_color: "#ff6b6b", status: "in_progress", message: "JWT token refresh working, testing edge cases",
   progress: 0.65,
-  files: ["src/auth/service.ts", "src/auth/middleware.ts", "src/auth/types.ts"],
+  files: ["src/auth/service.ts", "src/auth/middleware.ts", "src/auth/types.ts", "src/auth/rate-limit.ts"],
   subtasks: ["Login endpoint", "JWT generation", "Token refresh", "Logout endpoint", "Rate limiting"],
   subtasks_done: ["Login endpoint", "JWT generation", "Token refresh"],
   high: 1, medium: 2,
@@ -539,9 +632,9 @@ addTask({
   id: 3, title: "Design dashboard UI (React TSX)", agent: "frontend-dev",
   agent_color: "#ffd43b", status: "in_progress", message: "Polishing responsive layout",
   progress: 0.40,
-  files: ["src/components/Header.tsx", "src/components/Sidebar.tsx"],
-  subtasks: ["Header component", "Sidebar nav", "Card grid", "Theme system"],
-  subtasks_done: ["Header component", "Sidebar nav"],
+  files: ["src/components/Header.tsx", "src/components/Sidebar.tsx", "src/components/UserMenu.tsx"],
+  subtasks: ["Header component", "Sidebar nav", "User menu", "Card grid", "Theme system"],
+  subtasks_done: ["Header component", "Sidebar nav", "User menu"],
 });
 
 addTask({
@@ -553,10 +646,11 @@ addTask({
 
 addTask({
   id: 5, title: "Set up CI/CD pipeline (YAML)", agent: "devops",
-  agent_color: "#f783ac", status: "ready", message: "",
-  progress: 0,
-  files: [".github/workflows/ci.yml"],
-  subtasks: ["GitHub Actions config", "Docker build", "Deploy staging"],
+  agent_color: "#f783ac", status: "in_progress", message: "Dockerfile created, wiring up CI",
+  progress: 0.35,
+  files: [".github/workflows/ci.yml", "Dockerfile"],
+  subtasks: ["GitHub Actions config", "Dockerfile", "Deploy staging"],
+  subtasks_done: ["Dockerfile"],
 });
 
 addTask({

@@ -1,10 +1,31 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { startServer, stopServer, resetFilesCache, isRunning } from "../src/http-server.js";
+import { startServer, stopServer, resetFilesCache, isRunning, buildNewFileDiff } from "../src/http-server.js";
 import { reset, initDashboard, addTask, addLog, getLogs } from "../src/state.js";
 
 vi.mock("node:child_process", () => ({
   execSync: vi.fn(),
 }));
+
+let mockReadFileSyncImpl: ((...args: any[]) => any) | null = null;
+vi.mock("node:fs", async (importOriginal) => {
+  const original = await importOriginal<typeof import("node:fs")>();
+  return {
+    ...original,
+    default: {
+      ...original,
+      readFileSync: (...args: any[]) => {
+        if (mockReadFileSyncImpl) return mockReadFileSyncImpl(...args);
+        return original.readFileSync(...(args as Parameters<typeof original.readFileSync>));
+      },
+      readFile: original.readFile,
+      mkdirSync: original.mkdirSync,
+      writeFileSync: original.writeFileSync,
+      existsSync: original.existsSync,
+      rmSync: original.rmSync,
+      mkdtempSync: original.mkdtempSync,
+    },
+  };
+});
 
 import { execSync } from "node:child_process";
 const mockExecSync = vi.mocked(execSync);
@@ -429,6 +450,42 @@ describe("GET /api/diff", () => {
       expect.objectContaining({ cwd: "/my/project" })
     );
   });
+
+  it("returns synthetic diff with is_new when diff is empty and status=A", async () => {
+    initDashboard({ title: "t", subtitle: "s", project_dir: "/my/project" });
+    mockExecSync.mockReturnValue("");
+    mockReadFileSyncImpl = () => "line one\nline two\n";
+
+    const { body } = await fetchJson(`${baseUrl}/api/diff?file=src/new-file.ts&status=A`);
+
+    mockReadFileSyncImpl = null;
+    expect(body.is_new).toBe(true);
+    expect(body.file).toBe("src/new-file.ts");
+    expect(body.diff).toContain("--- /dev/null");
+    expect(body.diff).toContain("+++ b/src/new-file.ts");
+    expect(body.diff).toContain("+line one");
+    expect(body.diff).toContain("+line two");
+  });
+
+  it("returns normal empty diff when status is not A", async () => {
+    initDashboard({ title: "t", subtitle: "s", project_dir: "/my/project" });
+    mockExecSync.mockReturnValue("");
+
+    const { body } = await fetchJson(`${baseUrl}/api/diff?file=src/foo.ts&status=M`);
+
+    expect(body.is_new).toBeUndefined();
+    expect(body.diff).toBe("");
+  });
+
+  it("returns normal diff when git diff produces output even with status=A", async () => {
+    initDashboard({ title: "t", subtitle: "s", project_dir: "/my/project" });
+    mockExecSync.mockReturnValue("some actual diff output");
+
+    const { body } = await fetchJson(`${baseUrl}/api/diff?file=src/foo.ts&status=A`);
+
+    expect(body.is_new).toBeUndefined();
+    expect(body.diff).toBe("some actual diff output");
+  });
 });
 
 describe("GET /", () => {
@@ -729,5 +786,50 @@ describe("Server lifecycle", () => {
 
     await stopServer();
     expect(isRunning()).toBe(false);
+  });
+});
+
+describe("buildNewFileDiff", () => {
+  it("generates a unified diff with all lines as additions", () => {
+    const diff = buildNewFileDiff("src/new.ts", "line one\nline two\n");
+
+    expect(diff).toBe(
+      "--- /dev/null\n" +
+      "+++ b/src/new.ts\n" +
+      "@@ -0,0 +1,2 @@\n" +
+      "+line one\n" +
+      "+line two\n"
+    );
+  });
+
+  it("handles single-line file without trailing newline", () => {
+    const diff = buildNewFileDiff("README.md", "hello");
+
+    expect(diff).toBe(
+      "--- /dev/null\n" +
+      "+++ b/README.md\n" +
+      "@@ -0,0 +1,1 @@\n" +
+      "+hello\n"
+    );
+  });
+
+  it("handles multi-line file without trailing newline", () => {
+    const diff = buildNewFileDiff("file.txt", "a\nb\nc");
+
+    expect(diff).toBe(
+      "--- /dev/null\n" +
+      "+++ b/file.txt\n" +
+      "@@ -0,0 +1,3 @@\n" +
+      "+a\n" +
+      "+b\n" +
+      "+c\n"
+    );
+  });
+
+  it("handles empty file content", () => {
+    const diff = buildNewFileDiff("empty.ts", "");
+
+    expect(diff).toContain("--- /dev/null");
+    expect(diff).toContain("+++ b/empty.ts");
   });
 });
