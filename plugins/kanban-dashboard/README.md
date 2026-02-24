@@ -141,7 +141,31 @@ npm test             # Run unit tests (219 tests via Vitest)
 npm run test:e2e     # Run E2E tests (22 tests via Playwright)
 npm run test:coverage # Run with coverage report
 npm run dev          # Watch mode for TypeScript
+npm run demo         # Launch dashboard with sample data
 ```
+
+### Local Demo
+
+`npm run demo` builds the project and starts the dashboard on a random port with realistic sample data (8 tasks across 5 agents in various states, activity log entries, severity findings). It also creates a temporary git repo with real file diffs so the diff modal works — clicking a task card shows side-by-side diffs in multiple languages:
+
+- **TypeScript** — auth service, middleware, types
+- **React TSX** — header and sidebar components
+- **SQL** — database migrations
+- **YAML** — GitHub Actions CI/CD pipeline
+- **Clojure** — API request handlers
+- **Python** — application configuration
+
+The browser opens automatically. The temp repo is cleaned up on Ctrl+C. Useful for working on CSS, layout, diff rendering, or syntax highlighting without needing a live MCP client.
+
+## Updating Highlight.js
+
+The diff modal uses vendored [highlight.js](https://highlightjs.org/) files in `public/vendor/`. To update them:
+
+```bash
+./scripts/update-hljs.sh
+```
+
+This runs `npm update @highlightjs/cdn-assets`, then copies the core bundle, theme CSS, and extra language grammars (Clojure, Scala, Elixir, Erlang, Haskell, Dockerfile, Protobuf) into `public/vendor/`.
 
 ## Project Structure
 
@@ -159,6 +183,9 @@ kanban-dashboard/
       dashboard.js    Polling, rendering, stats
       modal.js        Task detail modal + file diffs
       diff.js         Unified diff parser + side-by-side renderer
+  scripts/
+    demo.js           Launches dashboard with sample data
+    update-hljs.sh    Updates vendored highlight.js from npm
   skills/
     kanban-team/
       SKILL.md        Auto-triggers on TeamCreate to drive the dashboard
