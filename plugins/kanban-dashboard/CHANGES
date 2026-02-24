@@ -1,2 +1,7 @@
+## 1.4.0
+  * Add syntax highlighting to code blocks in git diff
+  * Fix issue where new files won't showing up in file history/git diff
+    * Add visual indicator that a file is a newly created file
+
 ## 1.3.1
   * Adjust width of line number columns in Git diff modal
