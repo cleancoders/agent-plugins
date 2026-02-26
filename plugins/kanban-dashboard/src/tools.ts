@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { Task, DashboardConfig, initDashboard, addTask, updateTask, addLog, reset, getState, getProjectDir } from './state.js';
+import { Task, DashboardConfig, initDashboard, addTask, updateTask, addLog, reset, getState, getProjectDir, consumeSignals } from './state.js';
 import { startServer, stopServer, isRunning } from './http-server.js';
 import { exec, execSync } from 'child_process';
 import { platform } from 'os';
@@ -287,6 +287,19 @@ export function registerTools(server: McpServer): void {
       await stopServer();
       reset();
       return { content: [{ type: 'text' as const, text: JSON.stringify({ success: true }) }] };
+    }
+  );
+
+  // 6. kanban_check_signals
+  server.tool(
+    'kanban_check_signals',
+    'Check for pending signals from the dashboard browser UI. Agents should call this periodically (every ~10 tool calls) to receive poke/shake/skip/check_others commands from the user.',
+    {
+      agent: z.string().describe('The agent name to check signals for'),
+    },
+    async ({ agent }) => {
+      const pending = consumeSignals(agent as string);
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ signals: pending }) }] };
     }
   );
 }

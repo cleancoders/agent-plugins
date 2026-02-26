@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { registerTools } from "../src/tools.js";
-import { getState, getProjectDir, getBaselineRef, getLogs, reset } from "../src/state.js";
+import { getState, getProjectDir, getBaselineRef, getLogs, reset, addSignal, getSignalStatus } from "../src/state.js";
 
 vi.mock("../src/http-server.js", () => ({
   startServer: vi.fn().mockResolvedValue({ url: "http://localhost:1234", port: 1234 }),
@@ -1188,5 +1188,79 @@ describe("kanban_update_task - auto log entries", () => {
     expect(logs.entries[0].time).toBeDefined();
     expect(typeof logs.entries[0].time).toBe("string");
     expect(logs.entries[0].time.length).toBeGreaterThan(0);
+  });
+});
+
+describe("kanban_check_signals", () => {
+  let tools: Map<string, RegisteredTool>;
+
+  beforeEach(() => {
+    reset();
+    vi.mocked(startServer).mockClear();
+    vi.mocked(stopServer).mockClear();
+    vi.mocked(isRunning).mockClear();
+    vi.mocked(isRunning).mockReturnValue(false);
+    vi.mocked(exec).mockClear();
+    vi.mocked(platform).mockReturnValue("darwin");
+    const mock = createMockServer();
+    tools = mock.tools;
+    registerTools(mock.server);
+  });
+
+  it("is registered as a tool", () => {
+    expect(tools.has("kanban_check_signals")).toBe(true);
+  });
+
+  it("returns empty signals array when no signals pending", async () => {
+    const handler = tools.get("kanban_check_signals")!.handler;
+    const result = await handler({ agent: "alice" });
+    const parsed = parseResult(result);
+    expect(parsed.signals).toEqual([]);
+  });
+
+  it("returns pending signals for the agent", async () => {
+    addSignal("alice", { action: "poke", timestamp: "2026-02-25T14:00:00.000Z", source: "browser" });
+    addSignal("alice", { action: "shake", timestamp: "2026-02-25T14:01:00.000Z", source: "browser" });
+
+    const handler = tools.get("kanban_check_signals")!.handler;
+    const result = await handler({ agent: "alice" });
+    const parsed = parseResult(result);
+
+    expect(parsed.signals).toHaveLength(2);
+    expect(parsed.signals[0].action).toBe("poke");
+    expect(parsed.signals[1].action).toBe("shake");
+  });
+
+  it("marks signals as acknowledged after consumption", async () => {
+    addSignal("alice", { action: "poke", timestamp: "2026-02-25T14:00:00.000Z", source: "browser" });
+
+    const handler = tools.get("kanban_check_signals")!.handler;
+    await handler({ agent: "alice" });
+
+    const status = getSignalStatus();
+    expect(status[0].acknowledged).toBe(true);
+  });
+
+  it("does not return other agents' signals", async () => {
+    addSignal("alice", { action: "poke", timestamp: "2026-02-25T14:00:00.000Z", source: "browser" });
+    addSignal("bob", { action: "shake", timestamp: "2026-02-25T14:01:00.000Z", source: "browser" });
+
+    const handler = tools.get("kanban_check_signals")!.handler;
+    const result = await handler({ agent: "alice" });
+    const parsed = parseResult(result);
+
+    expect(parsed.signals).toHaveLength(1);
+    expect(parsed.signals[0].action).toBe("poke");
+  });
+
+  it("does not return already-consumed signals on second call", async () => {
+    addSignal("alice", { action: "poke", timestamp: "2026-02-25T14:00:00.000Z", source: "browser" });
+
+    const handler = tools.get("kanban_check_signals")!.handler;
+    await handler({ agent: "alice" });
+    const result = await handler({ agent: "alice" });
+    const parsed = parseResult(result);
+
+    expect(parsed.signals).toEqual([]);
   });
 });
