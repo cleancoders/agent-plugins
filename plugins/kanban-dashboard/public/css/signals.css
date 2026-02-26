@@ -1,0 +1,78 @@
+/* Signal action buttons */
+.card-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.card:hover .card-actions { opacity: 1; }
+
+.card-action-btn {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.card-action-btn:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.2);
+  color: var(--text);
+}
+
+.card-action-btn.sent {
+  animation: btn-pulse 0.6s ease;
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+@keyframes btn-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); box-shadow: 0 0 8px rgba(88,166,255,0.3); }
+  100% { transform: scale(1); }
+}
+
+/* Poke badge on card */
+.poke-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: rgba(88,166,255,0.15);
+  color: var(--blue);
+  margin-left: auto;
+}
+
+.poke-badge.no-response {
+  background: rgba(255,212,59,0.15);
+  color: var(--yellow);
+}
+
+/* Agent bar poke button */
+.agent-poke-btn {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  margin-left: 4px;
+  transition: all 0.2s ease;
+}
+
+.agent-poke-btn:hover {
+  background: rgba(255,255,255,0.08);
+  color: var(--text);
+  border-color: rgba(255,255,255,0.2);
+}

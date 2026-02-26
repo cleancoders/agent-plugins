@@ -3,6 +3,52 @@ let prevTaskMap = {};
 let allTasks = [];
 let allLogEntries = [];
 
+// Signal tracking
+let pendingPokes = {}; // { "agent-name": { time: Date.now(), action: "poke" } }
+
+async function sendSignal(agent, action, event) {
+  if (event) event.stopPropagation();
+  try {
+    const res = await fetch('/api/signal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent, action }),
+    });
+    if (res.ok) {
+      pendingPokes[agent] = { time: Date.now(), action };
+    }
+  } catch (e) {
+    console.warn('Failed to send signal:', e);
+  }
+}
+
+function renderActionButtons(task) {
+  if (task.status === 'done') return '';
+  const actions = [
+    { action: 'poke', icon: '\u{1F4E1}', label: 'Poke' },
+  ];
+  if (task.status === 'in_progress') {
+    actions.push({ action: 'shake', icon: '\u26A1', label: 'Shake' });
+    actions.push({ action: 'skip', icon: '\u23ED', label: 'Skip' });
+    actions.push({ action: 'check_others', icon: '\u{1F440}', label: 'Check' });
+  }
+  return `<div class="card-actions">${actions.map(a =>
+    `<button class="card-action-btn" onclick="sendSignal('${task.agent}', '${a.action}', event)" title="${a.label}">${a.icon} ${a.label}</button>`
+  ).join('')}</div>`;
+}
+
+function renderPokeBadge(task) {
+  const poke = pendingPokes[task.agent];
+  if (!poke) return '';
+  const elapsed = Math.floor((Date.now() - poke.time) / 1000);
+  if (elapsed > 60) {
+    delete pendingPokes[task.agent];
+    return '';
+  }
+  const cls = elapsed > 30 ? 'poke-badge no-response' : 'poke-badge';
+  return `<span class="${cls}">${elapsed > 30 ? 'No response' : 'Poked'} ${elapsed}s ago</span>`;
+}
+
 //region Active Subtask Detection
 
 const STOP_WORDS = new Set(['the','and','for','with','that','this','from','are','was','has','have','will','been','into','than','its','all','but','not','can','did','get','got','set','use','new','now','also','each','when','then','them','they','what','which','where','how','our','out','one','two']);
@@ -83,6 +129,7 @@ function renderCard(task) {
       <div class="card-top-right">
         ${task.blocked_by && task.blocked_by.length > 0 ? `<div class="blocked-badges">${task.blocked_by.map(id => `<span class="badge badge-blocked">#${id}</span>`).join('')}</div>` : ''}
         <div class="severity-badges">${renderBadges(task)}</div>
+        ${renderPokeBadge(task)}
       </div>
     </div>
     <div class="card-title">${task.title}</div>
@@ -95,6 +142,7 @@ function renderCard(task) {
       <div class="card-progress-fill" style="width:${Math.round(progress * 100)}%;background:${task.agent_color}"></div>
     </div>
     ${task.status === 'in_progress' ? renderSubtasks(task) : ''}
+    ${renderActionButtons(task)}
   </div>`;
 }
 
@@ -109,6 +157,7 @@ function renderAgentBar(tasks) {
     html += `<span class="agent-chip ${state}">
       <span class="agent-dot ${state}" style="background:${t.agent_color}"></span>
       ${t.agent}
+      <button class="agent-poke-btn" onclick="sendSignal('${t.agent}', 'poke', event)" title="Poke">\u{1F4E1}</button>
     </span>`;
   });
   bar.innerHTML = html;
@@ -167,7 +216,7 @@ function renderBoard(tasks) {
 
   // Save state for diff
   prevTaskMap = {};
-  tasks.forEach(t => prevTaskMap[t.id] = { status: t.status });
+  tasks.forEach(t => prevTaskMap[t.id] = { status: t.status, message: t.message });
 }
 
 async function fetchLog() {
@@ -205,8 +254,18 @@ async function poll() {
     }
     document.getElementById('connecting-overlay').classList.add('hidden');
     if (data.tasks) {
+      const prevMap = { ...prevTaskMap };
       renderBoard(data.tasks);
       renderAgentBar(data.tasks);
+      // Clear poke badges for agents that responded
+      data.tasks.forEach(t => {
+        const prev = prevMap[t.id];
+        if (prev && pendingPokes[t.agent]) {
+          if (prev.message !== t.message || prev.status !== t.status) {
+            delete pendingPokes[t.agent];
+          }
+        }
+      });
     }
   } catch (e) {
     console.warn('Poll failed:', e);
