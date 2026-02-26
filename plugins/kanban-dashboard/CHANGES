@@ -1,3 +1,7 @@
+## 1.4.1
+    * adds project name and agent leader name to header
+    * adds poke, shake, skip, and check buttons to agent cards and header
+
 ## 1.4.0
   * Add syntax highlighting to code blocks in git diff
   * Fix issue where new files won't showing up in file history/git diff
