@@ -9,8 +9,11 @@ import {
   updateTask,
   addLog,
   getLogs,
+  addSignal,
+  consumeSignals,
+  getSignalStatus,
 } from "../src/state.js";
-import type { Task, LogEntry } from "../src/state.js";
+import type { Task, LogEntry, Signal } from "../src/state.js";
 
 function makeTask(overrides: Partial<Task> = {}): Task {
   return {
@@ -483,5 +486,54 @@ describe("updateTask message accumulation", () => {
     updateTask(1, { progress: 50 });
     const { tasks } = getState();
     expect(tasks[0].messages).toBeUndefined();
+  });
+});
+
+describe("signal state", () => {
+  beforeEach(() => {
+    reset();
+  });
+
+  it("addSignal stores a signal for an agent", () => {
+    addSignal("alice", { action: "poke", timestamp: "2026-02-25T14:00:00.000Z", source: "browser" });
+    const status = getSignalStatus();
+    expect(status).toHaveLength(1);
+    expect(status[0].agent).toBe("alice");
+    expect(status[0].action).toBe("poke");
+    expect(status[0].acknowledged).toBe(false);
+  });
+
+  it("consumeSignals returns and clears signals for an agent", () => {
+    addSignal("alice", { action: "poke", timestamp: "2026-02-25T14:00:00.000Z", source: "browser" });
+    addSignal("alice", { action: "shake", timestamp: "2026-02-25T14:01:00.000Z", source: "browser" });
+    const signals = consumeSignals("alice");
+    expect(signals).toHaveLength(2);
+    expect(signals[0].action).toBe("poke");
+    expect(signals[1].action).toBe("shake");
+    const status = getSignalStatus();
+    expect(status.every(s => s.acknowledged)).toBe(true);
+  });
+
+  it("consumeSignals returns empty array when no signals exist", () => {
+    const signals = consumeSignals("bob");
+    expect(signals).toEqual([]);
+  });
+
+  it("signals for different agents are independent", () => {
+    addSignal("alice", { action: "poke", timestamp: "2026-02-25T14:00:00.000Z", source: "browser" });
+    addSignal("bob", { action: "shake", timestamp: "2026-02-25T14:01:00.000Z", source: "browser" });
+    const aliceSignals = consumeSignals("alice");
+    expect(aliceSignals).toHaveLength(1);
+    expect(aliceSignals[0].action).toBe("poke");
+    const status = getSignalStatus();
+    const bobPending = status.filter(s => s.agent === "bob" && !s.acknowledged);
+    expect(bobPending).toHaveLength(1);
+  });
+
+  it("reset clears all signals", () => {
+    addSignal("alice", { action: "poke", timestamp: "2026-02-25T14:00:00.000Z", source: "browser" });
+    reset();
+    const status = getSignalStatus();
+    expect(status).toHaveLength(0);
   });
 });

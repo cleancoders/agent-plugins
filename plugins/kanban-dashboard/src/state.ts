@@ -26,6 +26,17 @@ export interface LogEntry {
   message: string;
 }
 
+export interface Signal {
+  action: string;
+  timestamp: string;
+  source: string;
+}
+
+interface PendingSignal extends Signal {
+  agent: string;
+  acknowledged: boolean;
+}
+
 export interface DashboardConfig {
   title: string;
   subtitle: string;
@@ -37,6 +48,7 @@ const defaultConfig: DashboardConfig = { title: "Dashboard", subtitle: "" };
 
 let tasks: Task[] = [];
 let logs: LogEntry[] = [];
+let signals: PendingSignal[] = [];
 let config: DashboardConfig = { ...defaultConfig };
 
 export function initDashboard(cfg: DashboardConfig): void {
@@ -128,8 +140,30 @@ export function getBaselineRef(): string | undefined {
   return config.baseline_ref;
 }
 
+export function addSignal(agent: string, signal: Signal): void {
+  signals.push({ ...signal, agent, acknowledged: false });
+}
+
+export function consumeSignals(agent: string): Signal[] {
+  const agentSignals = signals.filter(s => s.agent === agent && !s.acknowledged);
+  for (const s of signals) {
+    if (s.agent === agent) s.acknowledged = true;
+  }
+  return agentSignals.map(({ action, timestamp, source }) => ({ action, timestamp, source }));
+}
+
+export function getSignalStatus(): Array<{ agent: string; action: string; timestamp: string; acknowledged: boolean }> {
+  return signals.map(s => ({
+    agent: s.agent,
+    action: s.action,
+    timestamp: s.timestamp,
+    acknowledged: s.acknowledged,
+  }));
+}
+
 export function reset(): void {
   tasks = [];
   logs = [];
+  signals = [];
   config = { ...defaultConfig };
 }
