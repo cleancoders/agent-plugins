@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { startServer, stopServer, resetFilesCache, isRunning, buildNewFileDiff } from "../src/http-server.js";
-import { reset, initDashboard, addTask, addLog, getLogs } from "../src/state.js";
+import { reset, initDashboard, addTask, addLog, getLogs, addSignal, getSignalStatus } from "../src/state.js";
 
 vi.mock("node:child_process", () => ({
   execSync: vi.fn(),
@@ -729,7 +729,7 @@ describe("OPTIONS", () => {
 
     expect(res.status).toBe(204);
     expect(res.headers.get("access-control-allow-origin")).toBe("*");
-    expect(res.headers.get("access-control-allow-methods")).toBe("GET, OPTIONS");
+    expect(res.headers.get("access-control-allow-methods")).toBe("GET, POST, OPTIONS");
     expect(res.headers.get("access-control-allow-headers")).toBe("Content-Type");
   });
 });
@@ -831,5 +831,119 @@ describe("buildNewFileDiff", () => {
 
     expect(diff).toContain("--- /dev/null");
     expect(diff).toContain("+++ b/empty.ts");
+  });
+});
+
+describe("POST /api/signal", () => {
+  let baseUrl: string;
+
+  beforeEach(async () => {
+    reset();
+    resetFilesCache();
+    mockExecSync.mockReset();
+    const info = await startServer(0);
+    baseUrl = info.url;
+  });
+
+  afterEach(async () => {
+    await stopServer();
+  });
+
+  it("returns success when signal is sent", async () => {
+    initDashboard({ title: "t", subtitle: "s" });
+
+    const res = await fetch(`${baseUrl}/api/signal`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agent: "alice", action: "poke" }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.success).toBe(true);
+  });
+
+  it("stores the signal in state", async () => {
+    initDashboard({ title: "t", subtitle: "s" });
+
+    await fetch(`${baseUrl}/api/signal`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agent: "alice", action: "shake" }),
+    });
+
+    const status = getSignalStatus();
+    expect(status).toHaveLength(1);
+    expect(status[0].agent).toBe("alice");
+    expect(status[0].action).toBe("shake");
+  });
+
+  it("returns 400 when agent is missing", async () => {
+    initDashboard({ title: "t", subtitle: "s" });
+
+    const res = await fetch(`${baseUrl}/api/signal`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "poke" }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.error).toBeDefined();
+  });
+
+  it("returns 400 when action is missing", async () => {
+    initDashboard({ title: "t", subtitle: "s" });
+
+    const res = await fetch(`${baseUrl}/api/signal`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agent: "alice" }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.error).toBeDefined();
+  });
+});
+
+describe("GET /api/signals", () => {
+  let baseUrl: string;
+
+  beforeEach(async () => {
+    reset();
+    resetFilesCache();
+    mockExecSync.mockReset();
+    const info = await startServer(0);
+    baseUrl = info.url;
+  });
+
+  afterEach(async () => {
+    await stopServer();
+  });
+
+  it("returns empty signals array initially", async () => {
+    const { status, body } = await fetchJson(`${baseUrl}/api/signals`);
+
+    expect(status).toBe(200);
+    expect(body.signals).toEqual([]);
+  });
+
+  it("returns pending signals after POST", async () => {
+    initDashboard({ title: "t", subtitle: "s" });
+
+    await fetch(`${baseUrl}/api/signal`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agent: "alice", action: "poke" }),
+    });
+
+    const { status, body } = await fetchJson(`${baseUrl}/api/signals`);
+
+    expect(status).toBe(200);
+    expect(body.signals).toHaveLength(1);
+    expect(body.signals[0].agent).toBe("alice");
+    expect(body.signals[0].action).toBe("poke");
+    expect(body.signals[0].acknowledged).toBe(false);
   });
 });

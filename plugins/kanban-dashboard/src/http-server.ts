@@ -2,13 +2,13 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
-import { getState, getLogs, getProjectDir, getBaselineRef } from "./state.js";
+import { getState, getLogs, getProjectDir, getBaselineRef, addSignal, getSignalStatus } from "./state.js";
 
 let server: http.Server | null = null;
 
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
@@ -299,6 +299,31 @@ function handleRequest(
 
   if (method === "GET" && url === "/api/log") {
     sendJson(res, 200, getLogs());
+    return;
+  }
+
+  if (method === "POST" && url === "/api/signal") {
+    let body = "";
+    req.on("data", (chunk) => { body += chunk; });
+    req.on("end", () => {
+      try {
+        const data = JSON.parse(body);
+        if (!data.agent || !data.action) {
+          sendJson(res, 400, { error: "agent and action are required" });
+          return;
+        }
+        const timestamp = new Date().toISOString();
+        addSignal(data.agent, { action: data.action, timestamp, source: "browser" });
+        sendJson(res, 200, { success: true });
+      } catch {
+        sendJson(res, 400, { error: "Invalid JSON" });
+      }
+    });
+    return;
+  }
+
+  if (method === "GET" && url === "/api/signals") {
+    sendJson(res, 200, { signals: getSignalStatus() });
     return;
   }
 
