@@ -34948,10 +34948,14 @@ var require_state = __commonJS({
     exports2.getLogs = getLogs;
     exports2.getProjectDir = getProjectDir;
     exports2.getBaselineRef = getBaselineRef;
+    exports2.addSignal = addSignal;
+    exports2.consumeSignals = consumeSignals;
+    exports2.getSignalStatus = getSignalStatus;
     exports2.reset = reset;
     var defaultConfig = { title: "Dashboard", subtitle: "" };
     var tasks = [];
     var logs = [];
+    var signals = [];
     var config = { ...defaultConfig };
     function initDashboard(cfg) {
       config = { ...cfg };
@@ -35016,9 +35020,29 @@ var require_state = __commonJS({
     function getBaselineRef() {
       return config.baseline_ref;
     }
+    function addSignal(agent, signal) {
+      signals.push({ ...signal, agent, acknowledged: false });
+    }
+    function consumeSignals(agent) {
+      const agentSignals = signals.filter((s) => s.agent === agent && !s.acknowledged);
+      for (const s of signals) {
+        if (s.agent === agent && !s.acknowledged)
+          s.acknowledged = true;
+      }
+      return agentSignals.map(({ action, timestamp, source }) => ({ action, timestamp, source }));
+    }
+    function getSignalStatus() {
+      return signals.map((s) => ({
+        agent: s.agent,
+        action: s.action,
+        timestamp: s.timestamp,
+        acknowledged: s.acknowledged
+      }));
+    }
     function reset() {
       tasks = [];
       logs = [];
+      signals = [];
       config = { ...defaultConfig };
     }
   }
@@ -35045,7 +35069,7 @@ var require_http_server = __commonJS({
     var server2 = null;
     var CORS_HEADERS = {
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type"
     };
     var filesCache = null;
@@ -35305,6 +35329,31 @@ var require_http_server = __commonJS({
       }
       if (method === "GET" && url === "/api/log") {
         sendJson(res, 200, (0, state_js_12.getLogs)());
+        return;
+      }
+      if (method === "POST" && url === "/api/signal") {
+        let body = "";
+        req.on("data", (chunk) => {
+          body += chunk;
+        });
+        req.on("end", () => {
+          try {
+            const data = JSON.parse(body);
+            if (!data.agent || !data.action) {
+              sendJson(res, 400, { error: "agent and action are required" });
+              return;
+            }
+            const timestamp = (/* @__PURE__ */ new Date()).toISOString();
+            (0, state_js_12.addSignal)(data.agent, { action: data.action, timestamp, source: "browser" });
+            sendJson(res, 200, { success: true });
+          } catch {
+            sendJson(res, 400, { error: "Invalid JSON" });
+          }
+        });
+        return;
+      }
+      if (method === "GET" && url === "/api/signals") {
+        sendJson(res, 200, { signals: (0, state_js_12.getSignalStatus)() });
         return;
       }
       sendJson(res, 404, { error: "Not found" });
@@ -35610,6 +35659,12 @@ var require_tools = __commonJS({
         await (0, http_server_js_12.stopServer)();
         (0, state_js_12.reset)();
         return { content: [{ type: "text", text: JSON.stringify({ success: true }) }] };
+      });
+      server2.tool("kanban_check_signals", "Check for pending signals from the dashboard browser UI. Agents should call this periodically (every ~10 tool calls) to receive poke/shake/skip/check_others commands from the user.", {
+        agent: zod_1.z.string().describe("The agent name to check signals for")
+      }, async ({ agent }) => {
+        const pending = (0, state_js_12.consumeSignals)(agent);
+        return { content: [{ type: "text", text: JSON.stringify({ signals: pending }) }] };
       });
     }
   }
