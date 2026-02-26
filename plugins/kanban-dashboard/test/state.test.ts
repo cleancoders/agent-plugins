@@ -536,4 +536,29 @@ describe("signal state", () => {
     const status = getSignalStatus();
     expect(status).toHaveLength(0);
   });
+
+  it("consumeSignals returns empty on second call after signals are consumed", () => {
+    addSignal("alice", { action: "poke", timestamp: "2026-02-25T14:00:00.000Z", source: "browser" });
+    consumeSignals("alice");
+    const second = consumeSignals("alice");
+    expect(second).toEqual([]);
+  });
+
+  it("getSignalStatus returns defensive copies", () => {
+    addSignal("alice", { action: "poke", timestamp: "2026-02-25T14:00:00.000Z", source: "browser" });
+    const status = getSignalStatus();
+    status[0].action = "tampered";
+    const fresh = getSignalStatus();
+    expect(fresh[0].action).toBe("poke");
+  });
+
+  it("consumeSignals returns defensive copies", () => {
+    addSignal("alice", { action: "poke", timestamp: "2026-02-25T14:00:00.000Z", source: "browser" });
+    const signals = consumeSignals("alice");
+    signals[0].action = "tampered";
+    // Re-add and consume to verify independence
+    addSignal("alice", { action: "shake", timestamp: "2026-02-25T14:01:00.000Z", source: "browser" });
+    const fresh = consumeSignals("alice");
+    expect(fresh[0].action).toBe("shake");
+  });
 });

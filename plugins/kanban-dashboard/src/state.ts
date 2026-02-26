@@ -147,7 +147,7 @@ export function addSignal(agent: string, signal: Signal): void {
 export function consumeSignals(agent: string): Signal[] {
   const agentSignals = signals.filter(s => s.agent === agent && !s.acknowledged);
   for (const s of signals) {
-    if (s.agent === agent) s.acknowledged = true;
+    if (s.agent === agent && !s.acknowledged) s.acknowledged = true;
   }
   return agentSignals.map(({ action, timestamp, source }) => ({ action, timestamp, source }));
 }
