@@ -141,6 +141,52 @@ After all tasks are complete and you are shutting down the team:
 kanban_stop()
 ```
 
+## Signal Handling (Agent Poke)
+
+The dashboard allows users to send signals to agents from the browser. Four actions are available: **poke** (request status update), **shake** (wake stalled agent), **skip** (move to next task), and **check others** (inspect teammates).
+
+### How it works
+
+1. User clicks an action button on a card or agent bar in the browser
+2. The MCP server stores the signal
+3. Agents poll for signals using `kanban_check_signals`
+4. Agent acts on the signal and updates its card
+
+### Polling for signals
+
+**Every agent should call `kanban_check_signals` every ~10 tool calls** (roughly every 2 minutes) as part of the check-in protocol:
+
+```
+kanban_check_signals({ agent: "<your-agent-name>" })
+```
+
+Returns: `{ signals: [{ action, timestamp, source }] }` or `{ signals: [] }`
+
+### Responding to signals
+
+When signals are received, the agent should act and update its card:
+
+| Signal | Agent Response |
+|---|---|
+| `poke` | Output `[CHECK-IN]` to terminal, call `kanban_update_task` with fresh status message |
+| `shake` | Output `[SHAKEN]` to terminal, self-diagnose for loops/stuck state, try alternative approach, update card with recovery status |
+| `skip` | Mark current task done/abandoned, check `TaskList` for next work, update card: "Skipped by user — moving to next task" |
+| `check_others` | Read `TaskList` for teammate statuses, send `SendMessage` to teammates, report findings to card + terminal |
+
+### Instructing teammates to poll
+
+When dispatching teammates, include this instruction:
+
+```
+Every ~10 tool calls, check for signals from the dashboard:
+  kanban_check_signals({ agent: "<your-name>" })
+If you receive signals, act on them:
+- poke: Output [CHECK-IN] with your current status and update your kanban card
+- shake: Check if you're stuck, try a different approach, update your card
+- skip: Mark current task done, move to next available task
+- check_others: Check TaskList and report teammate statuses
+```
+
 ## Tips
 
 - **Update immediately, every time.** The dashboard polls every 1.5 seconds. If you don't call `kanban_update_task`, the card will appear frozen to the user. Update on every teammate message.
