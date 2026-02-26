@@ -42,6 +42,8 @@ export interface DashboardConfig {
   subtitle: string;
   project_dir?: string;
   baseline_ref?: string;
+  leader?: string;
+  project?: string;
 }
 
 const defaultConfig: DashboardConfig = { title: "Dashboard", subtitle: "" };

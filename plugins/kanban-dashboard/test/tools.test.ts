@@ -106,6 +106,36 @@ describe("kanban_init tool - project_dir parameter", () => {
     const state = getState();
     expect(state.config.project_dir).toBe("/some/repo");
   });
+
+  it("passes leader and project to initDashboard when provided", async () => {
+    const handler = tools.get("kanban_init")!.handler;
+    await handler({
+      title: "Test",
+      subtitle: "",
+      tasks: [],
+      port: 0,
+      open_browser: false,
+      leader: "alice",
+      project: "my-app",
+    });
+    const state = getState();
+    expect(state.config.leader).toBe("alice");
+    expect(state.config.project).toBe("my-app");
+  });
+
+  it("works without leader and project (backward compatibility)", async () => {
+    const handler = tools.get("kanban_init")!.handler;
+    await handler({
+      title: "Test",
+      subtitle: "",
+      tasks: [],
+      port: 0,
+      open_browser: false,
+    });
+    const state = getState();
+    expect(state.config.leader).toBeUndefined();
+    expect(state.config.project).toBeUndefined();
+  });
 });
 
 describe("getAgentColor (via tool handlers)", () => {

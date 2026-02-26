@@ -81,6 +81,20 @@ describe("initDashboard", () => {
     expect(config.subtitle).toBe("s2");
     expect(config.project_dir).toBe("/new");
   });
+
+  it("stores leader and project in config", () => {
+    initDashboard({ title: "T", subtitle: "S", leader: "alice", project: "my-app" });
+    const { config } = getState();
+    expect(config.leader).toBe("alice");
+    expect(config.project).toBe("my-app");
+  });
+
+  it("returns undefined for leader and project when not provided", () => {
+    initDashboard({ title: "T", subtitle: "S" });
+    const { config } = getState();
+    expect(config.leader).toBeUndefined();
+    expect(config.project).toBeUndefined();
+  });
 });
 
 describe("addTask", () => {

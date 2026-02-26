@@ -7,7 +7,17 @@ let allLogEntries = [];
 let pendingPokes = {}; // { "agent-name": { time: Date.now(), action: "poke" } }
 
 async function sendSignal(agent, action, event) {
-  if (event) event.stopPropagation();
+  if (event) {
+    event.stopPropagation();
+    event.preventDefault();
+  }
+  console.log('[signal] sending', action, 'to', agent);
+  // Visual feedback on the clicked button
+  const btn = event && event.currentTarget;
+  if (btn) {
+    btn.classList.add('sent');
+    setTimeout(() => btn.classList.remove('sent'), 600);
+  }
   try {
     const res = await fetch('/api/signal', {
       method: 'POST',
@@ -15,10 +25,15 @@ async function sendSignal(agent, action, event) {
       body: JSON.stringify({ agent, action }),
     });
     if (res.ok) {
+      console.log('[signal] sent ok:', action, agent);
       pendingPokes[agent] = { time: Date.now(), action };
+      // Force immediate re-render so badge appears without waiting for next poll
+      poll();
+    } else {
+      console.warn('[signal] server returned', res.status);
     }
   } catch (e) {
-    console.warn('Failed to send signal:', e);
+    console.warn('[signal] Failed to send signal:', e);
   }
 }
 
@@ -250,6 +265,14 @@ async function poll() {
       }
       if (subtitleEl && data.config.subtitle) {
         subtitleEl.textContent = '/ ' + data.config.subtitle;
+      }
+      const metaEl = document.getElementById('dashboard-meta');
+      if (metaEl) {
+        const parts = [];
+        if (data.config.project) parts.push(data.config.project);
+        if (data.config.leader) parts.push('led by ' + data.config.leader);
+        metaEl.textContent = parts.join(' \u2022 ');
+        metaEl.style.display = parts.length > 0 ? '' : 'none';
       }
     }
     document.getElementById('connecting-overlay').classList.add('hidden');

@@ -68,8 +68,10 @@ export function registerTools(server: McpServer): void {
       port: z.number().optional().describe('Fixed port (0 for auto)'),
       open_browser: z.boolean().optional().default(true).describe('Open browser automatically'),
       project_dir: z.string().optional().describe('Absolute path to the project git repository for file diff inspection'),
+      leader: z.string().optional().describe('Name of the team leader'),
+      project: z.string().optional().describe('Project name'),
     },
-    async ({ title, subtitle, tasks, port, open_browser, project_dir }) => {
+    async ({ title, subtitle, tasks, port, open_browser, project_dir, leader, project }) => {
       reset();
       agentColors.clear();
       colorIndex = 0;
@@ -83,7 +85,7 @@ export function registerTools(server: McpServer): void {
         }
       }
 
-      initDashboard({ title, subtitle: subtitle || '', project_dir, baseline_ref });
+      initDashboard({ title, subtitle: subtitle || '', project_dir, baseline_ref, leader, project });
 
       for (const t of tasks) {
         const color = getAgentColor(t.agent, t.agent_color);

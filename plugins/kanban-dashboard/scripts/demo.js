@@ -3,7 +3,7 @@
 // Creates a temp git repo with multi-language diffs so the diff modal works.
 // Usage: npm run demo
 
-const { initDashboard, addTask, addLog } = require("../dist/state.js");
+const { initDashboard, addTask, addLog, updateTask, getSignalStatus, consumeSignals, getState } = require("../dist/state.js");
 const { startServer } = require("../dist/http-server.js");
 const { execSync } = require("child_process");
 const fs = require("fs");
@@ -608,6 +608,8 @@ initDashboard({
   subtitle: "Demo Dashboard",
   project_dir: tmpDir,
   baseline_ref: baselineCommit,
+  leader: "architect",
+  project: "acme-webapp",
 });
 
 addTask({
@@ -691,6 +693,58 @@ addLog({ time: "11:00:00", agent: "tester", color: "#748ffc", message: "Test pla
 addLog({ time: "11:15:00", agent: "backend-dev", color: "#ff6b6b", message: "Clojure API handlers: added auth guards and pagination" });
 addLog({ time: "11:30:00", agent: "devops", color: "#f783ac", message: "Python config: adding production env var validation" });
 
+// --- Poke responses ---
+
+const POKE_RESPONSES = [
+  "hey! that tickled!",
+  "beep boop, I'm working here!",
+  "why you pokin' me?",
+  "*yawns* oh hey, still here!",
+  "poke received, sending vibes back~",
+  "I'm not a button... oh wait, I am",
+  "ow! just kidding, I can't feel things",
+  "acknowledged! now let me cook",
+  "you rang?",
+  "I'm alive! I'm alive! ...was that ever in question?",
+  "boop! right back atcha",
+  "yes yes, I see you too",
+];
+
+function randomResponse() {
+  return POKE_RESPONSES[Math.floor(Math.random() * POKE_RESPONSES.length)];
+}
+
+function agentColor(agentName) {
+  const state = getState();
+  const task = state.tasks.find(t => t.agent === agentName);
+  return task ? task.agent_color : "#aaa";
+}
+
+function handleSignals() {
+  const signals = getSignalStatus().filter(s => !s.acknowledged);
+  const seen = new Set();
+  for (const sig of signals) {
+    if (seen.has(sig.agent)) continue;
+    seen.add(sig.agent);
+    consumeSignals(sig.agent);
+
+    const response = randomResponse();
+    const color = agentColor(sig.agent);
+    const now = new Date();
+    const time = now.toTimeString().slice(0, 8);
+
+    addLog({ time, agent: sig.agent, color, message: response });
+
+    const state = getState();
+    const task = state.tasks.find(t => t.agent === sig.agent && t.status === "in_progress");
+    if (task) {
+      updateTask(task.id, { message: response });
+    }
+
+    console.log(`[${time}] ${sig.agent} was poked: "${response}"`);
+  }
+}
+
 // --- Start server ---
 
 (async () => {
@@ -703,6 +757,9 @@ addLog({ time: "11:30:00", agent: "devops", color: "#f783ac", message: "Python c
     fs.rmSync(tmpDir, { recursive: true, force: true });
     process.exit(0);
   });
+
+  // Poll for signals and respond with cute messages
+  setInterval(handleSignals, 2000);
 
   try {
     execSync(`open ${url}`, { stdio: "ignore" });

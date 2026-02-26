@@ -10,7 +10,7 @@ Claude Code (Client)
     |-- stdio JSON-RPC
     |
 MCP Server (Node.js)
-    |-- Tool Handlers (5 MCP tools)
+    |-- Tool Handlers (6 MCP tools)
     |-- In-Memory State (tasks, logs, config)
     |-- Embedded HTTP Server (auto-assigned port)
          |-- GET /              index.html
@@ -18,6 +18,8 @@ MCP Server (Node.js)
          |-- GET /api/log       activity log JSON
          |-- GET /api/files     git diff --name-status
          |-- GET /api/diff      unified diff for a file
+         |-- POST /api/signal   send signal to an agent
+         |-- GET /api/signals   pending signal status
          |-- GET /css/*, /js/*  static assets
 
 Browser
@@ -26,7 +28,7 @@ Browser
     |-- Updates elapsed timer every 1s
 ```
 
-The MCP server and HTTP server run in a single Node.js process. State is entirely in-memory — no files written to disk.
+The MCP server and HTTP server run in a single Node.js process. State is entirely in-memory — no files written to disk (signal files are the exception, written to `~/.claude/signals/` for agent consumption).
 
 ## MCP Tools
 
@@ -42,6 +44,8 @@ Initialize the dashboard with a title and task list. Starts the HTTP server and 
 | port | number | no | `0` | Server port (0 = auto-assign) |
 | open_browser | boolean | no | `true` | Open browser on start |
 | project_dir | string | no | | Git repo path for file diffs |
+| leader | string | no | | Team leader name (shown in header) |
+| project | string | no | | Project name (shown in header) |
 
 Returns `{ url, port }`.
 
@@ -90,6 +94,16 @@ Add an entry to the activity log.
 | message | string | yes | Log message |
 | color | string | no | Override agent color |
 
+### kanban_check_signals
+
+Check for pending signals sent from the browser UI. Agents should call this periodically (every ~10 tool calls) to receive poke/shake/skip/check_others commands from the user. Consuming signals marks them as acknowledged.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| agent | string | yes | Agent name to check signals for |
+
+Returns `{ signals: [{ action, timestamp, source }] }`.
+
 ### kanban_stop
 
 Stop the HTTP server and reset all state. No parameters.
@@ -102,11 +116,11 @@ Colors are auto-assigned from a pool of 10 distinct colors in round-robin order.
 
 The browser dashboard includes:
 
-- **Header** — live indicator, title/subtitle, stats (active/done/total/findings), elapsed timer
+- **Header** — live indicator, title/subtitle, project/leader meta line, stats (active/done/total/findings), elapsed timer
 - **Progress bar** — completion percentage across all tasks
-- **Agent bar** — unique agents with active/done/idle status indicators
+- **Agent bar** — unique agents with active/done/idle status indicators and poke buttons
 - **Kanban board** — four columns: Blocked, Ready, In Progress, Done
-- **Task cards** — ID, title, agent, progress bar, severity badges, file tags, subtasks (in-progress only)
+- **Task cards** — ID, title, agent, progress bar, severity badges, file tags, subtasks (in-progress only), action buttons on hover (poke/shake/skip/check others), poke badges with countdown
 - **Task modal** — click any card for details: agent, progress, findings, message, file diffs, subtasks, dependencies, agent activity log
 - **Activity log** — scrolling log of agent messages
 - **Completion banner** — appears when all tasks reach done
@@ -137,7 +151,7 @@ The skill designates the **team lead as the sole dashboard driver**. Teammates d
 ```bash
 npm install
 npm run build        # Compile TypeScript
-npm test             # Run unit tests (219 tests via Vitest)
+npm test             # Run unit tests 
 npm run test:e2e     # Run E2E tests (22 tests via Playwright)
 npm run test:coverage # Run with coverage report
 npm run dev          # Watch mode for TypeScript
@@ -174,11 +188,12 @@ kanban-dashboard/
   src/
     index.ts          Entry point — MCP server + stdio transport
     state.ts          In-memory state management
+    signals.ts        Signal file I/O for agent poke feature
     http-server.ts    Embedded HTTP server
     tools.ts          MCP tool definitions + handlers
   public/
     index.html        Dashboard HTML
-    css/              Stylesheets (base, layout, cards, log, modal, diff)
+    css/              Stylesheets (base, layout, cards, log, modal, diff, signals)
     js/
       dashboard.js    Polling, rendering, stats
       modal.js        Task detail modal + file diffs

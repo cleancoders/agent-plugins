@@ -662,6 +662,16 @@ describe("GET /api/status", () => {
 
     expect(res.headers.get("access-control-allow-origin")).toBe("*");
   });
+
+  it("returns leader and project in config when set", async () => {
+    initDashboard({ title: "T", subtitle: "S", leader: "alice", project: "my-app" });
+
+    const { status, body } = await fetchJson(`${baseUrl}/api/status`);
+
+    expect(status).toBe(200);
+    expect(body.config.leader).toBe("alice");
+    expect(body.config.project).toBe("my-app");
+  });
 });
 
 describe("GET /api/log", () => {

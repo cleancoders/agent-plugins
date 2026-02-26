@@ -35479,8 +35479,10 @@ var require_tools = __commonJS({
         })).describe("Initial task list"),
         port: zod_1.z.number().optional().describe("Fixed port (0 for auto)"),
         open_browser: zod_1.z.boolean().optional().default(true).describe("Open browser automatically"),
-        project_dir: zod_1.z.string().optional().describe("Absolute path to the project git repository for file diff inspection")
-      }, async ({ title, subtitle, tasks, port, open_browser, project_dir }) => {
+        project_dir: zod_1.z.string().optional().describe("Absolute path to the project git repository for file diff inspection"),
+        leader: zod_1.z.string().optional().describe("Name of the team leader"),
+        project: zod_1.z.string().optional().describe("Project name")
+      }, async ({ title, subtitle, tasks, port, open_browser, project_dir, leader, project }) => {
         (0, state_js_12.reset)();
         agentColors.clear();
         colorIndex = 0;
@@ -35491,7 +35493,7 @@ var require_tools = __commonJS({
           } catch {
           }
         }
-        (0, state_js_12.initDashboard)({ title, subtitle: subtitle || "", project_dir, baseline_ref });
+        (0, state_js_12.initDashboard)({ title, subtitle: subtitle || "", project_dir, baseline_ref, leader, project });
         for (const t of tasks) {
           const color = getAgentColor(t.agent, t.agent_color);
           const task = {
