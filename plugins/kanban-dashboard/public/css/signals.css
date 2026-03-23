@@ -76,3 +76,16 @@
   color: var(--text);
   border-color: rgba(255,255,255,0.2);
 }
+
+/* Mobile responsive */
+@media (max-width: 767px) {
+  .card-actions { opacity: 1; }
+
+  .card-action-btn {
+    min-height: 36px;
+    min-width: 36px;
+    justify-content: center;
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+}

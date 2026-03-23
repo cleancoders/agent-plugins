@@ -212,3 +212,8 @@
   background-size: 200% 100%;
   animation: shimmer 3s infinite linear;
 }
+
+/* Mobile responsive */
+@media (max-width: 767px) {
+  .card { padding: 10px; }
+}
