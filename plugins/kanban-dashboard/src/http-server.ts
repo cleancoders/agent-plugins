@@ -2,7 +2,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
-import { getState, getLogs, getProjectDir, getBaselineRef, addSignal, getSignalStatus } from "./state.js";
+import { getState, getLogs, getProjectDir, getBaselineRef, addSignal, getSignalStatus, getChatState, answerOldestQuestion, addFreeformMessage } from "./state.js";
 
 let server: http.Server | null = null;
 
@@ -324,6 +324,35 @@ function handleRequest(
 
   if (method === "GET" && url === "/api/signals") {
     sendJson(res, 200, { signals: getSignalStatus() });
+    return;
+  }
+
+  if (method === "GET" && url === "/api/chat") {
+    sendJson(res, 200, getChatState());
+    return;
+  }
+
+  if (method === "POST" && url === "/api/chat") {
+    let body = "";
+    req.on("data", (chunk) => { body += chunk; });
+    req.on("end", () => {
+      try {
+        const data = JSON.parse(body);
+        if (!data.text || typeof data.text !== "string" || data.text.trim() === "") {
+          sendJson(res, 400, { error: "text is required" });
+          return;
+        }
+        const answered = answerOldestQuestion(data.text);
+        if (answered) {
+          sendJson(res, 200, { success: true, message_id: answered.id, response_to: answered.response_to });
+        } else {
+          const msg = addFreeformMessage(data.text);
+          sendJson(res, 200, { success: true, message_id: msg.id });
+        }
+      } catch {
+        sendJson(res, 400, { error: "Invalid JSON" });
+      }
+    });
     return;
   }
 

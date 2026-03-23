@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { startServer, stopServer, resetFilesCache, isRunning, buildNewFileDiff } from "../src/http-server.js";
-import { reset, initDashboard, addTask, addLog, getLogs, addSignal, getSignalStatus } from "../src/state.js";
+import { reset, initDashboard, addTask, addLog, getLogs, addSignal, getSignalStatus, addChatMessage } from "../src/state.js";
 
 vi.mock("node:child_process", () => ({
   execSync: vi.fn(),
@@ -955,5 +955,122 @@ describe("GET /api/signals", () => {
     expect(body.signals[0].agent).toBe("alice");
     expect(body.signals[0].action).toBe("poke");
     expect(body.signals[0].acknowledged).toBe(false);
+  });
+});
+
+describe("GET /api/chat", () => {
+  let baseUrl: string;
+
+  beforeEach(async () => {
+    reset();
+    resetFilesCache();
+    mockExecSync.mockReset();
+    const info = await startServer(0);
+    baseUrl = info.url;
+  });
+
+  afterEach(async () => {
+    await stopServer();
+  });
+
+  it("returns empty chat state when no messages exist", async () => {
+    const { status, body } = await fetchJson(`${baseUrl}/api/chat`);
+
+    expect(status).toBe(200);
+    expect(body).toEqual({ messages: [], waiting: false, pending_questions: 0 });
+  });
+
+  it("returns messages after they are added", async () => {
+    addChatMessage({ sender: "agent", text: "Hello?", waiting: true });
+
+    const { status, body } = await fetchJson(`${baseUrl}/api/chat`);
+
+    expect(status).toBe(200);
+    expect(body.messages).toHaveLength(1);
+    expect(body.messages[0].text).toBe("Hello?");
+    expect(body.waiting).toBe(true);
+    expect(body.pending_questions).toBe(1);
+  });
+});
+
+describe("POST /api/chat", () => {
+  let baseUrl: string;
+
+  beforeEach(async () => {
+    reset();
+    resetFilesCache();
+    mockExecSync.mockReset();
+    const info = await startServer(0);
+    baseUrl = info.url;
+  });
+
+  afterEach(async () => {
+    await stopServer();
+  });
+
+  it("answers the oldest pending question", async () => {
+    addChatMessage({ sender: "agent", text: "What should I do?", waiting: true });
+
+    const res = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: "Do the thing" }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.message_id).toBeDefined();
+    expect(body.response_to).toBe(1);
+  });
+
+  it("creates free-form message when no question is pending", async () => {
+    const res = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: "Just chatting" }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.message_id).toBeDefined();
+    expect(body.response_to).toBeUndefined();
+  });
+
+  it("returns 400 when text is missing", async () => {
+    const res = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ other: "field" }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.error).toBe("text is required");
+  });
+
+  it("returns 400 when text is whitespace only", async () => {
+    const res = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: "   " }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.error).toBe("text is required");
+  });
+
+  it("returns 400 for invalid JSON", async () => {
+    const res = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "not json at all",
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.error).toBe("Invalid JSON");
   });
 });
