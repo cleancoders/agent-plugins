@@ -11,6 +11,20 @@ function openModal(taskId) {
   statusEl.className = 'modal-status ' + task.status;
   document.getElementById('modal-title').textContent = task.title;
 
+  // Task navigation arrows
+  const sorted = allTasks.slice().sort((a, b) => a.id - b.id);
+  const idx = sorted.findIndex(t => t.id === task.id);
+  const prevBtn = document.getElementById('modal-nav-prev');
+  const nextBtn = document.getElementById('modal-nav-next');
+  if (prevBtn) {
+    prevBtn.disabled = idx <= 0;
+    prevBtn.onclick = idx > 0 ? () => openModal(sorted[idx - 1].id) : null;
+  }
+  if (nextBtn) {
+    nextBtn.disabled = idx >= sorted.length - 1;
+    nextBtn.onclick = idx < sorted.length - 1 ? () => openModal(sorted[idx + 1].id) : null;
+  }
+
   let html = '';
 
   // Agent

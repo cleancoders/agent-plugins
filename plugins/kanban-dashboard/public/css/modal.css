@@ -66,6 +66,37 @@
 .modal-status.blocked { background: rgba(72,79,88,0.3); color: var(--text-dim); }
 .modal-status.ready { background: rgba(255,212,59,0.15); color: var(--yellow); }
 
+.modal-header-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.modal-nav-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 4px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.modal-nav-btn:hover:not(:disabled) {
+  background: rgba(255,255,255,0.08);
+  color: var(--text);
+  border-color: #444c56;
+}
+
+.modal-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
 .modal-close {
   background: none;
   border: none;

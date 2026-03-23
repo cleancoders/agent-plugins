@@ -180,6 +180,44 @@ test('completion banner is hidden when not all tasks are done', async ({ page })
   await expect(banner).toBeHidden();
 });
 
+// --- Modal navigation ---
+
+test('modal shows left and right navigation arrows', async ({ page }) => {
+  await page.locator('#card-3').click();
+  await expect(page.locator('#modal-nav-prev')).toBeVisible();
+  await expect(page.locator('#modal-nav-next')).toBeVisible();
+});
+
+test('clicking right arrow navigates to next task by ID', async ({ page }) => {
+  // Task 3 -> right -> Task 4
+  await page.locator('#card-3').click();
+  await expect(page.locator('#modal-id')).toHaveText('#3');
+  await page.locator('#modal-nav-next').click();
+  await expect(page.locator('#modal-id')).toHaveText('#4');
+  await expect(page.locator('#modal-title')).toHaveText('Done Task');
+});
+
+test('clicking left arrow navigates to previous task by ID', async ({ page }) => {
+  // Task 3 -> left -> Task 2
+  await page.locator('#card-3').click();
+  await expect(page.locator('#modal-id')).toHaveText('#3');
+  await page.locator('#modal-nav-prev').click();
+  await expect(page.locator('#modal-id')).toHaveText('#2');
+  await expect(page.locator('#modal-title')).toHaveText('Ready Task');
+});
+
+test('left arrow is disabled on first task', async ({ page }) => {
+  await page.locator('#card-1').click();
+  await expect(page.locator('#modal-nav-prev')).toBeDisabled();
+  await expect(page.locator('#modal-nav-next')).toBeEnabled();
+});
+
+test('right arrow is disabled on last task', async ({ page }) => {
+  await page.locator('#card-4').click();
+  await expect(page.locator('#modal-nav-next')).toBeDisabled();
+  await expect(page.locator('#modal-nav-prev')).toBeEnabled();
+});
+
 // --- Mobile responsive ---
 
 test.describe('mobile viewport', () => {
