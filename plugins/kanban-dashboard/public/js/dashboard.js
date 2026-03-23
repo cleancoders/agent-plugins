@@ -274,6 +274,7 @@ async function poll() {
         if (data.config.leader) parts.push('led by ' + data.config.leader);
         metaEl.textContent = parts.join(' \u2022 ');
         metaEl.style.display = parts.length > 0 ? '' : 'none';
+      window._dashboardConfig = data.config;
       }
     }
     document.getElementById('connecting-overlay').classList.add('hidden');

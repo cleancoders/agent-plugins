@@ -153,6 +153,26 @@
   </div>
 </div>
 
+<button class="chat-bubble" id="chat-bubble" title="Chat">
+  <span>&#128172;</span>
+  <span class="chat-bubble-badge" id="chat-badge"></span>
+</button>
+
+<div class="chat-panel" id="chat-panel">
+  <div class="chat-panel-header">
+    <span class="chat-panel-title">Chat</span>
+    <button class="chat-panel-close" id="chat-close" title="Close">&times;</button>
+  </div>
+  <div class="chat-messages" id="chat-messages">
+    <div class="chat-empty" id="chat-empty">No messages yet</div>
+  </div>
+  <div class="chat-waiting-indicator" id="chat-waiting">Waiting for your response...</div>
+  <div class="chat-input-area">
+    <textarea class="chat-input" id="chat-input" placeholder="Type a message..." rows="1"></textarea>
+    <button class="chat-send-btn" id="chat-send">Send</button>
+  </div>
+</div>
+
 <button class="log-fab" id="log-fab" title="Activity Log">&#9776;</button>
 <div class="log-backdrop" id="log-backdrop"></div>
 
@@ -168,5 +188,6 @@
 <script src="/js/dashboard.js"></script>
 <script src="/js/diff.js"></script>
 <script src="/js/modal.js"></script>
+<script src="/js/chat.js"></script>
 </body>
 </html>
