@@ -1073,4 +1073,60 @@ describe("POST /api/chat", () => {
     expect(res.status).toBe(400);
     expect(body.error).toBe("Invalid JSON");
   });
+
+  it("full flow: agent question -> user answer -> state reflects answered", async () => {
+    // Agent sends question
+    addChatMessage({ sender: "agent", text: "Which database?", waiting: true });
+
+    // Verify GET shows waiting
+    const before = await fetchJson(`${baseUrl}/api/chat`);
+    expect(before.body.waiting).toBe(true);
+    expect(before.body.pending_questions).toBe(1);
+
+    // User answers
+    const postRes = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: "PostgreSQL" }),
+    });
+    const postBody = await postRes.json();
+    expect(postBody.response_to).toBe(1);
+
+    // Verify GET shows answered
+    const after = await fetchJson(`${baseUrl}/api/chat`);
+    expect(after.body.waiting).toBe(false);
+    expect(after.body.pending_questions).toBe(0);
+    expect(after.body.messages).toHaveLength(2);
+    const question = after.body.messages[0];
+    expect(question.waiting).toBe(true);
+    expect(question.answered).toBe(true);
+  });
+
+  it("FIFO: answers questions in order", async () => {
+    addChatMessage({ sender: "agent", text: "Q1?", waiting: true });
+    addChatMessage({ sender: "agent", text: "Q2?", waiting: true });
+
+    // First answer goes to Q1
+    const res1 = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: "A1" }),
+    });
+    const body1 = await res1.json();
+    expect(body1.response_to).toBe(1);
+
+    // Second answer goes to Q2
+    const res2 = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: "A2" }),
+    });
+    const body2 = await res2.json();
+    expect(body2.response_to).toBe(2);
+
+    // All answered
+    const after = await fetchJson(`${baseUrl}/api/chat`);
+    expect(after.body.waiting).toBe(false);
+    expect(after.body.pending_questions).toBe(0);
+  });
 });
