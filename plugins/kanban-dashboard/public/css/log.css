@@ -32,3 +32,53 @@
 
 .log-time { color: var(--text-dim); min-width: 80px; }
 .log-agent { font-weight: 600; min-width: 120px; }
+
+.log-fab { display: none; }
+.log-backdrop { display: none; }
+
+@keyframes slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@media (max-width: 767px) {
+  .log-panel { display: none; }
+  .log-panel.mobile-open {
+    display: block;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-height: 60vh;
+    z-index: 400;
+    border-radius: 12px 12px 0 0;
+    animation: slide-up 0.3s ease;
+  }
+
+  .log-fab {
+    display: flex;
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 18px;
+    align-items: center;
+    justify-content: center;
+    z-index: 300;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+
+  .log-backdrop.open {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 350;
+  }
+}

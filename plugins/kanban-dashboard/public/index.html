@@ -69,6 +69,13 @@
   <span class="agent-bar-label">Agents</span>
 </div>
 
+<div class="column-tabs" id="column-tabs">
+  <div class="column-tab" data-column="blocked">BLK <span class="tab-count" id="tab-count-blocked">0</span></div>
+  <div class="column-tab" data-column="ready">RDY <span class="tab-count" id="tab-count-ready">0</span></div>
+  <div class="column-tab active" data-column="in_progress">WIP <span class="tab-count" id="tab-count-progress">0</span></div>
+  <div class="column-tab" data-column="done">DONE <span class="tab-count" id="tab-count-done">0</span></div>
+</div>
+
 <div class="board" id="board">
   <div class="column col-blocked" id="col-blocked">
     <div class="column-header">
@@ -134,6 +141,9 @@
     </div>
   </div>
 </div>
+
+<button class="log-fab" id="log-fab" title="Activity Log">&#9776;</button>
+<div class="log-backdrop" id="log-backdrop"></div>
 
 <script src="/vendor/highlight.min.js"></script>
 <script src="/vendor/languages/clojure.min.js"></script>
