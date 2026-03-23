@@ -1,3 +1,15 @@
+## 1.5.0
+  * Mobile responsive layout (< 768px breakpoint)
+    * Compact stacked header with relocated elapsed timer
+    * Horizontally scrollable agent bar
+    * Swipeable tab-based column navigation (BLK/RDY/WIP/DONE)
+    * Always-visible card action buttons for touch devices
+    * Log panel as floating action button + bottom sheet overlay
+    * Full-screen task detail and diff modals
+    * Unified diff renderer (replaces side-by-side on mobile)
+    * Collapsible file dropdown in diff modal (replaces sidebar)
+  * Add left/right navigation arrows to task detail modal for browsing tasks by ID
+
 ## 1.4.1
     * adds project name and agent leader name to header
     * adds poke, shake, skip, and check buttons to agent cards and header
