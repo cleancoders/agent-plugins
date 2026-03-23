@@ -38,6 +38,7 @@ function showNotification() {
 function renderChatMessages() {
   const container = document.getElementById('chat-messages');
   const empty = document.getElementById('chat-empty');
+  if (!container || !empty) return;
   if (chatMessages.length === 0) {
     empty.style.display = '';
     return;
@@ -147,9 +148,9 @@ async function pollChat() {
       // Check for new waiting message to trigger notification + auto-open
       if (data.waiting) {
         const currentWaiting = chatMessages.filter(m => m.waiting && !m.answered);
-        const newestWaiting = currentWaiting[0]; // oldest unanswered
-        if (newestWaiting && newestWaiting.id !== lastWaitingId) {
-          lastWaitingId = newestWaiting.id;
+        const oldestPending = currentWaiting[0];
+        if (oldestPending && oldestPending.id !== lastWaitingId) {
+          lastWaitingId = oldestPending.id;
           showNotification();
           if (!chatPanelOpen) openChatPanel();
         }
