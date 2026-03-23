@@ -232,6 +232,7 @@ function renderBoard(tasks) {
   // Save state for diff
   prevTaskMap = {};
   tasks.forEach(t => prevTaskMap[t.id] = { status: t.status, message: t.message });
+  updateTabCounts();
 }
 
 async function fetchLog() {
@@ -296,6 +297,107 @@ async function poll() {
   }
   document.getElementById('elapsed').textContent = elapsed();
 }
+
+//region Mobile Responsive
+
+const mobileQuery = window.matchMedia('(max-width: 767px)');
+const COLUMN_ORDER = ['blocked', 'ready', 'in_progress', 'done'];
+let activeColumnIndex = 2; // default to in_progress
+
+function colIdFromStatus(status) {
+  return status === 'in_progress' ? 'progress' : status;
+}
+
+function switchToColumn(index) {
+  if (index < 0 || index >= COLUMN_ORDER.length) return;
+  activeColumnIndex = index;
+  const status = COLUMN_ORDER[index];
+  const colId = colIdFromStatus(status);
+
+  document.querySelectorAll('.column-tab').forEach(tab => tab.classList.remove('active'));
+  document.querySelector(`.column-tab[data-column="${status}"]`)?.classList.add('active');
+
+  document.querySelectorAll('.column').forEach(col => col.classList.remove('mobile-active'));
+  document.getElementById(`col-${colId}`)?.classList.add('mobile-active');
+}
+
+function updateTabCounts() {
+  COLUMN_ORDER.forEach(status => {
+    const colId = colIdFromStatus(status);
+    const count = document.getElementById(`count-${colId}`)?.textContent || '0';
+    const tabCount = document.getElementById(`tab-count-${colId}`);
+    if (tabCount) tabCount.textContent = count;
+  });
+}
+
+function handleMobileLayout(e) {
+  // 1. Relocate elapsed timer
+  const elapsedEl = document.querySelector('.elapsed');
+  const topRow = document.querySelector('.header-top-row');
+  const headerStats = document.querySelector('.header-stats');
+  if (elapsedEl && topRow && headerStats) {
+    if (e.matches) topRow.appendChild(elapsedEl);
+    else headerStats.appendChild(elapsedEl);
+  }
+
+  // 2. Set sticky top for column tabs
+  const columnTabs = document.getElementById('column-tabs');
+  const headerEl = document.querySelector('header');
+  if (columnTabs && headerEl) {
+    if (e.matches) columnTabs.style.top = headerEl.offsetHeight + 'px';
+    else columnTabs.style.top = '';
+  }
+
+  // 3. Handle column visibility
+  if (e.matches) {
+    switchToColumn(activeColumnIndex);
+  } else {
+    document.querySelectorAll('.column').forEach(col => col.classList.remove('mobile-active'));
+  }
+}
+
+// Tab click handler
+document.getElementById('column-tabs')?.addEventListener('click', (e) => {
+  const tab = e.target.closest('.column-tab');
+  if (!tab) return;
+  const status = tab.dataset.column;
+  const index = COLUMN_ORDER.indexOf(status);
+  if (index !== -1) switchToColumn(index);
+});
+
+// Swipe detection on .board
+let touchStartX = 0, touchStartY = 0;
+const boardEl = document.querySelector('.board');
+
+boardEl?.addEventListener('touchstart', (e) => {
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+}, { passive: true });
+
+boardEl?.addEventListener('touchend', (e) => {
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  const dy = e.changedTouches[0].clientY - touchStartY;
+  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+    if (dx < 0) switchToColumn(activeColumnIndex + 1);
+    else switchToColumn(activeColumnIndex - 1);
+  }
+}, { passive: true });
+
+// Log FAB
+document.getElementById('log-fab')?.addEventListener('click', () => {
+  document.getElementById('log-panel')?.classList.toggle('mobile-open');
+  document.getElementById('log-backdrop')?.classList.toggle('open');
+});
+document.getElementById('log-backdrop')?.addEventListener('click', () => {
+  document.getElementById('log-panel')?.classList.remove('mobile-open');
+  document.getElementById('log-backdrop')?.classList.remove('open');
+});
+
+// Initialize on load
+mobileQuery.addEventListener('change', handleMobileLayout);
+handleMobileLayout(mobileQuery);
+
+//endregion
 
 // Initial render
 poll();

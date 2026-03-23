@@ -179,3 +179,96 @@ test('completion banner is hidden when not all tasks are done', async ({ page })
   const banner = page.locator('#completion-banner');
   await expect(banner).toBeHidden();
 });
+
+// --- Mobile responsive ---
+
+test.describe('mobile viewport', () => {
+  test.use({ viewport: { width: 375, height: 667 } });
+
+  test('tab bar is visible on mobile', async ({ page }) => {
+    const tabs = page.locator('#column-tabs');
+    await expect(tabs).toBeVisible();
+  });
+
+  test('WIP tab is active by default', async ({ page }) => {
+    const wipTab = page.locator('.column-tab[data-column="in_progress"]');
+    await expect(wipTab).toHaveClass(/active/);
+  });
+
+  test('in_progress column is visible on mobile', async ({ page }) => {
+    const col = page.locator('#col-progress');
+    await expect(col).toHaveClass(/mobile-active/);
+  });
+
+  test('blocked column is hidden on mobile by default', async ({ page }) => {
+    const col = page.locator('#col-blocked');
+    await expect(col).not.toHaveClass(/mobile-active/);
+  });
+
+  test('clicking BLK tab shows blocked column', async ({ page }) => {
+    await page.locator('.column-tab[data-column="blocked"]').click();
+    const blockedCol = page.locator('#col-blocked');
+    await expect(blockedCol).toHaveClass(/mobile-active/);
+    const progressCol = page.locator('#col-progress');
+    await expect(progressCol).not.toHaveClass(/mobile-active/);
+  });
+
+  test('tab counts match column counts', async ({ page }) => {
+    await expect(page.locator('#tab-count-blocked')).toHaveText('1');
+    await expect(page.locator('#tab-count-ready')).toHaveText('1');
+    await expect(page.locator('#tab-count-progress')).toHaveText('1');
+    await expect(page.locator('#tab-count-done')).toHaveText('1');
+  });
+
+  test('log FAB is visible on mobile', async ({ page }) => {
+    const fab = page.locator('#log-fab');
+    await expect(fab).toBeVisible();
+  });
+
+  test('log panel is hidden on mobile by default', async ({ page }) => {
+    const logPanel = page.locator('#log-panel');
+    await expect(logPanel).not.toBeVisible();
+  });
+
+  test('clicking FAB opens log bottom sheet', async ({ page }) => {
+    await page.locator('#log-fab').click();
+    const logPanel = page.locator('#log-panel');
+    await expect(logPanel).toBeVisible();
+    await expect(logPanel).toHaveClass(/mobile-open/);
+  });
+
+  test('clicking backdrop closes log bottom sheet', async ({ page }) => {
+    await page.locator('#log-fab').click();
+    await expect(page.locator('#log-panel')).toHaveClass(/mobile-open/);
+    await page.locator('#log-backdrop').click();
+    await expect(page.locator('#log-panel')).not.toHaveClass(/mobile-open/);
+  });
+
+  test('tab bar is hidden on desktop viewport', async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+    const page = await context.newPage();
+    await page.goto(baseUrl);
+    await page.waitForSelector('#connecting-overlay.hidden', { timeout: 5000 });
+    const tabs = page.locator('#column-tabs');
+    await expect(tabs).not.toBeVisible();
+    await context.close();
+  });
+
+  test('card action buttons are visible without hover', async ({ page }) => {
+    const actions = page.locator('#card-3 .card-actions');
+    await expect(actions).toBeVisible();
+  });
+
+  test('task modal is full-screen on mobile', async ({ page }) => {
+    await page.locator('#card-3').click();
+    const modal = page.locator('.modal-content');
+    const box = await modal.boundingBox();
+    expect(box!.width).toBeGreaterThanOrEqual(370);
+    expect(box!.height).toBeGreaterThanOrEqual(660);
+  });
+
+  test('elapsed timer is in header top row on mobile', async ({ page }) => {
+    const elapsed = page.locator('.header-top-row .elapsed');
+    await expect(elapsed).toBeVisible();
+  });
+});
