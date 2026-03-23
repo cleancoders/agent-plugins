@@ -349,3 +349,51 @@
 .diff-modal-main .diff-table {
   font-size: 12px;
 }
+
+/* Mobile file dropdown */
+.diff-mobile-files { display: none; }
+
+/* Mobile responsive */
+@media (max-width: 767px) {
+  .diff-modal-content {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+  }
+
+  .diff-modal-sidebar { display: none; }
+
+  .diff-modal-filename { font-size: 11px; }
+
+  .diff-mobile-files {
+    display: block;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-card);
+    flex-shrink: 0;
+  }
+
+  .diff-mobile-files-toggle {
+    width: 100%;
+    padding: 8px 12px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .diff-mobile-files-list {
+    display: none;
+    max-height: 40vh;
+    overflow-y: auto;
+  }
+
+  .diff-mobile-files-list.open { display: block; }
+
+  .diff-row.added .diff-line-content { background: rgba(105, 219, 124, 0.1); }
+  .diff-row.added .diff-line-num { background: rgba(105, 219, 124, 0.08); }
+  .diff-row.removed .diff-line-content { background: rgba(255, 107, 107, 0.1); }
+  .diff-row.removed .diff-line-num { background: rgba(255, 107, 107, 0.08); }
+}

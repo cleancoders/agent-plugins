@@ -213,6 +213,21 @@ function openDiffModal(filePath) {
     </div>`
   ).join('');
 
+  // Populate mobile file dropdown
+  const mobileFileList = document.getElementById('diff-mobile-files-list');
+  const mobileFileCount = document.getElementById('diff-mobile-files-count');
+  if (mobileFileList) {
+    mobileFileList.innerHTML = diffModalFiles.map(f =>
+      `<div class="diff-file-row ${f.path === filePath ? 'active' : ''}" data-file="${escapeHtml(f.path)}" onclick="switchDiffFileMobile(this, '${escapeHtml(f.path)}')">
+        ${f.status ? `<span class="diff-file-status ${f.status}">${f.status}</span>` : ''}
+        <span class="diff-file-path">${escapeHtml(f.path)}</span>
+      </div>`
+    ).join('');
+  }
+  if (mobileFileCount) {
+    mobileFileCount.textContent = `(${diffModalFiles.length})`;
+  }
+
   // Load the selected file's diff
   loadDiffInModal(filePath);
 }
@@ -266,6 +281,24 @@ function switchDiffFile(rowEl, filePath) {
   rowEl.classList.add('active');
   loadDiffInModal(filePath);
 }
+
+function switchDiffFileMobile(rowEl, filePath) {
+  // Update active state in mobile list
+  document.querySelectorAll('#diff-mobile-files-list .diff-file-row.active').forEach(el => el.classList.remove('active'));
+  rowEl.classList.add('active');
+  // Also update sidebar active state
+  document.querySelectorAll('#diff-modal-sidebar .diff-file-row.active').forEach(el => el.classList.remove('active'));
+  const sidebarRow = document.querySelector(`#diff-modal-sidebar .diff-file-row[data-file="${filePath}"]`);
+  if (sidebarRow) sidebarRow.classList.add('active');
+  // Collapse dropdown
+  document.getElementById('diff-mobile-files-list')?.classList.remove('open');
+  loadDiffInModal(filePath);
+}
+
+// Mobile file dropdown toggle
+document.getElementById('diff-mobile-files-toggle')?.addEventListener('click', () => {
+  document.getElementById('diff-mobile-files-list')?.classList.toggle('open');
+});
 
 function closeDiffModal() {
   // Back to task modal

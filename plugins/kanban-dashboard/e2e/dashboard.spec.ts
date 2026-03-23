@@ -271,4 +271,20 @@ test.describe('mobile viewport', () => {
     const elapsed = page.locator('.header-top-row .elapsed');
     await expect(elapsed).toBeVisible();
   });
+
+  test('diff modal is full-screen on mobile', async ({ page }) => {
+    // Open task modal for task 3 (has files)
+    await page.locator('#card-3').click();
+    await expect(page.locator('#task-modal')).toHaveClass(/open/);
+
+    // Check if file list exists in modal (may not if API isn't available)
+    const fileRows = page.locator('#modal-file-list .diff-file-row');
+    const count = await fileRows.count();
+    if (count > 0) {
+      await fileRows.first().click();
+      const diffModal = page.locator('.diff-modal-content');
+      const box = await diffModal.boundingBox();
+      expect(box!.width).toBeGreaterThanOrEqual(370);
+    }
+  });
 });

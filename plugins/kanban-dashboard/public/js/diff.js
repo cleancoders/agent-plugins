@@ -204,6 +204,37 @@ function renderNewFileBanner() {
 
 //endregion
 
+//region Unified Diff Renderer
+
+function renderUnifiedDiff(hunks) {
+  let html = '<div class="diff-container"><table class="diff-table">';
+  html += '<colgroup><col style="width:48px"><col></colgroup>';
+
+  for (const hunk of hunks) {
+    html += `<tr class="diff-hunk-header"><td colspan="2">${escapeHtml(hunk.header)}</td></tr>`;
+
+    for (const line of hunk.lines) {
+      const lineNum = line.newNum != null ? line.newNum : (line.oldNum != null ? line.oldNum : '');
+      let prefix = ' ';
+      let rowClass = line.type;
+      if (line.type === 'added') prefix = '+';
+      else if (line.type === 'removed') prefix = '-';
+      else rowClass = 'context';
+
+      const content = escapeHtml(prefix + (line.content || ''));
+      html += `<tr class="diff-row ${rowClass}">`;
+      html += `<td class="diff-line-num">${lineNum}</td>`;
+      html += `<td class="diff-line-content">${content}</td>`;
+      html += `</tr>`;
+    }
+  }
+
+  html += '</table></div>';
+  return html;
+}
+
+//endregion
+
 //region Diff Renderer
 
 function renderDiff(diffText) {
@@ -214,6 +245,11 @@ function renderDiff(diffText) {
   const hunks = parseDiff(diffText);
   if (hunks.length === 0) {
     return '<div class="diff-loading">No changes</div>';
+  }
+
+  const isMobile = window.matchMedia('(max-width: 767px)').matches;
+  if (isMobile) {
+    return renderUnifiedDiff(hunks);
   }
 
   const rows = buildSideBySide(hunks);
