@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { Task, DashboardConfig, initDashboard, addTask, updateTask, addLog, reset, getState, getProjectDir, consumeSignals } from './state.js';
+import { Task, DashboardConfig, initDashboard, addTask, updateTask, addLog, reset, getState, getProjectDir, consumeSignals, addChatMessage, getChatState, getChatMessageById, getUnreadFreeformMessages, answerOldestQuestion, addFreeformMessage } from './state.js';
 import { startServer, stopServer, isRunning } from './http-server.js';
 import { exec, execSync } from 'child_process';
 import { platform } from 'os';
@@ -302,6 +302,55 @@ export function registerTools(server: McpServer): void {
     async ({ agent }) => {
       const pending = consumeSignals(agent as string);
       return { content: [{ type: 'text' as const, text: JSON.stringify({ signals: pending }) }] };
+    }
+  );
+
+  // 7. kanban_chat
+  server.tool(
+    'kanban_chat',
+    'Send a message or question to the user via the dashboard chat. Use wait_for_response: true to ask a question and then poll with kanban_chat_poll for the answer.',
+    {
+      message: z.string().describe('The message text to display'),
+      wait_for_response: z.boolean().optional().default(false).describe('If true, marks as a question awaiting user response'),
+    },
+    async ({ message, wait_for_response }) => {
+      const msg = addChatMessage({ sender: "agent", text: message as string, waiting: wait_for_response as boolean });
+      if (wait_for_response) {
+        const state = getState();
+        const leader = state.config.leader || "Orchestrator";
+        addLog({ time: new Date().toLocaleTimeString(), agent: leader, color: "#4fc3f7", message: `${leader} is waiting for user input` });
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ success: true, message_id: msg.id, status: "waiting" }) }] };
+      }
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ success: true, message_id: msg.id }) }] };
+    }
+  );
+
+  // 8. kanban_chat_poll
+  server.tool(
+    'kanban_chat_poll',
+    'Poll for the user\'s response to a chat question (by message_id), or check for unsolicited user messages (message_id: 0).',
+    {
+      message_id: z.number().describe('The message ID from kanban_chat, or 0 for unread free-form messages'),
+    },
+    async ({ message_id }) => {
+      const id = message_id as number;
+      if (id === 0) {
+        const msgs = getUnreadFreeformMessages();
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ status: "ok", messages: msgs }) }] };
+      }
+      const msg = getChatMessageById(id);
+      if (!msg) {
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ status: "error", error: "message not found" }) }] };
+      }
+      if (msg.sender !== "agent" || !msg.waiting) {
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ status: "error", error: "message is not a question" }) }] };
+      }
+      if (msg.answered) {
+        const chatState = getChatState();
+        const response = chatState.messages.find(m => m.response_to === id);
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ status: "answered", response: response?.text || "" }) }] };
+      }
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ status: "waiting" }) }] };
     }
   );
 }

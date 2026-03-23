@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { registerTools } from "../src/tools.js";
-import { getState, getProjectDir, getBaselineRef, getLogs, reset, addSignal, getSignalStatus } from "../src/state.js";
+import { getState, getProjectDir, getBaselineRef, getLogs, reset, addSignal, getSignalStatus, answerOldestQuestion, addFreeformMessage } from "../src/state.js";
 
 vi.mock("../src/http-server.js", () => ({
   startServer: vi.fn().mockResolvedValue({ url: "http://localhost:1234", port: 1234 }),
@@ -1292,5 +1292,154 @@ describe("kanban_check_signals", () => {
     const parsed = parseResult(result);
 
     expect(parsed.signals).toEqual([]);
+  });
+});
+
+describe("kanban_chat tool", () => {
+  let tools: Map<string, RegisteredTool>;
+
+  beforeEach(() => {
+    reset();
+    vi.mocked(startServer).mockClear();
+    vi.mocked(stopServer).mockClear();
+    vi.mocked(isRunning).mockClear();
+    vi.mocked(isRunning).mockReturnValue(false);
+    vi.mocked(exec).mockClear();
+    vi.mocked(platform).mockReturnValue("darwin");
+    const mock = createMockServer();
+    tools = mock.tools;
+    registerTools(mock.server);
+  });
+
+  it("sends a plain message and returns success with message_id and no status field", async () => {
+    const handler = tools.get("kanban_chat")!.handler;
+    const result = await handler({ message: "Hello from agent", wait_for_response: false });
+    const parsed = parseResult(result);
+    expect(parsed.success).toBe(true);
+    expect(parsed.message_id).toBe(1);
+    expect(parsed.status).toBeUndefined();
+  });
+
+  it("sends a question with wait_for_response: true, adds activity log with leader name", async () => {
+    const initHandler = tools.get("kanban_init")!.handler;
+    await initHandler({
+      title: "Test",
+      subtitle: "",
+      tasks: [],
+      port: 0,
+      open_browser: false,
+      leader: "Alice",
+    });
+
+    const handler = tools.get("kanban_chat")!.handler;
+    const result = await handler({ message: "What do you think?", wait_for_response: true });
+    const parsed = parseResult(result);
+    expect(parsed.success).toBe(true);
+    expect(parsed.message_id).toBeDefined();
+    expect(parsed.status).toBe("waiting");
+
+    const logs = getLogs();
+    const waitingLog = logs.entries.find(e => e.message.includes("waiting for user input"));
+    expect(waitingLog).toBeDefined();
+    expect(waitingLog!.agent).toBe("Alice");
+  });
+});
+
+describe("kanban_chat_poll tool", () => {
+  let tools: Map<string, RegisteredTool>;
+
+  beforeEach(() => {
+    reset();
+    vi.mocked(startServer).mockClear();
+    vi.mocked(stopServer).mockClear();
+    vi.mocked(isRunning).mockClear();
+    vi.mocked(isRunning).mockReturnValue(false);
+    vi.mocked(exec).mockClear();
+    vi.mocked(platform).mockReturnValue("darwin");
+    const mock = createMockServer();
+    tools = mock.tools;
+    registerTools(mock.server);
+  });
+
+  it("returns status waiting when question not yet answered", async () => {
+    const chatHandler = tools.get("kanban_chat")!.handler;
+    const chatResult = await chatHandler({ message: "Any blockers?", wait_for_response: true });
+    const chatParsed = parseResult(chatResult);
+
+    const pollHandler = tools.get("kanban_chat_poll")!.handler;
+    const result = await pollHandler({ message_id: chatParsed.message_id });
+    const parsed = parseResult(result);
+    expect(parsed.status).toBe("waiting");
+  });
+
+  it("returns answered with response text after answerOldestQuestion is called", async () => {
+    const chatHandler = tools.get("kanban_chat")!.handler;
+    const chatResult = await chatHandler({ message: "Are you done?", wait_for_response: true });
+    const chatParsed = parseResult(chatResult);
+
+    answerOldestQuestion("Yes, all done!");
+
+    const pollHandler = tools.get("kanban_chat_poll")!.handler;
+    const result = await pollHandler({ message_id: chatParsed.message_id });
+    const parsed = parseResult(result);
+    expect(parsed.status).toBe("answered");
+    expect(parsed.response).toBe("Yes, all done!");
+  });
+
+  it("returns error when message_id does not exist", async () => {
+    const pollHandler = tools.get("kanban_chat_poll")!.handler;
+    const result = await pollHandler({ message_id: 999 });
+    const parsed = parseResult(result);
+    expect(parsed.status).toBe("error");
+    expect(parsed.error).toBe("message not found");
+  });
+
+  it("returns error when message is not a waiting question (plain agent message)", async () => {
+    const chatHandler = tools.get("kanban_chat")!.handler;
+    const chatResult = await chatHandler({ message: "Just info", wait_for_response: false });
+    const chatParsed = parseResult(chatResult);
+
+    const pollHandler = tools.get("kanban_chat_poll")!.handler;
+    const result = await pollHandler({ message_id: chatParsed.message_id });
+    const parsed = parseResult(result);
+    expect(parsed.status).toBe("error");
+    expect(parsed.error).toBe("message is not a question");
+  });
+
+  it("returns error when polling a user message id", async () => {
+    // Create a question and answer it to get a user message in the chat
+    const chatHandler = tools.get("kanban_chat")!.handler;
+    await chatHandler({ message: "Question?", wait_for_response: true });
+    const userMsg = answerOldestQuestion("My answer");
+
+    const pollHandler = tools.get("kanban_chat_poll")!.handler;
+    const result = await pollHandler({ message_id: userMsg!.id });
+    const parsed = parseResult(result);
+    expect(parsed.status).toBe("error");
+    expect(parsed.error).toBe("message is not a question");
+  });
+
+  it("message_id 0 returns unread free-form messages", async () => {
+    addFreeformMessage("Hey there");
+    addFreeformMessage("Another message");
+
+    const pollHandler = tools.get("kanban_chat_poll")!.handler;
+    const result = await pollHandler({ message_id: 0 });
+    const parsed = parseResult(result);
+    expect(parsed.status).toBe("ok");
+    expect(parsed.messages).toHaveLength(2);
+    expect(parsed.messages[0].text).toBe("Hey there");
+    expect(parsed.messages[1].text).toBe("Another message");
+  });
+
+  it("message_id 0 second call returns empty after messages already read", async () => {
+    addFreeformMessage("Hey there");
+
+    const pollHandler = tools.get("kanban_chat_poll")!.handler;
+    await pollHandler({ message_id: 0 });
+    const result = await pollHandler({ message_id: 0 });
+    const parsed = parseResult(result);
+    expect(parsed.status).toBe("ok");
+    expect(parsed.messages).toHaveLength(0);
   });
 });
