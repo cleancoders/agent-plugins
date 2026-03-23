@@ -163,9 +163,80 @@ export function getSignalStatus(): Array<{ agent: string; action: string; timest
   }));
 }
 
+export interface ChatMessage {
+  id: number;
+  sender: "agent" | "user";
+  text: string;
+  timestamp: string;
+  waiting: boolean;
+  answered: boolean;
+  response_to?: number;
+}
+
+let chat: ChatMessage[] = [];
+let chatCounter = 0;
+let readFreeformIds = new Set<number>();
+
+export function addChatMessage(msg: { sender: "agent" | "user"; text: string; waiting: boolean; response_to?: number }): ChatMessage {
+  chatCounter++;
+  const entry: ChatMessage = {
+    id: chatCounter,
+    sender: msg.sender,
+    text: msg.text,
+    timestamp: new Date().toISOString(),
+    waiting: msg.waiting,
+    answered: false,
+    ...(msg.response_to !== undefined && { response_to: msg.response_to }),
+  };
+  chat.push(entry);
+  if (chat.length > 500) {
+    chat = chat.slice(chat.length - 500);
+  }
+  return { ...entry };
+}
+
+export function getChatState(): { messages: ChatMessage[]; waiting: boolean; pending_questions: number } {
+  const pendingQuestions = chat.filter(m => m.sender === "agent" && m.waiting && !m.answered);
+  return {
+    messages: chat.map(m => ({ ...m })),
+    waiting: pendingQuestions.length > 0,
+    pending_questions: pendingQuestions.length,
+  };
+}
+
+export function answerOldestQuestion(text: string): ChatMessage | null {
+  const pending = chat.find(m => m.sender === "agent" && m.waiting && !m.answered);
+  if (!pending) return null;
+  pending.answered = true;
+  const userMsg = addChatMessage({ sender: "user", text, waiting: false, response_to: pending.id });
+  return userMsg;
+}
+
+export function addFreeformMessage(text: string): ChatMessage {
+  return addChatMessage({ sender: "user", text, waiting: false });
+}
+
+export function getUnreadFreeformMessages(): Array<{ id: number; text: string; timestamp: string }> {
+  const freeform = chat.filter(m =>
+    m.sender === "user" && m.response_to === undefined && !readFreeformIds.has(m.id)
+  );
+  for (const m of freeform) {
+    readFreeformIds.add(m.id);
+  }
+  return freeform.map(m => ({ id: m.id, text: m.text, timestamp: m.timestamp }));
+}
+
+export function getChatMessageById(id: number): ChatMessage | null {
+  const msg = chat.find(m => m.id === id);
+  return msg ? { ...msg } : null;
+}
+
 export function reset(): void {
   tasks = [];
   logs = [];
   signals = [];
   config = { ...defaultConfig };
+  chat = [];
+  chatCounter = 0;
+  readFreeformIds = new Set<number>();
 }

@@ -12,8 +12,14 @@ import {
   addSignal,
   consumeSignals,
   getSignalStatus,
+  addChatMessage,
+  getChatState,
+  answerOldestQuestion,
+  addFreeformMessage,
+  getUnreadFreeformMessages,
+  getChatMessageById,
 } from "../src/state.js";
-import type { Task, LogEntry, Signal } from "../src/state.js";
+import type { Task, LogEntry, Signal, ChatMessage } from "../src/state.js";
 
 function makeTask(overrides: Partial<Task> = {}): Task {
   return {
@@ -574,5 +580,230 @@ describe("signal state", () => {
     addSignal("alice", { action: "shake", timestamp: "2026-02-25T14:01:00.000Z", source: "browser" });
     const fresh = consumeSignals("alice");
     expect(fresh[0].action).toBe("shake");
+  });
+});
+
+describe("addChatMessage and getChatState", () => {
+  beforeEach(() => {
+    reset();
+  });
+
+  it("stores an agent message with correct fields", () => {
+    const msg = addChatMessage({ sender: "agent", text: "What is your goal?", waiting: true });
+    expect(msg.id).toBe(1);
+    expect(msg.sender).toBe("agent");
+    expect(msg.text).toBe("What is your goal?");
+    expect(msg.waiting).toBe(true);
+    expect(msg.answered).toBe(false);
+    expect(typeof msg.timestamp).toBe("string");
+    expect(msg.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(msg.response_to).toBeUndefined();
+  });
+
+  it("auto-increments IDs", () => {
+    const m1 = addChatMessage({ sender: "agent", text: "Q1", waiting: true });
+    const m2 = addChatMessage({ sender: "agent", text: "Q2", waiting: true });
+    const m3 = addChatMessage({ sender: "user", text: "A", waiting: false });
+    expect(m1.id).toBe(1);
+    expect(m2.id).toBe(2);
+    expect(m3.id).toBe(3);
+  });
+
+  it("getChatState waiting is true when a question is pending", () => {
+    addChatMessage({ sender: "agent", text: "Ready?", waiting: true });
+    const state = getChatState();
+    expect(state.waiting).toBe(true);
+    expect(state.pending_questions).toBe(1);
+  });
+
+  it("getChatState waiting is false when no pending questions", () => {
+    addChatMessage({ sender: "agent", text: "Hello", waiting: false });
+    const state = getChatState();
+    expect(state.waiting).toBe(false);
+    expect(state.pending_questions).toBe(0);
+  });
+
+  it("getChatState messages contains all stored messages", () => {
+    addChatMessage({ sender: "agent", text: "Q", waiting: true });
+    addChatMessage({ sender: "user", text: "A", waiting: false });
+    const state = getChatState();
+    expect(state.messages).toHaveLength(2);
+  });
+
+  it("getChatState returns defensive copies of messages", () => {
+    addChatMessage({ sender: "agent", text: "Original", waiting: false });
+    const state = getChatState();
+    state.messages[0].text = "Mutated";
+    const fresh = getChatState();
+    expect(fresh.messages[0].text).toBe("Original");
+  });
+});
+
+describe("answerOldestQuestion", () => {
+  beforeEach(() => {
+    reset();
+  });
+
+  it("marks oldest pending question as answered and returns user message with response_to", () => {
+    const q = addChatMessage({ sender: "agent", text: "What next?", waiting: true });
+    const userMsg = answerOldestQuestion("Deploy it");
+    expect(userMsg).not.toBeNull();
+    expect(userMsg!.sender).toBe("user");
+    expect(userMsg!.text).toBe("Deploy it");
+    expect(userMsg!.response_to).toBe(q.id);
+    expect(userMsg!.waiting).toBe(false);
+    const state = getChatState();
+    const agentMsg = state.messages.find(m => m.id === q.id)!;
+    expect(agentMsg.answered).toBe(true);
+    expect(agentMsg.waiting).toBe(true); // waiting is immutable
+  });
+
+  it("returns null when no pending question exists", () => {
+    addChatMessage({ sender: "agent", text: "Hello", waiting: false });
+    const result = answerOldestQuestion("anything");
+    expect(result).toBeNull();
+  });
+
+  it("answers questions in FIFO order", () => {
+    const q1 = addChatMessage({ sender: "agent", text: "Q1", waiting: true });
+    const q2 = addChatMessage({ sender: "agent", text: "Q2", waiting: true });
+    const q3 = addChatMessage({ sender: "agent", text: "Q3", waiting: true });
+    const ans1 = answerOldestQuestion("A1");
+    expect(ans1!.response_to).toBe(q1.id);
+    const ans2 = answerOldestQuestion("A2");
+    expect(ans2!.response_to).toBe(q2.id);
+    // Q3 still unanswered
+    const state = getChatState();
+    const q3State = state.messages.find(m => m.id === q3.id)!;
+    expect(q3State.answered).toBe(false);
+    expect(state.waiting).toBe(true);
+    expect(state.pending_questions).toBe(1);
+  });
+});
+
+describe("addFreeformMessage", () => {
+  beforeEach(() => {
+    reset();
+  });
+
+  it("creates a user message with no response_to", () => {
+    const msg = addFreeformMessage("Just checking in");
+    expect(msg.sender).toBe("user");
+    expect(msg.text).toBe("Just checking in");
+    expect(msg.waiting).toBe(false);
+    expect(msg.response_to).toBeUndefined();
+  });
+});
+
+describe("getUnreadFreeformMessages", () => {
+  beforeEach(() => {
+    reset();
+  });
+
+  it("returns unread free-form user messages", () => {
+    addFreeformMessage("hello");
+    addFreeformMessage("world");
+    const unread = getUnreadFreeformMessages();
+    expect(unread).toHaveLength(2);
+    expect(unread[0].text).toBe("hello");
+    expect(unread[1].text).toBe("world");
+  });
+
+  it("marks messages as read on retrieval — second call returns empty", () => {
+    addFreeformMessage("once");
+    getUnreadFreeformMessages();
+    const second = getUnreadFreeformMessages();
+    expect(second).toHaveLength(0);
+  });
+
+  it("excludes question responses (messages with response_to)", () => {
+    addChatMessage({ sender: "agent", text: "Q?", waiting: true });
+    answerOldestQuestion("response to Q");
+    addFreeformMessage("freeform msg");
+    const unread = getUnreadFreeformMessages();
+    expect(unread).toHaveLength(1);
+    expect(unread[0].text).toBe("freeform msg");
+  });
+
+  it("returns id, text, and timestamp fields", () => {
+    const msg = addFreeformMessage("test");
+    const unread = getUnreadFreeformMessages();
+    expect(unread[0].id).toBe(msg.id);
+    expect(unread[0].text).toBe("test");
+    expect(typeof unread[0].timestamp).toBe("string");
+  });
+});
+
+describe("getChatMessageById", () => {
+  beforeEach(() => {
+    reset();
+  });
+
+  it("returns the message for a valid ID", () => {
+    const msg = addChatMessage({ sender: "agent", text: "Hi", waiting: false });
+    const found = getChatMessageById(msg.id);
+    expect(found).not.toBeNull();
+    expect(found!.id).toBe(msg.id);
+    expect(found!.text).toBe("Hi");
+  });
+
+  it("returns null for an unknown ID", () => {
+    const result = getChatMessageById(9999);
+    expect(result).toBeNull();
+  });
+
+  it("returns a defensive copy", () => {
+    const msg = addChatMessage({ sender: "agent", text: "Original", waiting: false });
+    const found = getChatMessageById(msg.id)!;
+    found.text = "Mutated";
+    const fresh = getChatMessageById(msg.id)!;
+    expect(fresh.text).toBe("Original");
+  });
+});
+
+describe("reset clears chat state", () => {
+  beforeEach(() => {
+    reset();
+  });
+
+  it("clears all chat messages", () => {
+    addChatMessage({ sender: "agent", text: "Q", waiting: true });
+    addFreeformMessage("hello");
+    reset();
+    const state = getChatState();
+    expect(state.messages).toHaveLength(0);
+    expect(state.waiting).toBe(false);
+  });
+
+  it("resets counter so next ID is 1 again", () => {
+    addChatMessage({ sender: "agent", text: "Q", waiting: false });
+    reset();
+    const msg = addChatMessage({ sender: "agent", text: "After reset", waiting: false });
+    expect(msg.id).toBe(1);
+  });
+
+  it("clears readFreeformIds so previously read messages are forgotten", () => {
+    addFreeformMessage("read me");
+    getUnreadFreeformMessages(); // marks as read
+    reset();
+    addFreeformMessage("new msg after reset");
+    const unread = getUnreadFreeformMessages();
+    expect(unread).toHaveLength(1);
+  });
+});
+
+describe("chat 500 message cap", () => {
+  beforeEach(() => {
+    reset();
+  });
+
+  it("caps stored messages at 500, dropping oldest", () => {
+    for (let i = 1; i <= 502; i++) {
+      addChatMessage({ sender: "agent", text: `msg ${i}`, waiting: false });
+    }
+    const state = getChatState();
+    expect(state.messages).toHaveLength(500);
+    expect(state.messages[0].text).toBe("msg 3");
+    expect(state.messages[499].text).toBe("msg 502");
   });
 });
