@@ -288,7 +288,7 @@ function switchDiffFileMobile(rowEl, filePath) {
   rowEl.classList.add('active');
   // Also update sidebar active state
   document.querySelectorAll('#diff-modal-sidebar .diff-file-row.active').forEach(el => el.classList.remove('active'));
-  const sidebarRow = document.querySelector(`#diff-modal-sidebar .diff-file-row[data-file="${filePath}"]`);
+  const sidebarRow = document.querySelector(`#diff-modal-sidebar .diff-file-row[data-file="${CSS.escape(filePath)}"]`);
   if (sidebarRow) sidebarRow.classList.add('active');
   // Collapse dropdown
   document.getElementById('diff-mobile-files-list')?.classList.remove('open');

@@ -213,6 +213,42 @@ test.describe('mobile viewport', () => {
     await expect(progressCol).not.toHaveClass(/mobile-active/);
   });
 
+  test('swiping left advances to next column', async ({ page }) => {
+    // Default is WIP (index 2), swipe left should go to DONE (index 3)
+    await page.evaluate(() => {
+      const board = document.querySelector('.board')!;
+      board.dispatchEvent(new TouchEvent('touchstart', {
+        touches: [new Touch({ identifier: 0, target: board, clientX: 300, clientY: 300 })],
+      }));
+      board.dispatchEvent(new TouchEvent('touchend', {
+        changedTouches: [new Touch({ identifier: 0, target: board, clientX: 50, clientY: 300 })],
+      }));
+    });
+
+    const doneCol = page.locator('#col-done');
+    await expect(doneCol).toHaveClass(/mobile-active/);
+    const doneTab = page.locator('.column-tab[data-column="done"]');
+    await expect(doneTab).toHaveClass(/active/);
+  });
+
+  test('swiping right goes to previous column', async ({ page }) => {
+    // Default is WIP (index 2), swipe right should go to RDY (index 1)
+    await page.evaluate(() => {
+      const board = document.querySelector('.board')!;
+      board.dispatchEvent(new TouchEvent('touchstart', {
+        touches: [new Touch({ identifier: 0, target: board, clientX: 50, clientY: 300 })],
+      }));
+      board.dispatchEvent(new TouchEvent('touchend', {
+        changedTouches: [new Touch({ identifier: 0, target: board, clientX: 300, clientY: 300 })],
+      }));
+    });
+
+    const readyCol = page.locator('#col-ready');
+    await expect(readyCol).toHaveClass(/mobile-active/);
+    const readyTab = page.locator('.column-tab[data-column="ready"]');
+    await expect(readyTab).toHaveClass(/active/);
+  });
+
   test('tab counts match column counts', async ({ page }) => {
     await expect(page.locator('#tab-count-blocked')).toHaveText('1');
     await expect(page.locator('#tab-count-ready')).toHaveText('1');
