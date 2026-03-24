@@ -1,9 +1,12 @@
-## 1.6.0
+## 1.7.0
   * Add bidirectional chat between orchestrator and user via dashboard
   * New MCP tools: kanban_chat, kanban_chat_poll
+  * kanban_chat with wait_for_response blocks until user answers in the browser
   * Floating chat bubble with browser notifications when input is needed
   * FIFO question queue — multiple questions answered in order
-  * Free-form messaging — user can send messages anytime
+  * Free-form messaging — user can send messages anytime, picked up via kanban_check_signals
+  * Optimistic message rendering on send
+  * 500ms chat polling for responsive UX
 
 ## 1.5.0
   * Mobile responsive layout (< 768px breakpoint)
