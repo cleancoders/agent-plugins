@@ -196,6 +196,6 @@ document.getElementById('chat-input')?.addEventListener('input', (e) => {
 
 //endregion
 
-// Poll on same interval as status
-setInterval(pollChat, 1500);
+// Poll frequently for responsive chat
+setInterval(pollChat, 500);
 pollChat();

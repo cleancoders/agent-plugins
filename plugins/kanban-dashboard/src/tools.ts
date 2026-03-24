@@ -330,7 +330,7 @@ export function registerTools(server: McpServer): void {
               const userResponse = chatState.messages.find(m => m.response_to === msg.id);
               resolve(userResponse?.text || "");
             }
-          }, 2000);
+          }, 500);
         });
 
         return { content: [{ type: 'text' as const, text: JSON.stringify({ success: true, message_id: msg.id, response }) }] };
