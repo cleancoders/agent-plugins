@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { registerTools } from "../src/tools.js";
-import { getState, getProjectDir, getBaselineRef, getLogs, reset, addSignal, getSignalStatus, answerOldestQuestion, addFreeformMessage } from "../src/state.js";
+import { getState, getProjectDir, getBaselineRef, getLogs, reset, addSignal, getSignalStatus, answerOldestQuestion, addFreeformMessage, addChatMessage } from "../src/state.js";
 
 vi.mock("../src/http-server.js", () => ({
   startServer: vi.fn().mockResolvedValue({ url: "http://localhost:1234", port: 1234 }),
@@ -1320,7 +1320,7 @@ describe("kanban_chat tool", () => {
     expect(parsed.status).toBeUndefined();
   });
 
-  it("sends a question with wait_for_response: true, adds activity log with leader name", async () => {
+  it("blocks with wait_for_response: true until user answers, adds activity log with leader name", async () => {
     const initHandler = tools.get("kanban_init")!.handler;
     await initHandler({
       title: "Test",
@@ -1332,11 +1332,17 @@ describe("kanban_chat tool", () => {
     });
 
     const handler = tools.get("kanban_chat")!.handler;
+
+    // Simulate user answering after a short delay
+    setTimeout(() => {
+      answerOldestQuestion("Looks good!");
+    }, 100);
+
     const result = await handler({ message: "What do you think?", wait_for_response: true });
     const parsed = parseResult(result);
     expect(parsed.success).toBe(true);
     expect(parsed.message_id).toBeDefined();
-    expect(parsed.status).toBe("waiting");
+    expect(parsed.response).toBe("Looks good!");
 
     const logs = getLogs();
     const waitingLog = logs.entries.find(e => e.message.includes("waiting for user input"));
@@ -1362,25 +1368,22 @@ describe("kanban_chat_poll tool", () => {
   });
 
   it("returns status waiting when question not yet answered", async () => {
-    const chatHandler = tools.get("kanban_chat")!.handler;
-    const chatResult = await chatHandler({ message: "Any blockers?", wait_for_response: true });
-    const chatParsed = parseResult(chatResult);
+    // Use addChatMessage directly since kanban_chat now blocks on wait_for_response: true
+    addChatMessage({ sender: "agent", text: "Any blockers?", waiting: true });
 
     const pollHandler = tools.get("kanban_chat_poll")!.handler;
-    const result = await pollHandler({ message_id: chatParsed.message_id });
+    const result = await pollHandler({ message_id: 1 });
     const parsed = parseResult(result);
     expect(parsed.status).toBe("waiting");
   });
 
   it("returns answered with response text after answerOldestQuestion is called", async () => {
-    const chatHandler = tools.get("kanban_chat")!.handler;
-    const chatResult = await chatHandler({ message: "Are you done?", wait_for_response: true });
-    const chatParsed = parseResult(chatResult);
+    addChatMessage({ sender: "agent", text: "Are you done?", waiting: true });
 
     answerOldestQuestion("Yes, all done!");
 
     const pollHandler = tools.get("kanban_chat_poll")!.handler;
-    const result = await pollHandler({ message_id: chatParsed.message_id });
+    const result = await pollHandler({ message_id: 1 });
     const parsed = parseResult(result);
     expect(parsed.status).toBe("answered");
     expect(parsed.response).toBe("Yes, all done!");
@@ -1407,9 +1410,8 @@ describe("kanban_chat_poll tool", () => {
   });
 
   it("returns error when polling a user message id", async () => {
-    // Create a question and answer it to get a user message in the chat
-    const chatHandler = tools.get("kanban_chat")!.handler;
-    await chatHandler({ message: "Question?", wait_for_response: true });
+    // Create a question and answer it directly via state to get a user message
+    addChatMessage({ sender: "agent", text: "Question?", waiting: true });
     const userMsg = answerOldestQuestion("My answer");
 
     const pollHandler = tools.get("kanban_chat_poll")!.handler;

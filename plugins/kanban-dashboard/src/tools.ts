@@ -308,10 +308,10 @@ export function registerTools(server: McpServer): void {
   // 7. kanban_chat
   server.tool(
     'kanban_chat',
-    'Send a message or question to the user via the dashboard chat. Use wait_for_response: true to ask a question and then poll with kanban_chat_poll for the answer.',
+    'Send a message or question to the user via the dashboard chat panel. When wait_for_response is true, this tool BLOCKS until the user responds in the browser — do NOT use AskUserQuestion for questions when a kanban dashboard is active. The user sees the question in a floating chat panel overlay and types their response there.',
     {
       message: z.string().describe('The message text to display'),
-      wait_for_response: z.boolean().optional().default(false).describe('If true, marks as a question awaiting user response'),
+      wait_for_response: z.boolean().optional().default(false).describe('If true, blocks until the user responds via the dashboard chat panel'),
     },
     async ({ message, wait_for_response }) => {
       const msg = addChatMessage({ sender: "agent", text: message as string, waiting: wait_for_response as boolean });
@@ -319,7 +319,21 @@ export function registerTools(server: McpServer): void {
         const state = getState();
         const leader = state.config.leader || "Orchestrator";
         addLog({ time: new Date().toLocaleTimeString(), agent: leader, color: "#4fc3f7", message: `${leader} is waiting for user input` });
-        return { content: [{ type: 'text' as const, text: JSON.stringify({ success: true, message_id: msg.id, status: "waiting" }) }] };
+
+        // Block until user responds — poll every 2 seconds
+        const response = await new Promise<string>((resolve) => {
+          const interval = setInterval(() => {
+            const current = getChatMessageById(msg.id);
+            if (current && current.answered) {
+              clearInterval(interval);
+              const chatState = getChatState();
+              const userResponse = chatState.messages.find(m => m.response_to === msg.id);
+              resolve(userResponse?.text || "");
+            }
+          }, 2000);
+        });
+
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ success: true, message_id: msg.id, response }) }] };
       }
       return { content: [{ type: 'text' as const, text: JSON.stringify({ success: true, message_id: msg.id }) }] };
     }
@@ -328,9 +342,9 @@ export function registerTools(server: McpServer): void {
   // 8. kanban_chat_poll
   server.tool(
     'kanban_chat_poll',
-    'Poll for the user\'s response to a chat question (by message_id), or check for unsolicited user messages (message_id: 0).',
+    'Check for unsolicited user messages sent via the dashboard chat (messages the user sent without being asked a question). Pass message_id: 0 to get all unread free-form messages.',
     {
-      message_id: z.number().describe('The message ID from kanban_chat, or 0 for unread free-form messages'),
+      message_id: z.number().describe('Pass 0 to get unread free-form user messages'),
     },
     async ({ message_id }) => {
       const id = message_id as number;
