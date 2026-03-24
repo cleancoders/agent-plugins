@@ -117,6 +117,17 @@ async function sendChatMessage() {
   input.value = '';
   input.style.height = 'auto';
 
+  // Optimistic update — show message immediately
+  chatMessages.push({
+    id: Date.now(),
+    sender: 'user',
+    text: text,
+    timestamp: new Date().toISOString(),
+    waiting: false,
+    answered: false,
+  });
+  renderChatMessages();
+
   try {
     await fetch('/api/chat', {
       method: 'POST',
