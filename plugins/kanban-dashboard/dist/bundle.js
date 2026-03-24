@@ -34951,6 +34951,12 @@ var require_state = __commonJS({
     exports2.addSignal = addSignal;
     exports2.consumeSignals = consumeSignals;
     exports2.getSignalStatus = getSignalStatus;
+    exports2.addChatMessage = addChatMessage;
+    exports2.getChatState = getChatState;
+    exports2.answerOldestQuestion = answerOldestQuestion;
+    exports2.addFreeformMessage = addFreeformMessage;
+    exports2.getUnreadFreeformMessages = getUnreadFreeformMessages;
+    exports2.getChatMessageById = getChatMessageById;
     exports2.reset = reset;
     var defaultConfig = { title: "Dashboard", subtitle: "" };
     var tasks = [];
@@ -35039,11 +35045,64 @@ var require_state = __commonJS({
         acknowledged: s.acknowledged
       }));
     }
+    var chat = [];
+    var chatCounter = 0;
+    var readFreeformIds = /* @__PURE__ */ new Set();
+    function addChatMessage(msg) {
+      chatCounter++;
+      const entry = {
+        id: chatCounter,
+        sender: msg.sender,
+        text: msg.text,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+        waiting: msg.waiting,
+        answered: false,
+        ...msg.response_to !== void 0 && { response_to: msg.response_to }
+      };
+      chat.push(entry);
+      if (chat.length > 500) {
+        chat = chat.slice(chat.length - 500);
+      }
+      return { ...entry };
+    }
+    function getChatState() {
+      const pendingQuestions = chat.filter((m) => m.sender === "agent" && m.waiting && !m.answered);
+      return {
+        messages: chat.map((m) => ({ ...m })),
+        waiting: pendingQuestions.length > 0,
+        pending_questions: pendingQuestions.length
+      };
+    }
+    function answerOldestQuestion(text) {
+      const pending = chat.find((m) => m.sender === "agent" && m.waiting && !m.answered);
+      if (!pending)
+        return null;
+      pending.answered = true;
+      const userMsg = addChatMessage({ sender: "user", text, waiting: false, response_to: pending.id });
+      return userMsg;
+    }
+    function addFreeformMessage(text) {
+      return addChatMessage({ sender: "user", text, waiting: false });
+    }
+    function getUnreadFreeformMessages() {
+      const freeform = chat.filter((m) => m.sender === "user" && m.response_to === void 0 && !readFreeformIds.has(m.id));
+      for (const m of freeform) {
+        readFreeformIds.add(m.id);
+      }
+      return freeform.map((m) => ({ id: m.id, text: m.text, timestamp: m.timestamp }));
+    }
+    function getChatMessageById(id) {
+      const msg = chat.find((m) => m.id === id);
+      return msg ? { ...msg } : null;
+    }
     function reset() {
       tasks = [];
       logs = [];
       signals = [];
       config = { ...defaultConfig };
+      chat = [];
+      chatCounter = 0;
+      readFreeformIds = /* @__PURE__ */ new Set();
     }
   }
 });
@@ -35356,6 +35415,35 @@ var require_http_server = __commonJS({
         sendJson(res, 200, { signals: (0, state_js_12.getSignalStatus)() });
         return;
       }
+      if (method === "GET" && url === "/api/chat") {
+        sendJson(res, 200, (0, state_js_12.getChatState)());
+        return;
+      }
+      if (method === "POST" && url === "/api/chat") {
+        let body = "";
+        req.on("data", (chunk) => {
+          body += chunk;
+        });
+        req.on("end", () => {
+          try {
+            const data = JSON.parse(body);
+            if (!data.text || typeof data.text !== "string" || data.text.trim() === "") {
+              sendJson(res, 400, { error: "text is required" });
+              return;
+            }
+            const answered = (0, state_js_12.answerOldestQuestion)(data.text);
+            if (answered) {
+              sendJson(res, 200, { success: true, message_id: answered.id, response_to: answered.response_to });
+            } else {
+              const msg = (0, state_js_12.addFreeformMessage)(data.text);
+              sendJson(res, 200, { success: true, message_id: msg.id });
+            }
+          } catch {
+            sendJson(res, 400, { error: "Invalid JSON" });
+          }
+        });
+        return;
+      }
       sendJson(res, 404, { error: "Not found" });
     }
     function startServer(port) {
@@ -35662,11 +35750,58 @@ var require_tools = __commonJS({
         (0, state_js_12.reset)();
         return { content: [{ type: "text", text: JSON.stringify({ success: true }) }] };
       });
-      server2.tool("kanban_check_signals", "Check for pending signals from the dashboard browser UI. Agents should call this periodically (every ~10 tool calls) to receive poke/shake/skip/check_others commands from the user.", {
+      server2.tool("kanban_check_signals", "Check for pending signals and chat messages from the dashboard browser UI. Agents should call this periodically (every ~10 tool calls). Returns signals (poke/shake/skip/check_others) and any chat_messages the user sent via the dashboard chat panel.", {
         agent: zod_1.z.string().describe("The agent name to check signals for")
       }, async ({ agent }) => {
         const pending = (0, state_js_12.consumeSignals)(agent);
-        return { content: [{ type: "text", text: JSON.stringify({ signals: pending }) }] };
+        const chatMessages = (0, state_js_12.getUnreadFreeformMessages)();
+        return { content: [{ type: "text", text: JSON.stringify({ signals: pending, ...chatMessages.length > 0 && { chat_messages: chatMessages } }) }] };
+      });
+      server2.tool("kanban_chat", "Send a message or question to the user via the dashboard chat panel. When wait_for_response is true, this tool BLOCKS until the user responds in the browser \u2014 do NOT use AskUserQuestion for questions when a kanban dashboard is active. The user sees the question in a floating chat panel overlay and types their response there.", {
+        message: zod_1.z.string().describe("The message text to display"),
+        wait_for_response: zod_1.z.boolean().optional().default(false).describe("If true, blocks until the user responds via the dashboard chat panel")
+      }, async ({ message, wait_for_response }) => {
+        const msg = (0, state_js_12.addChatMessage)({ sender: "agent", text: message, waiting: wait_for_response });
+        if (wait_for_response) {
+          const state = (0, state_js_12.getState)();
+          const leader = state.config.leader || "Orchestrator";
+          (0, state_js_12.addLog)({ time: (/* @__PURE__ */ new Date()).toLocaleTimeString(), agent: leader, color: "#4fc3f7", message: `${leader} is waiting for user input` });
+          const response = await new Promise((resolve) => {
+            const interval = setInterval(() => {
+              const current = (0, state_js_12.getChatMessageById)(msg.id);
+              if (current && current.answered) {
+                clearInterval(interval);
+                const chatState = (0, state_js_12.getChatState)();
+                const userResponse = chatState.messages.find((m) => m.response_to === msg.id);
+                resolve(userResponse?.text || "");
+              }
+            }, 500);
+          });
+          return { content: [{ type: "text", text: JSON.stringify({ success: true, message_id: msg.id, response }) }] };
+        }
+        return { content: [{ type: "text", text: JSON.stringify({ success: true, message_id: msg.id }) }] };
+      });
+      server2.tool("kanban_chat_poll", "Check for unsolicited user messages sent via the dashboard chat (messages the user sent without being asked a question). Pass message_id: 0 to get all unread free-form messages.", {
+        message_id: zod_1.z.number().describe("Pass 0 to get unread free-form user messages")
+      }, async ({ message_id }) => {
+        const id = message_id;
+        if (id === 0) {
+          const msgs = (0, state_js_12.getUnreadFreeformMessages)();
+          return { content: [{ type: "text", text: JSON.stringify({ status: "ok", messages: msgs }) }] };
+        }
+        const msg = (0, state_js_12.getChatMessageById)(id);
+        if (!msg) {
+          return { content: [{ type: "text", text: JSON.stringify({ status: "error", error: "message not found" }) }] };
+        }
+        if (msg.sender !== "agent" || !msg.waiting) {
+          return { content: [{ type: "text", text: JSON.stringify({ status: "error", error: "message is not a question" }) }] };
+        }
+        if (msg.answered) {
+          const chatState = (0, state_js_12.getChatState)();
+          const response = chatState.messages.find((m) => m.response_to === id);
+          return { content: [{ type: "text", text: JSON.stringify({ status: "answered", response: response?.text || "" }) }] };
+        }
+        return { content: [{ type: "text", text: JSON.stringify({ status: "waiting" }) }] };
       });
     }
   }
@@ -35681,7 +35816,7 @@ var http_server_js_1 = require_http_server();
 var state_js_1 = require_state();
 var server = new mcp_js_1.McpServer({
   name: "kanban-dashboard",
-  version: "1.4.1"
+  version: "1.7.0"
 });
 async function cleanup() {
   await (0, http_server_js_1.stopServer)();
