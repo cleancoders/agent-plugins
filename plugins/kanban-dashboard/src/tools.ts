@@ -295,13 +295,14 @@ export function registerTools(server: McpServer): void {
   // 6. kanban_check_signals
   server.tool(
     'kanban_check_signals',
-    'Check for pending signals from the dashboard browser UI. Agents should call this periodically (every ~10 tool calls) to receive poke/shake/skip/check_others commands from the user.',
+    'Check for pending signals and chat messages from the dashboard browser UI. Agents should call this periodically (every ~10 tool calls). Returns signals (poke/shake/skip/check_others) and any chat_messages the user sent via the dashboard chat panel.',
     {
       agent: z.string().describe('The agent name to check signals for'),
     },
     async ({ agent }) => {
       const pending = consumeSignals(agent as string);
-      return { content: [{ type: 'text' as const, text: JSON.stringify({ signals: pending }) }] };
+      const chatMessages = getUnreadFreeformMessages();
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ signals: pending, ...(chatMessages.length > 0 && { chat_messages: chatMessages }) }) }] };
     }
   );
 
