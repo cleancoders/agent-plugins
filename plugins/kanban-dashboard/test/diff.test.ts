@@ -43,6 +43,7 @@ beforeAll(() => {
       highlight: hljsHighlightMock,
       getLanguage: vi.fn((lang: string) => lang ? {} : null),
     },
+    window: { matchMedia: vi.fn().mockReturnValue({ matches: false }) },
   };
   runInNewContext(code, context);
   parseDiff = context.parseDiff as typeof parseDiff;

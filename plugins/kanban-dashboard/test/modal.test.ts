@@ -15,6 +15,7 @@ function createMockElement() {
       remove: vi.fn((cls: string) => _classes.delete(cls)),
       contains: vi.fn((cls: string) => _classes.has(cls)),
     },
+    addEventListener: vi.fn(),
   };
 }
 

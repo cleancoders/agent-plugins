@@ -8,13 +8,16 @@ function createMockElement(tag = 'div') {
     innerHTML: '',
     textContent: '',
     className: '',
-    style: { display: '', width: '' },
+    style: { display: '', width: '' } as Record<string, string>,
     classList: {
       add: vi.fn(),
       remove: vi.fn(),
       contains: vi.fn(),
     },
     childNodes: [{ textContent: '' }] as Array<{ textContent: string }>,
+    addEventListener: vi.fn(),
+    closest: vi.fn(),
+    dataset: {} as Record<string, string>,
   };
 }
 
@@ -37,6 +40,8 @@ function createMockDOM() {
     elements,
     document: {
       getElementById: (id: string) => elements[id] || createMockElement(),
+      querySelectorAll: vi.fn().mockReturnValue([]),
+      querySelector: vi.fn().mockReturnValue(null),
     },
   };
 }
@@ -62,12 +67,22 @@ function loadDashboard(fixedNow?: number): { ctx: DashboardContext; dom: ReturnT
   });
 
   const now = fixedNow ?? 1000000;
+  const mockMatchMedia = {
+    matches: false,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  };
   const ctx: Record<string, unknown> = {
-    document: dom.document,
+    document: {
+      ...dom.document,
+      querySelectorAll: vi.fn().mockReturnValue([]),
+      querySelector: vi.fn().mockReturnValue(null),
+    },
     fetch: mockFetch,
     setInterval: (fn: () => void, ms: number) => { intervals.push({ fn, ms }); return intervals.length; },
     Date: { now: () => now },
     console: { warn: vi.fn(), log: vi.fn(), error: vi.fn() },
+    window: { matchMedia: vi.fn().mockReturnValue(mockMatchMedia), _dashboardConfig: null },
     Math,
     String,
     Set,
@@ -98,8 +113,11 @@ describe('elapsed()', () => {
       setInterval: vi.fn(),
       Date: { now: () => time },
       console: { warn: vi.fn(), log: vi.fn(), error: vi.fn() },
+      window: { matchMedia: vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn() }), _dashboardConfig: null },
       Math, String, Set, Promise, Array,
     };
+    (ctx.document as any).querySelectorAll = vi.fn().mockReturnValue([]);
+    (ctx.document as any).querySelector = vi.fn().mockReturnValue(null);
     runInNewContext(code, ctx);
     // Now advance time by 1 second
     time = 6000;
@@ -119,8 +137,11 @@ describe('elapsed()', () => {
       setInterval: vi.fn(),
       Date: { now: () => time },
       console: { warn: vi.fn(), log: vi.fn(), error: vi.fn() },
+      window: { matchMedia: vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn() }), _dashboardConfig: null },
       Math, String, Set, Promise, Array,
     };
+    (ctx.document as any).querySelectorAll = vi.fn().mockReturnValue([]);
+    (ctx.document as any).querySelector = vi.fn().mockReturnValue(null);
     runInNewContext(code, ctx);
     time = 61000;
     (ctx.Date as { now: () => number }).now = () => time;
@@ -139,8 +160,11 @@ describe('elapsed()', () => {
       setInterval: vi.fn(),
       Date: { now: () => time },
       console: { warn: vi.fn(), log: vi.fn(), error: vi.fn() },
+      window: { matchMedia: vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn() }), _dashboardConfig: null },
       Math, String, Set, Promise, Array,
     };
+    (ctx.document as any).querySelectorAll = vi.fn().mockReturnValue([]);
+    (ctx.document as any).querySelector = vi.fn().mockReturnValue(null);
     runInNewContext(code, ctx);
     time = 3661000;
     (ctx.Date as { now: () => number }).now = () => time;
@@ -159,8 +183,11 @@ describe('elapsed()', () => {
       setInterval: vi.fn(),
       Date: { now: () => time },
       console: { warn: vi.fn(), log: vi.fn(), error: vi.fn() },
+      window: { matchMedia: vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn() }), _dashboardConfig: null },
       Math, String, Set, Promise, Array,
     };
+    (ctx.document as any).querySelectorAll = vi.fn().mockReturnValue([]);
+    (ctx.document as any).querySelector = vi.fn().mockReturnValue(null);
     runInNewContext(code, ctx);
     time = 5000;
     (ctx.Date as { now: () => number }).now = () => time;
