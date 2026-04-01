@@ -10,12 +10,6 @@
       "source": "./plugins/kanban-dashboard",
       "description": "Live KanBan dashboard for monitoring Claude Code agent teams in real-time",
       "version": "1.7.0"
-    },
-    {
-      "name": "clean-craftsmen",
-      "source": "./plugins/clean-craftsmen",
-      "description": "26 Clean Code specialist AI agents for software craftsmanship",
-      "version": "1.0.0"
     }
   ]
 }
