@@ -1,0 +1,14 @@
+{
+  "name": "clean-craftsmen",
+  "description": "26 Clean Code specialist AI agents for software craftsmanship — TDD, SOLID, Clean Code, Architecture, and more",
+  "version": "1.0.0",
+  "mcpServers": {
+    "clean-craftsmen": {
+      "command": "python3",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/server.py"
+      ],
+      "cwd": "${CLAUDE_PLUGIN_ROOT}"
+    }
+  }
+}

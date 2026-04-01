@@ -1,0 +1,6 @@
+{
+  "agent": "code-review",
+  "tier": 2,
+  "description": "Code review validation - identify issues in known-good and known-bad samples",
+  "samples": []
+}

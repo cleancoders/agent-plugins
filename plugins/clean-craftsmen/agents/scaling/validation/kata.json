@@ -1,0 +1,12 @@
+{
+  "name": "Scaling Kata",
+  "passThreshold": 0.8,
+  "katas": [
+    {
+      "id": "sc-kata-1",
+      "title": "Scale a Social Media Feed",
+      "prompt": "A social media app's 'feed' feature works fine at 10K users but becomes slow at 1M users. The current design: for each feed request, query all posts from all followed users, sort by date, return top 50. Design a scalable approach.",
+      "criteria": ["Identifies the fan-out problem", "Proposes caching (pre-computed feed or read-time fan-out)", "Discusses trade-offs between approaches", "Addresses consistency (how quickly do new posts appear?)", "Considers data partitioning", "Incremental approach (not over-engineered)"]
+    }
+  ]
+}

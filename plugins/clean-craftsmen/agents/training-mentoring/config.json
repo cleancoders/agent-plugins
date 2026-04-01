@@ -1,0 +1,16 @@
+{
+  "name": "training-mentoring",
+  "displayName": "Training and Mentoring Expert",
+  "version": "1.0.0",
+  "description": "Expert in developer training, mentoring, apprenticeship, code katas, deliberate practice, and professional development",
+  "tags": ["training", "mentoring", "apprenticeship", "learning", "practice"],
+  "dependencies": [],
+  "composesWellWith": ["pair-programming", "tdd", "clean-code", "agile"],
+  "tier": "specialized",
+  "wave": 5,
+  "validation": {
+    "quizPassThreshold": 0.9,
+    "reviewPassThreshold": 0.85,
+    "kataPassThreshold": 0.8
+  }
+}

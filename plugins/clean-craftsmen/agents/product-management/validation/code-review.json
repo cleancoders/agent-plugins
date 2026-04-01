@@ -1,0 +1,13 @@
+{
+  "name": "Product Management Code Review Validation",
+  "passThreshold": 0.85,
+  "scenarios": [
+    {
+      "id": "pdm-review-1",
+      "title": "Feature without clear user need",
+      "code": "// Feature: Admin Dashboard Real-time Analytics\n// User Story: As an admin, I want real-time analytics\n// Acceptance Criteria: (none specified)\n// User Research: (none conducted)\n// Priority: High (CEO requested it)\n// Implementation: 3 sprints estimated\n// Current admin users: 2",
+      "expectedFindings": ["No acceptance criteria -- cannot verify 'done'", "No user research -- building on assumption", "2 admin users does not justify 3 sprints of real-time analytics", "CEO request is not user research", "Story lacks 'so that [benefit]' -- no clear outcome"],
+      "severity": "warning"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "name": "Security Kata",
+  "passThreshold": 0.8,
+  "katas": [
+    {
+      "id": "sec-kata-1",
+      "title": "Secure a User Registration Endpoint",
+      "prompt": "Design a user registration endpoint that accepts username, email, and password. Address: input validation, password storage, error responses, and rate limiting. Show the security considerations at each step.",
+      "criteria": ["Input validation (whitelist, length, format)", "Password hashed with strong algorithm (bcrypt/argon2)", "No sensitive data in error responses", "Rate limiting mentioned", "No SQL injection vectors"]
+    }
+  ]
+}

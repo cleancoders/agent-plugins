@@ -1,0 +1,12 @@
+{
+  "name": "Training and Mentoring Kata",
+  "passThreshold": 0.8,
+  "katas": [
+    {
+      "id": "tm-kata-1",
+      "title": "Design a Developer Onboarding Plan",
+      "prompt": "A junior developer is joining a team that practices TDD, pair programming, and Clean Code. Design a 4-week onboarding plan that gets them contributing while building their skills.",
+      "criteria": ["Pairing from day 1", "TDD introduced through katas", "Gradual increase in responsibility", "Regular feedback checkpoints", "Specific learning goals per week", "Balance between learning and contributing"]
+    }
+  ]
+}

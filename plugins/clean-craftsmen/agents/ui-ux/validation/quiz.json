@@ -1,0 +1,12 @@
+{
+  "name": "UI/UX Knowledge Quiz",
+  "passThreshold": 0.9,
+  "questions": [
+    {
+      "id": "uiux-1",
+      "question": "What is the difference between 'recognition' and 'recall' in interface design?",
+      "expectedAnswer": "Recognition shows options so users can identify what they need (menus, visible buttons). Recall requires users to remember commands or paths from memory (command lines, hidden features). Recognition is easier and less error-prone.",
+      "rubric": "Must explain both concepts and why recognition is preferred"
+    }
+  ]
+}

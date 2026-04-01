@@ -1,0 +1,13 @@
+{
+  "name": "Scaling Code Review Validation",
+  "passThreshold": 0.85,
+  "scenarios": [
+    {
+      "id": "sc-review-1",
+      "title": "Session state stored in-memory",
+      "code": "class SessionStore {\n  constructor() {\n    this.sessions = {};  // in-memory\n  }\n  set(userId, data) {\n    this.sessions[userId] = { data, lastAccess: Date.now() };\n  }\n  get(userId) {\n    return this.sessions[userId]?.data;\n  }\n}\n// Used in production with 3 load-balanced app servers",
+      "expectedFindings": ["In-memory session storage prevents horizontal scaling", "User gets different session depending on which server handles request", "Move sessions to external store (Redis, database)", "Session data lost on server restart"],
+      "severity": "critical"
+    }
+  ]
+}

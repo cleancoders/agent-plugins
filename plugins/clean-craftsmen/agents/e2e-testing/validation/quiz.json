@@ -1,0 +1,18 @@
+{
+  "name": "E2E Testing Knowledge Quiz",
+  "passThreshold": 0.9,
+  "questions": [
+    {
+      "id": "e2e-1",
+      "question": "Where do E2E tests fit in the test pyramid and why should there be fewer of them?",
+      "expectedAnswer": "E2E tests are at the top of the pyramid. There should be few because they are slow, expensive, and brittle. Most logic should be covered by faster unit and integration tests. E2E tests verify integration, not logic.",
+      "rubric": "Must place E2E at top and explain the cost/speed trade-off"
+    },
+    {
+      "id": "e2e-2",
+      "question": "What is a page object pattern and why does it matter for E2E test maintenance?",
+      "expectedAnswer": "A page object encapsulates the UI structure and interactions of a page behind a clean API. Tests call methods like loginPage.login() instead of finding CSS selectors directly. When the UI changes, only the page object needs updating, not every test.",
+      "rubric": "Must describe the abstraction and the maintenance benefit"
+    }
+  ]
+}

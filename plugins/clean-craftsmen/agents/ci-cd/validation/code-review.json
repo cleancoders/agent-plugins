@@ -1,0 +1,13 @@
+{
+  "name": "CI/CD Code Review Validation",
+  "passThreshold": 0.85,
+  "scenarios": [
+    {
+      "id": "cicd-review-1",
+      "title": "Pipeline with manual deployment step",
+      "code": "# CI Pipeline\nstages:\n  - build\n  - test\n  - deploy\n\nbuild:\n  script: make build\n\ntest:\n  script: make test\n\ndeploy:\n  script: echo 'Please SSH into production and run deploy.sh manually'\n  when: manual",
+      "expectedFindings": ["Manual deployment step defeats CD purpose", "Deploy should be automated and repeatable", "No rollback strategy defined"],
+      "severity": "critical"
+    }
+  ]
+}

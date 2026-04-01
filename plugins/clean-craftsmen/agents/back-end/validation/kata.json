@@ -1,0 +1,12 @@
+{
+  "name": "Back-end Kata",
+  "passThreshold": 0.8,
+  "katas": [
+    {
+      "id": "be-kata-1",
+      "title": "Clean Architecture Service",
+      "prompt": "Design a user registration service using Clean Architecture. Show the entity, use case, repository interface, and controller. The use case validates the user, checks for duplicate emails, hashes the password, and persists the user.",
+      "criteria": ["Domain entity with validation rules", "Use case orchestrating the workflow", "Repository interface (abstraction)", "Controller as thin adapter", "Dependencies point inward", "Testable with mock repository"]
+    }
+  ]
+}

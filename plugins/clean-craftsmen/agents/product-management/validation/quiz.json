@@ -1,0 +1,18 @@
+{
+  "name": "Product Management Knowledge Quiz",
+  "passThreshold": 0.9,
+  "questions": [
+    {
+      "id": "pdm-1",
+      "question": "What is the purpose of an MVP?",
+      "expectedAnswer": "To test the riskiest assumption with the smallest possible investment. An MVP is an experiment, not a feature-stripped product. It answers: 'Is this worth building?' before committing to full development.",
+      "rubric": "Must frame MVP as an experiment/learning tool, not a small product"
+    },
+    {
+      "id": "pdm-2",
+      "question": "A stakeholder asks for a feature and says 'I need this by Friday.' How do you respond as a product manager?",
+      "expectedAnswer": "Understand the underlying need (why Friday? what problem does the feature solve?). Evaluate against current priorities. If it conflicts with higher-priority work, communicate the trade-off. Negotiate scope if timeline is fixed. Never promise what the team cannot deliver.",
+      "rubric": "Must show problem-first thinking and trade-off communication"
+    }
+  ]
+}

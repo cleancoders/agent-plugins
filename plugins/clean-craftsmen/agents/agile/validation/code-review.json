@@ -1,0 +1,13 @@
+{
+  "name": "Agile Code Review Validation",
+  "passThreshold": 0.85,
+  "scenarios": [
+    {
+      "id": "ag-review-1",
+      "title": "Sprint with no working software",
+      "code": "// Sprint 7 Retrospective Notes\n// - Completed: Updated design documents, held 3 architecture review meetings,\n//   created detailed technical spec for next 4 sprints\n// - In Progress: Feature A (70% complete), Feature B (40% complete)\n// - Demo: Skipped (nothing demo-able yet)\n// - Next Sprint: Continue Features A and B, start Feature C\n// - Tests: Will add after features are complete\n// - Velocity: 'hard to measure since nothing is done-done yet'",
+      "expectedFindings": ["No working software delivered in the sprint -- violates core agile principle", "Percent-complete is not meaningful (70% done is not done)", "Demo skipped -- stakeholders have no visibility", "Tests deferred to later -- violates technical excellence principle", "4-sprint technical spec is waterfall thinking", "Velocity is unmeasurable because nothing is complete"],
+      "severity": "critical"
+    }
+  ]
+}

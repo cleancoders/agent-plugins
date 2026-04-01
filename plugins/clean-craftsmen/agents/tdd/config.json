@@ -1,0 +1,16 @@
+{
+  "name": "tdd",
+  "displayName": "Test-Driven Development Expert",
+  "version": "1.0.0",
+  "description": "Expert in TDD methodology: red-green-refactor, test doubles, testing strategies, and test design",
+  "tags": ["testing", "tdd", "quality"],
+  "dependencies": [],
+  "composesWellWith": ["solid", "clean-code", "pair-programming"],
+  "tier": "core",
+  "wave": 1,
+  "validation": {
+    "quizPassThreshold": 0.9,
+    "reviewPassThreshold": 0.85,
+    "kataPassThreshold": 0.8
+  }
+}

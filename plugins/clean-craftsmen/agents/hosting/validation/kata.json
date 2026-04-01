@@ -1,0 +1,12 @@
+{
+  "name": "Hosting Kata",
+  "passThreshold": 0.8,
+  "katas": [
+    {
+      "id": "host-kata-1",
+      "title": "Choose a Hosting Strategy",
+      "prompt": "A 3-person startup is launching a web app. Expected traffic: 1,000 users/day initially, goal of 100,000 in 12 months. Budget: minimal. Team has no dedicated ops. Recommend a hosting strategy with a growth path.",
+      "criteria": ["Starts simple (PaaS or managed service)", "Cost-appropriate for startup", "Has a growth path to handle 100x traffic", "Addresses infrastructure-as-code from the start", "Does not over-engineer for day-one needs"]
+    }
+  ]
+}

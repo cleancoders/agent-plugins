@@ -1,0 +1,18 @@
+{
+  "name": "Front-end Knowledge Quiz",
+  "passThreshold": 0.9,
+  "questions": [
+    {
+      "id": "fe-1",
+      "question": "What is the difference between a presentational component and a container component?",
+      "expectedAnswer": "A presentational component is concerned with how things look -- it receives data via props and renders UI. A container component is concerned with how things work -- it manages state, fetches data, and passes it to presentational components.",
+      "rubric": "Must distinguish rendering concern from data/logic concern"
+    },
+    {
+      "id": "fe-2",
+      "question": "Why is accessibility a first-class concern rather than an afterthought?",
+      "expectedAnswer": "Accessibility is a professional and ethical obligation. If users with disabilities cannot use the software, it is not complete. It is also a legal requirement in many jurisdictions. Building it in from the start is cheaper than retrofitting.",
+      "rubric": "Must frame accessibility as non-optional and explain why"
+    }
+  ]
+}

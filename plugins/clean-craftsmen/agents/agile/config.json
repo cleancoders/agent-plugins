@@ -1,0 +1,16 @@
+{
+  "name": "agile",
+  "displayName": "Agile Methodology Expert",
+  "version": "1.0.0",
+  "description": "Expert in agile values, principles, practices (XP, Scrum, Kanban), and the connection between technical excellence and agility",
+  "tags": ["agile", "xp", "scrum", "kanban", "methodology"],
+  "dependencies": [],
+  "composesWellWith": ["tdd", "pair-programming", "project-management", "product-management"],
+  "tier": "management",
+  "wave": 4,
+  "validation": {
+    "quizPassThreshold": 0.9,
+    "reviewPassThreshold": 0.85,
+    "kataPassThreshold": 0.8
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "Spiking Kata",
+  "passThreshold": 0.8,
+  "katas": [
+    {
+      "id": "sp-kata-1",
+      "title": "Plan a Spike",
+      "prompt": "The team needs to integrate with a third-party payment API they have never used. The product owner wants an estimate. Plan a spike: define the question, time box, success criteria, and what the team should do with the findings.",
+      "criteria": ["Clear question defined", "Reasonable time box (hours, not weeks)", "Success criteria specified", "Findings feed into estimation", "Spike code explicitly marked as throwaway", "Production implementation starts fresh with TDD"]
+    }
+  ]
+}

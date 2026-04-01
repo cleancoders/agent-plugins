@@ -1,0 +1,12 @@
+{
+  "name": "Pair Programming Kata",
+  "passThreshold": 0.8,
+  "katas": [
+    {
+      "id": "pp-kata-1",
+      "title": "Simulate a Ping-Pong TDD Session",
+      "prompt": "Walk through a ping-pong TDD pairing session for implementing a simple stack data structure (push, pop, peek, isEmpty). Show what Person A writes, then what Person B writes, alternating. Demonstrate natural test-first rhythm.",
+      "criteria": ["Clear alternation between Person A and Person B", "Each person writes a failing test then the other makes it pass", "Small increments", "Tests describe behavior", "Natural conversation between partners noted"]
+    }
+  ]
+}

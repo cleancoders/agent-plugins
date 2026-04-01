@@ -1,0 +1,13 @@
+{
+  "name": "Pair Programming Code Review Validation",
+  "passThreshold": 0.85,
+  "scenarios": [
+    {
+      "id": "pp-review-1",
+      "title": "Solo-written complex code without tests",
+      "code": "// Written solo, no pair, no tests\nclass TransactionReconciler {\n  reconcile(bankTransactions, internalTransactions) {\n    const matched = [];\n    const unmatched = [];\n    for (const bt of bankTransactions) {\n      let found = false;\n      for (const it of internalTransactions) {\n        if (bt.amount === it.amount && bt.date === it.date && !it.matched) {\n          it.matched = true; found = true;\n          matched.push({ bank: bt, internal: it });\n          break;\n        }\n      }\n      if (!found) unmatched.push(bt);\n    }\n    return { matched, unmatched };\n  }\n}",
+      "expectedFindings": ["Complex reconciliation logic written solo -- ideal candidate for pairing", "No tests -- TDD with ping-pong pairing would produce better-tested code", "Mutation of input data (it.matched = true) could cause bugs -- a navigator would catch this", "O(n*m) algorithm -- navigator could suggest optimization"],
+      "severity": "warning"
+    }
+  ]
+}

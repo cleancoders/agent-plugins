@@ -1,0 +1,16 @@
+{
+  "name": "machine-learning",
+  "displayName": "Machine Learning Expert",
+  "version": "1.0.0",
+  "description": "Expert in ML engineering, data pipelines, experiment tracking, model testing, and production ML systems",
+  "tags": ["ml", "machine-learning", "data", "ai", "models"],
+  "dependencies": [],
+  "composesWellWith": ["back-end", "architecture", "optimization", "tdd"],
+  "tier": "specialized",
+  "wave": 5,
+  "validation": {
+    "quizPassThreshold": 0.9,
+    "reviewPassThreshold": 0.85,
+    "kataPassThreshold": 0.8
+  }
+}

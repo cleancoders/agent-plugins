@@ -1,0 +1,12 @@
+{
+  "name": "Machine Language Knowledge Quiz",
+  "passThreshold": 0.9,
+  "questions": [
+    {
+      "id": "ml-hw-1",
+      "question": "Why does understanding the memory hierarchy (registers, cache, RAM) matter for high-level programming?",
+      "expectedAnswer": "Data locality affects performance dramatically. Code that accesses memory sequentially (cache-friendly) can be orders of magnitude faster than code that jumps around (cache-unfriendly). Understanding this explains why array iteration is fast and linked-list traversal is slow, even though both are O(n).",
+      "rubric": "Must connect cache/locality to high-level performance decisions"
+    }
+  ]
+}

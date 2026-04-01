@@ -1,0 +1,18 @@
+{
+  "name": "Agile Knowledge Quiz",
+  "passThreshold": 0.9,
+  "questions": [
+    {
+      "id": "ag-1",
+      "question": "What is the relationship between technical practices and agility?",
+      "expectedAnswer": "Technical practices (TDD, CI, refactoring, pairing) are what enable agility. Without them, a team cannot respond to change because the codebase becomes rigid and fragile. Principle 9 of the Manifesto: technical excellence enhances agility.",
+      "rubric": "Must connect technical practices to agility and reference Principle 9"
+    },
+    {
+      "id": "ag-2",
+      "question": "What are the signs of 'cargo cult agile'?",
+      "expectedAnswer": "Ceremonies without understanding (standups as status reports), sprints as mini-waterfalls, velocity as performance metric, no technical practices, 'agile' meaning no planning or documentation. The form without the substance.",
+      "rubric": "Must identify at least 3 specific cargo cult signs"
+    }
+  ]
+}

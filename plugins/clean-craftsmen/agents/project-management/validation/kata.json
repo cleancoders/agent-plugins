@@ -1,0 +1,12 @@
+{
+  "name": "Project Management Kata",
+  "passThreshold": 0.8,
+  "katas": [
+    {
+      "id": "pm-kata-1",
+      "title": "Plan an Iteration",
+      "prompt": "A team of 4 developers has a velocity of 32 story points per 2-week iteration. The product owner presents 50 points of stories for the next iteration. There is also 8 points of technical debt the team wants to address. How do you plan this iteration?",
+      "criteria": ["Respects velocity (cannot commit to 58 points with 32 velocity)", "Negotiates scope with product owner", "Includes some technical debt capacity", "Commits to what is achievable", "Distinguishes between estimate and commitment"]
+    }
+  ]
+}

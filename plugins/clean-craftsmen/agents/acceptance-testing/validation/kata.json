@@ -1,0 +1,12 @@
+{
+  "name": "Acceptance Testing Kata",
+  "passThreshold": 0.8,
+  "katas": [
+    {
+      "id": "at-kata-1",
+      "title": "Write Acceptance Scenarios for a Library System",
+      "prompt": "A library system allows users to check out books, return books, and search the catalog. Write acceptance test scenarios in Given-When-Then format for: checking out a book (happy path), checking out a book that is already checked out, and returning a book late.",
+      "criteria": ["Given-When-Then format", "Business language (not code)", "Happy path covered", "Edge cases covered", "Clear and readable by non-developers", "No implementation details"]
+    }
+  ]
+}

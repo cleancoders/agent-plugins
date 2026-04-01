@@ -1,0 +1,13 @@
+{
+  "name": "E2E Testing Code Review Validation",
+  "passThreshold": 0.85,
+  "scenarios": [
+    {
+      "id": "e2e-review-1",
+      "title": "Fragile E2E test with raw selectors and sleeps",
+      "code": "test('user can checkout', async () => {\n  await page.goto('/products');\n  await page.click('.product-list > div:nth-child(3) > button.add-to-cart');\n  await page.waitForTimeout(2000);\n  await page.click('#cart-icon');\n  await page.waitForTimeout(1000);\n  await page.click('button.checkout-btn');\n  await page.waitForTimeout(3000);\n  expect(await page.textContent('.order-confirmation h1')).toBe('Order Confirmed');\n});",
+      "expectedFindings": ["Raw CSS selectors are brittle -- use page objects", "sleep/waitForTimeout is flaky -- use explicit condition waits", "No test data setup -- depends on existing product data", "No teardown -- leaves order in the database", "Test mixes navigation, interaction, and assertion without abstraction"],
+      "severity": "warning"
+    }
+  ]
+}

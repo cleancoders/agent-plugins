@@ -1,0 +1,16 @@
+{
+  "name": "hosting",
+  "displayName": "Hosting and Infrastructure Expert",
+  "version": "1.0.0",
+  "description": "Expert in hosting, cloud infrastructure, infrastructure-as-code, deployment environments, and cost optimization",
+  "tags": ["hosting", "infrastructure", "cloud", "devops", "iac"],
+  "dependencies": [],
+  "composesWellWith": ["ci-cd", "security", "scaling", "architecture"],
+  "tier": "specialized",
+  "wave": 5,
+  "validation": {
+    "quizPassThreshold": 0.9,
+    "reviewPassThreshold": 0.85,
+    "kataPassThreshold": 0.8
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "code-review",
+  "displayName": "Code Review Expert",
+  "version": "1.0.0",
+  "description": "Expert in conducting thorough, constructive code reviews that improve code quality and mentor developers",
+  "tags": ["review", "quality", "mentoring"],
+  "dependencies": [],
+  "composesWellWith": [],
+  "tier": "specialist",
+  "wave": 1,
+  "validation": {
+    "quizPassThreshold": 0.9,
+    "reviewPassThreshold": 0.85,
+    "kataPassThreshold": 0.8
+  }
+}

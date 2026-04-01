@@ -1,0 +1,16 @@
+{
+  "name": "acceptance-testing",
+  "displayName": "Acceptance Testing Expert",
+  "version": "1.0.0",
+  "description": "Expert in acceptance testing, specification by example, Given-When-Then, and executable specifications",
+  "tags": ["acceptance-testing", "bdd", "specification", "given-when-then"],
+  "dependencies": [],
+  "composesWellWith": ["tdd", "agile", "product-management"],
+  "tier": "quality",
+  "wave": 3,
+  "validation": {
+    "quizPassThreshold": 0.9,
+    "reviewPassThreshold": 0.85,
+    "kataPassThreshold": 0.8
+  }
+}

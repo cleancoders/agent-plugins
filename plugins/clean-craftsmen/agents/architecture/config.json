@@ -1,0 +1,16 @@
+{
+  "name": "architecture",
+  "displayName": "Software Architecture Expert",
+  "version": "1.0.0",
+  "description": "Expert in software architecture patterns, component design, dependency management, and system structure",
+  "tags": ["architecture", "design", "patterns", "components"],
+  "dependencies": [],
+  "composesWellWith": [],
+  "tier": "specialist",
+  "wave": 1,
+  "validation": {
+    "quizPassThreshold": 0.9,
+    "reviewPassThreshold": 0.85,
+    "kataPassThreshold": 0.8
+  }
+}

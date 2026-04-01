@@ -1,0 +1,12 @@
+{
+  "name": "Package Principles Kata",
+  "passThreshold": 0.8,
+  "katas": [
+    {
+      "id": "pkg-kata-1",
+      "title": "Design a Package Structure",
+      "prompt": "An e-commerce system has these classes: Order, OrderValidator, OrderRepository, Product, ProductCatalog, PricingEngine, DiscountCalculator, EmailNotifier, SMSNotifier. Design a package structure that satisfies REP, CCP, CRP, and ADP. Show the dependency graph.",
+      "criteria": ["Packages have clear cohesion (CCP/CRP)", "No circular dependencies (ADP)", "Dependencies point toward stability (SDP)", "Dependency graph shown", "Rationale for grouping explained"]
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "name": "Security Knowledge Quiz",
+  "passThreshold": 0.9,
+  "questions": [
+    {
+      "id": "sec-1",
+      "question": "A developer builds a SQL query by concatenating user input into the query string. What vulnerability does this create and how do you fix it?",
+      "expectedAnswer": "SQL injection. Fix by using parameterized queries (prepared statements) or an ORM. Never concatenate user input into query strings.",
+      "rubric": "Must identify SQL injection and recommend parameterized queries"
+    },
+    {
+      "id": "sec-2",
+      "question": "An error handler returns a stack trace to the client in the HTTP response. What is the risk?",
+      "expectedAnswer": "Information disclosure. Stack traces reveal internal paths, library versions, and code structure that attackers use for reconnaissance. Return generic error messages to clients and log details server-side.",
+      "rubric": "Must identify information disclosure risk and recommend server-side logging"
+    },
+    {
+      "id": "sec-3",
+      "question": "Why is 'whitelist' validation preferred over 'blacklist' validation?",
+      "expectedAnswer": "Whitelisting defines what IS allowed, which is a closed set. Blacklisting tries to enumerate what is NOT allowed, which is an open set -- attackers will find inputs you did not think to block.",
+      "rubric": "Must explain the open-set vs closed-set distinction"
+    }
+  ]
+}

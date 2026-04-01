@@ -1,0 +1,28 @@
+{
+  "name": "craftsman",
+  "displayName": "Software Craftsman",
+  "version": "2.0.0",
+  "description": "Professional developer who composes specialist knowledge to write clean, tested, principled code. Multi-spawnable for parallel development. Supports pair programming, mob programming, and structured debate with other craftsmen.",
+  "tags": ["developer", "craftsman", "producer", "multi-spawn", "pair-programming", "mob-programming", "collaboration"],
+  "dependencies": [],
+  "composesWellWith": ["tdd", "solid", "clean-code", "architecture", "code-review", "craftsman"],
+  "tier": "core",
+  "wave": 1,
+  "role": "producer",
+  "multiSpawn": true,
+  "maxInstances": -1,
+  "reviewBoard": ["tdd", "solid", "clean-code", "architecture", "code-review"],
+  "collaboration": {
+    "pairModes": ["driver-navigator", "ping-pong", "strong-style"],
+    "mobSupport": true,
+    "debateProtocol": true,
+    "messageTypes": ["PROPOSE", "CHALLENGE", "AGREE", "COUNTER", "DRIVE", "NAVIGATE", "ROTATE", "PAUSE", "REFACTOR", "VETO", "DECIDE", "HANDOFF"],
+    "rotationTrigger": "tdd-cycle",
+    "debateTimeboxMinutes": 3
+  },
+  "validation": {
+    "quizPassThreshold": 0.85,
+    "reviewPassThreshold": 0.80,
+    "kataPassThreshold": 0.85
+  }
+}

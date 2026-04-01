@@ -1,0 +1,18 @@
+{
+  "name": "Back-end Knowledge Quiz",
+  "passThreshold": 0.9,
+  "questions": [
+    {
+      "id": "be-1",
+      "question": "Where should business logic live in a Clean Architecture?",
+      "expectedAnswer": "In the domain/entity layer and use case layer. Not in controllers, not in repositories, not in framework code.",
+      "rubric": "Must identify domain/use case layers and exclude controllers/repositories"
+    },
+    {
+      "id": "be-2",
+      "question": "What is the N+1 query problem and how do you solve it?",
+      "expectedAnswer": "N+1 occurs when code executes 1 query to get a list of N items, then N additional queries to get related data for each item. Solve with eager loading, joins, or batch queries.",
+      "rubric": "Must explain the problem and at least one solution"
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "agent": "tdd",
+  "tier": 1,
+  "description": "TDD knowledge recall quiz",
+  "questions": [
+    {
+      "id": "tdd-q1",
+      "question": "What are the Three Laws of TDD as defined by Robert C. Martin?",
+      "type": "open",
+      "expected_keywords": ["failing test", "not write production code", "not write more", "sufficient to fail", "sufficient to pass"],
+      "points": 3
+    },
+    {
+      "id": "tdd-q2",
+      "question": "What are the three phases of the TDD cycle, in order?",
+      "type": "open",
+      "expected_keywords": ["red", "green", "refactor"],
+      "points": 1
+    },
+    {
+      "id": "tdd-q3",
+      "question": "What is the difference between a stub and a mock?",
+      "type": "open",
+      "expected_keywords": ["stub", "canned answers", "mock", "expectations", "verify", "behavior", "interaction"],
+      "points": 2
+    },
+    {
+      "id": "tdd-q4",
+      "question": "What does the Transformation Priority Premise suggest about making tests pass?",
+      "type": "open",
+      "expected_keywords": ["simpler transformations", "priority", "constant", "scalar", "unconditional", "if"],
+      "points": 2
+    },
+    {
+      "id": "tdd-q5",
+      "question": "What does F.I.R.S.T. stand for in the context of test design?",
+      "type": "open",
+      "expected_keywords": ["fast", "independent", "repeatable", "self-validating", "timely"],
+      "points": 2
+    },
+    {
+      "id": "tdd-q6",
+      "question": "Why should you 'mock roles, not objects'?",
+      "type": "open",
+      "expected_keywords": ["interface", "contract", "implementation", "coupling", "concrete"],
+      "points": 2
+    },
+    {
+      "id": "tdd-q7",
+      "question": "Explain the 'Legacy Code Dilemma' and name two strategies for testing legacy code.",
+      "type": "open",
+      "expected_keywords": ["change code", "need tests", "write tests", "need to change", "characterization", "sprout", "wrap", "seam"],
+      "points": 3
+    },
+    {
+      "id": "tdd-q8",
+      "question": "What is the Arrange-Act-Assert pattern? How many 'acts' should a single test have?",
+      "type": "open",
+      "expected_keywords": ["arrange", "act", "assert", "one", "single"],
+      "points": 2
+    },
+    {
+      "id": "tdd-q9",
+      "question": "Why is TDD described as a 'design technique' rather than a 'testing technique'?",
+      "type": "open",
+      "expected_keywords": ["design", "drive", "shape", "structure", "testable", "coupling", "cohesion"],
+      "points": 2
+    },
+    {
+      "id": "tdd-q10",
+      "question": "What is wrong with 'Test After Development' (TAD)?",
+      "type": "open",
+      "expected_keywords": ["design feedback", "edge cases", "coverage", "influence", "already written"],
+      "points": 2
+    }
+  ]
+}

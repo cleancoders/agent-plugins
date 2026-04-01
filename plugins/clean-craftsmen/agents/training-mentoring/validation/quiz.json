@@ -1,0 +1,12 @@
+{
+  "name": "Training and Mentoring Knowledge Quiz",
+  "passThreshold": 0.9,
+  "questions": [
+    {
+      "id": "tm-1",
+      "question": "What is the difference between experience and deliberate practice?",
+      "expectedAnswer": "Experience is time spent working. Deliberate practice is intentional, focused effort on specific skills with feedback. 10 years of experience without deliberate practice can be 1 year repeated 10 times. Deliberate practice targets weaknesses and pushes beyond the comfort zone.",
+      "rubric": "Must distinguish passive experience from intentional practice"
+    }
+  ]
+}

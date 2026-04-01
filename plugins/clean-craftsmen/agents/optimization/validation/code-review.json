@@ -1,0 +1,13 @@
+{
+  "name": "Optimization Code Review Validation",
+  "passThreshold": 0.85,
+  "scenarios": [
+    {
+      "id": "opt-review-1",
+      "title": "Obvious algorithmic inefficiency",
+      "code": "function findDuplicates(items) {\n  const duplicates = [];\n  for (let i = 0; i < items.length; i++) {\n    for (let j = i + 1; j < items.length; j++) {\n      if (items[i] === items[j] && !duplicates.includes(items[i])) {\n        duplicates.push(items[i]);\n      }\n    }\n  }\n  return duplicates;\n}",
+      "expectedFindings": ["O(n^2) nested loop when O(n) is possible with a Set/Map", "duplicates.includes() adds another O(n) making it closer to O(n^3)", "Use a frequency map for O(n) solution"],
+      "severity": "warning"
+    }
+  ]
+}

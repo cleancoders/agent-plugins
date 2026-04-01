@@ -1,0 +1,63 @@
+{
+  "agent": "clean-code",
+  "tier": 1,
+  "description": "Clean Code knowledge recall quiz",
+  "questions": [
+    {
+      "id": "cc-q1",
+      "question": "What does Robert C. Martin mean by 'functions should do one thing'? How do you determine if a function does more than one thing?",
+      "type": "open",
+      "expected_keywords": ["extract", "function", "restatement", "implementation", "one level of abstraction"],
+      "points": 3
+    },
+    {
+      "id": "cc-q2",
+      "question": "Why are most comments considered harmful in Clean Code philosophy?",
+      "type": "open",
+      "expected_keywords": ["lie", "outdated", "failure", "express", "code", "change", "don't follow"],
+      "points": 2
+    },
+    {
+      "id": "cc-q3",
+      "question": "What is the Command-Query Separation principle?",
+      "type": "open",
+      "expected_keywords": ["do something", "answer something", "never both", "command", "query", "side effect"],
+      "points": 2
+    },
+    {
+      "id": "cc-q4",
+      "question": "Why should you never return null? What should you do instead?",
+      "type": "open",
+      "expected_keywords": ["null check", "NullPointer", "empty collection", "special case", "null object"],
+      "points": 2
+    },
+    {
+      "id": "cc-q5",
+      "question": "What is the 'newspaper metaphor' for code formatting?",
+      "type": "open",
+      "expected_keywords": ["headline", "top-down", "high-level", "detail", "read", "synopsis"],
+      "points": 2
+    },
+    {
+      "id": "cc-q6",
+      "question": "What makes a good variable or function name? List at least 4 naming rules from Clean Code.",
+      "type": "open",
+      "expected_keywords": ["intention-revealing", "pronounceable", "searchable", "meaningful", "avoid disinformation", "one word per concept"],
+      "points": 3
+    },
+    {
+      "id": "cc-q7",
+      "question": "Why are flag arguments (boolean parameters) considered bad?",
+      "type": "open",
+      "expected_keywords": ["does more than one thing", "unclear", "split into two functions", "True", "what does"],
+      "points": 2
+    },
+    {
+      "id": "cc-q8",
+      "question": "What is the Boy Scout Rule?",
+      "type": "open",
+      "expected_keywords": ["leave", "cleaner", "found", "better"],
+      "points": 1
+    }
+  ]
+}

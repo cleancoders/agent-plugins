@@ -1,0 +1,13 @@
+{
+  "name": "Front-end Code Review Validation",
+  "passThreshold": 0.85,
+  "scenarios": [
+    {
+      "id": "fe-review-1",
+      "title": "Component with mixed concerns",
+      "code": "function UserProfile({ userId }) {\n  const [user, setUser] = useState(null);\n  const [loading, setLoading] = useState(true);\n  useEffect(() => {\n    fetch(`/api/users/${userId}`)\n      .then(r => r.json())\n      .then(data => { setUser(data); setLoading(false); });\n  }, [userId]);\n  if (loading) return <div class='spinner'></div>;\n  return (\n    <div onclick={() => window.location.href = `/users/${userId}/edit`}>\n      <img src={user.avatar} />\n      <h1>{user.name}</h1>\n      <p>{user.bio}</p>\n    </div>\n  );\n}",
+      "expectedFindings": ["Data fetching mixed with presentation (SRP)", "No error handling for fetch", "img missing alt attribute (accessibility)", "Using onclick with div instead of button/link (accessibility)", "class should be className in JSX", "No loading/error state handling"],
+      "severity": "warning"
+    }
+  ]
+}

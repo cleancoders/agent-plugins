@@ -1,0 +1,12 @@
+{
+  "name": "Machine Learning Knowledge Quiz",
+  "passThreshold": 0.9,
+  "questions": [
+    {
+      "id": "ml-1",
+      "question": "Why should ML code be held to the same standards as other production code?",
+      "expectedAnswer": "ML code runs in production, affects users, and needs to be maintained. Untested, unreviewed ML code has the same risks as any other untested code -- bugs, regressions, and maintenance burden. Additionally, ML systems have unique risks like data drift and model degradation that require even more discipline.",
+      "rubric": "Must connect ML code to general software engineering standards and mention ML-specific risks"
+    }
+  ]
+}

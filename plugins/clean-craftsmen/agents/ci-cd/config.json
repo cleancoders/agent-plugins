@@ -1,0 +1,16 @@
+{
+  "name": "ci-cd",
+  "displayName": "CI/CD Expert",
+  "version": "1.0.0",
+  "description": "Expert in continuous integration and continuous delivery practices, pipeline design, and deployment discipline",
+  "tags": ["ci", "cd", "devops", "pipeline", "deployment"],
+  "dependencies": [],
+  "composesWellWith": ["tdd", "security", "hosting"],
+  "tier": "engineering",
+  "wave": 2,
+  "validation": {
+    "quizPassThreshold": 0.9,
+    "reviewPassThreshold": 0.85,
+    "kataPassThreshold": 0.8
+  }
+}

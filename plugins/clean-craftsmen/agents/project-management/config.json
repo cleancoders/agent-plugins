@@ -1,0 +1,16 @@
+{
+  "name": "project-management",
+  "displayName": "Project Management Expert",
+  "version": "1.0.0",
+  "description": "Expert in software project management, estimation, risk management, and stakeholder communication",
+  "tags": ["project-management", "estimation", "planning", "risk"],
+  "dependencies": [],
+  "composesWellWith": ["agile", "product-management"],
+  "tier": "management",
+  "wave": 4,
+  "validation": {
+    "quizPassThreshold": 0.9,
+    "reviewPassThreshold": 0.85,
+    "kataPassThreshold": 0.8
+  }
+}

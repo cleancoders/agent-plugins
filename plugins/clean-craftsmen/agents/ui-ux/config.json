@@ -1,0 +1,16 @@
+{
+  "name": "ui-ux",
+  "displayName": "UI/UX Expert",
+  "version": "1.0.0",
+  "description": "Expert in user interface design, user experience, usability heuristics, accessibility, and user testing",
+  "tags": ["ui", "ux", "design", "usability", "accessibility"],
+  "dependencies": [],
+  "composesWellWith": ["front-end", "product-management", "accessibility"],
+  "tier": "specialized",
+  "wave": 5,
+  "validation": {
+    "quizPassThreshold": 0.9,
+    "reviewPassThreshold": 0.85,
+    "kataPassThreshold": 0.8
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "Machine Language Code Review Validation",
+  "passThreshold": 0.85,
+  "scenarios": [
+    {
+      "id": "ml-hw-review-1",
+      "title": "Memory leak in C",
+      "code": "char* createMessage(const char* name) {\n    char* buffer = malloc(256);\n    sprintf(buffer, \"Hello, %s!\", name);\n    return buffer;\n}\n\nvoid greetAll(const char** names, int count) {\n    for (int i = 0; i < count; i++) {\n        char* msg = createMessage(names[i]);\n        printf(\"%s\\n\", msg);\n        // missing: free(msg)\n    }\n}",
+      "expectedFindings": ["Memory leak: malloc'd buffer never freed", "Potential buffer overflow: sprintf with fixed buffer and unbounded input", "Should use snprintf with size limit", "Each iteration leaks 256 bytes"],
+      "severity": "critical"
+    }
+  ]
+}

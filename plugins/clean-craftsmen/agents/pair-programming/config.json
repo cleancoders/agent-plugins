@@ -1,0 +1,16 @@
+{
+  "name": "pair-programming",
+  "displayName": "Pair Programming Expert",
+  "version": "1.0.0",
+  "description": "Expert in pair programming techniques, driver-navigator patterns, collaboration dynamics, and knowledge sharing",
+  "tags": ["pairing", "collaboration", "xp", "knowledge-sharing"],
+  "dependencies": [],
+  "composesWellWith": ["tdd", "clean-code", "training-mentoring"],
+  "tier": "engineering",
+  "wave": 2,
+  "validation": {
+    "quizPassThreshold": 0.9,
+    "reviewPassThreshold": 0.85,
+    "kataPassThreshold": 0.8
+  }
+}

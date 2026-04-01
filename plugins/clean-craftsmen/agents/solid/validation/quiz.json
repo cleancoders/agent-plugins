@@ -1,0 +1,63 @@
+{
+  "agent": "solid",
+  "tier": 1,
+  "description": "SOLID principles knowledge recall quiz",
+  "questions": [
+    {
+      "id": "solid-q1",
+      "question": "What does the Single Responsibility Principle actually mean? (Hint: it is NOT 'do one thing')",
+      "type": "open",
+      "expected_keywords": ["one reason to change", "one actor", "responsible to one", "stakeholder"],
+      "points": 3
+    },
+    {
+      "id": "solid-q2",
+      "question": "How does the Open-Closed Principle relate to the Dependency Inversion Principle?",
+      "type": "open",
+      "expected_keywords": ["abstractions", "extend", "without modifying", "depend on abstractions", "enables"],
+      "points": 3
+    },
+    {
+      "id": "solid-q3",
+      "question": "Explain the Rectangle-Square problem as an LSP violation.",
+      "type": "open",
+      "expected_keywords": ["square", "rectangle", "set_width", "set_height", "contract", "substitut", "postcondition"],
+      "points": 3
+    },
+    {
+      "id": "solid-q4",
+      "question": "What is the difference between a 'role interface' and a 'header interface'?",
+      "type": "open",
+      "expected_keywords": ["role", "specific", "client", "header", "entire", "fat", "focused"],
+      "points": 2
+    },
+    {
+      "id": "solid-q5",
+      "question": "In DIP, who OWNS the interface -- the high-level module or the low-level module? Why does this matter?",
+      "type": "open",
+      "expected_keywords": ["high-level", "owns", "defines", "low-level", "conforms", "inversion", "direction"],
+      "points": 3
+    },
+    {
+      "id": "solid-q6",
+      "question": "Give an example of how an ISP violation can also cause an LSP violation.",
+      "type": "open",
+      "expected_keywords": ["fat interface", "NotImplementedError", "methods it can't fulfill", "substitut"],
+      "points": 2
+    },
+    {
+      "id": "solid-q7",
+      "question": "What are the three LSP contract rules regarding preconditions and postconditions?",
+      "type": "open",
+      "expected_keywords": ["preconditions", "cannot be strengthened", "postconditions", "cannot be weakened", "invariants", "preserved"],
+      "points": 3
+    },
+    {
+      "id": "solid-q8",
+      "question": "When should you NOT apply OCP? Give practical guidance.",
+      "type": "open",
+      "expected_keywords": ["preemptive", "one implementation", "simple", "unnecessary", "complexity", "rule of three"],
+      "points": 2
+    }
+  ]
+}
