@@ -1,3 +1,9 @@
+## 1.2.0
+  * writing-migrations: document that migration tests must live IN the migration file itself
+    (same namespace), not in a separate *-spec.clj file. The migrator scans migrations.* and
+    calls up on every namespace it finds, so a separate spec file would crash startup. Tests
+    in the migration file are discovered by speclj under the :migration tag.
+
 ## 1.1.0
   * Add writing-clojure-code skill: formatting (cond->, as->, continuation args, let alignment)
     and handler idioms (short-circuit with or, extract guard helpers, extract reusable predicates)
