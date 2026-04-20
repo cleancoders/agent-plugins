@@ -10,6 +10,12 @@
       "source": "./plugins/kanban-dashboard",
       "description": "Live KanBan dashboard for monitoring Claude Code agent teams in real-time",
       "version": "1.7.0"
+    },
+    {
+      "name": "clojure",
+      "source": "./plugins/clojure",
+      "description": "Clojure / ClojureScript skills for c3kit, Reagent, Speclj, and cleancoders forms",
+      "version": "1.0.0"
     }
   ]
 }

@@ -14,6 +14,7 @@ Then install individual plugins:
 
 ```
 /plugin install kanban-dashboard@cleancoders-agent-plugins
+/plugin install clojure@cleancoders-agent-plugins
 ```
 
 ### Team-Wide Configuration
@@ -51,6 +52,14 @@ Live KanBan dashboard for monitoring Claude Code agent teams in real-time. Provi
 - File diff viewer with git integration
 - Task detail modals with subtask progress and dependency visualization
 - Completion banner with elapsed time
+
+### [clojure](plugins/clojure/)
+
+Clojure / ClojureScript skills for the cleancoders stack: c3kit (bucket, apron, wire), Reagent, Speclj, and cleancoders forms.
+
+**Skills:** `creating-pages`, `writing-migrations`, `using-forms`, `writing-tests`, `writing-reagent-components`, `using-c3kit-bucket`
+
+Invoke as `/clojure:<skill>` (e.g. `/clojure:writing-tests`).
 
 ## Adding to CLAUDE.md
 
