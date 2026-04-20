@@ -1,3 +1,7 @@
+## 1.1.0
+  * Add writing-clojure-code skill: formatting (cond->, as->, continuation args, let alignment)
+    and handler idioms (short-circuit with or, extract guard helpers, extract reusable predicates)
+
 ## 1.0.0
   * Initial release
   * Skills: creating-pages, writing-migrations, using-forms, writing-tests, writing-reagent-components, using-c3kit-bucket
