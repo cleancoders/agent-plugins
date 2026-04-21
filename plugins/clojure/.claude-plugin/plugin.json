@@ -1,5 +1,5 @@
 {
   "name": "clojure",
   "description": "Clojure / ClojureScript skills for c3kit, Reagent, Speclj, and cleancoders forms",
-  "version": "1.4.0"
+  "version": "1.5.0"
 }

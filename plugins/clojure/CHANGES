@@ -1,3 +1,17 @@
+## 1.5.0
+  * writing-reagent-components: two new rules covering Reagent component API design.
+    (1) Render subcomponents with brackets `[component]` rather than function calls
+    `(component)`. Paren form looks harmless on stateless helpers (rendered DOM is
+    identical), but breaks lifecycle binding (with-let/after-render fire in the
+    parent's context), flattens ratom subscriptions into the parent's render scope
+    (losing scoped re-renders), and costs React-level memoization. Also covers when
+    keys are required (dynamic `map`/`for` sequences) vs. not (static siblings).
+    (2) Pass hiccup children as positional args, not map keys. When a component
+    wraps content, the options map holds only data (id, title, urls, callbacks) —
+    children go as separate positional args, so callers read like hiccup instead
+    of config blobs with hiccup nested inside. Covers fragments (`[:<>]`) for
+    multi-sibling slots and trailing variadic (`& extras`) for optional content.
+
 ## 1.4.1
   * writing-migrations: extend rule 6 with a progress-logging pattern. Batched backfills
     on real data take minutes; without logs it's hard to tell whether the server is stuck
