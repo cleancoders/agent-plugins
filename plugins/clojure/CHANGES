@@ -1,3 +1,9 @@
+## 1.4.1
+  * writing-migrations: extend rule 6 with a progress-logging pattern. Batched backfills
+    on real data take minutes; without logs it's hard to tell whether the server is stuck
+    or making progress, and a StackOverflow mid-backfill leaves no breadcrumb. New pattern:
+    log/report at start/end of each phase with totals; log/info per batch with i/N.
+
 ## 1.4.0
   * writing-migrations: add batching rule for backfills. c3kit's or-where-clause builds
     :id IN queries via (reduce concat), producing a nested lazy concat that blows the
