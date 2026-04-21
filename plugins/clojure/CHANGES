@@ -1,3 +1,10 @@
+## 1.3.0
+  * writing-migrations: reverse 1.2.0 guidance. Inlining the describe block in the migration
+    file pulls test-only requires (beatles, speclj) into a namespace on the production
+    classpath, crashing server startup. Put the spec in a sibling directory whose ns prefix
+    is NOT :migration-ns (e.g., spec/clj/<project>/migration_specs/,
+    <project>.migration-specs.*) so the migrator won't scan it and prod won't load it.
+
 ## 1.2.0
   * writing-migrations: document that migration tests must live IN the migration file itself
     (same namespace), not in a separate *-spec.clj file. The migrator scans migrations.* and
