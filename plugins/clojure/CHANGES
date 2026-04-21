@@ -1,3 +1,9 @@
+## 1.4.0
+  * writing-migrations: add batching rule for backfills. c3kit's or-where-clause builds
+    :id IN queries via (reduce concat), producing a nested lazy concat that blows the
+    stack on thousands of ids. Dev datasets don't hit this; staging/prod do. New rule:
+    partition both the lookup and the tx* into batches (~100) when backfilling.
+
 ## 1.3.0
   * writing-migrations: reverse 1.2.0 guidance. Inlining the describe block in the migration
     file pulls test-only requires (beatles, speclj) into a namespace on the production
