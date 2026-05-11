@@ -140,7 +140,9 @@ After a migration adds/removes attributes, the schema definition file (`src/cljc
 
 ### 5. Use a migration-scoped DB for entity queries
 
-**CRITICAL:** `db/find :kind` (and other global `db/` functions) build queries from the current legend schema, which includes ALL attributes — even ones added by future migrations that haven't run yet. If the database is behind on migrations, these queries will fail with `:db.error/not-an-entity` because Datomic can't resolve attributes that haven't been installed yet.
+**CRITICAL:** `db/find :kind` (and other global `db/` functions) build queries from the current legend schema, which includes ALL attributes — even ones added by future migrations that haven't run yet. The same failure hits any migration that needs to backfill against existing data, not just dbs that are "behind" — a fresh production db is also behind every unrun migration. Specifically, c3kit's `where-all-of-kind` reads every attr of the kind from the legend and emits an `(or [?e :kind/attr] …)` clause; if any of those attrs isn't installed in Datomic yet, the query raises `:db.error/not-an-entity Unable to resolve entity: :kind/future-attr`.
+
+**This is not theoretical.** A real production failure (epic, 2026-05): two adjacent migrations added `:webhook-secret` then `:hmac-secret` to `:client-app`. The first migration backfilled via `(db/find :client-app)`. On a fresh db it crashed because the legend already listed `:hmac-secret` (added by the schema file as part of the same release) but the second migration hadn't run yet to install it.
 
 **The fix:** Define schema snapshots in each migration that only include the attributes that exist at that point in time. Create a migration-scoped DB impl and use `db/find-`, `db/tx-`, and other `-` suffixed variants that operate on the scoped DB instead of the global one.
 
@@ -182,17 +184,47 @@ This takes migration-local schema snapshots, swaps them in for the matching kind
 (def m-db (delay (db/create-db (db/load-config) (mhelper/schema-with-target-schemas [user]))))
 
 (defn up []
-  (m/add-attribute! :user :admin? {:type :boolean})
-  ;; Use db/find- with @m-db, NOT db/find
+  (m/add-attribute!- @m-db :user :admin? {:type :boolean})
+  ;; Use the - variants with @m-db, NOT the global db/find / db/tx* / m/add-attribute!
   (when-let [users (seq (db/find- @m-db :user))]
-    (db/tx* (map #(assoc % :admin? true) (filter admin-email? users)))))
+    (db/tx* @m-db (map #(assoc % :admin? true) (filter admin-email? users)))))
+
+(defn down []
+  (m/remove-attribute!- @m-db :user :admin?))
 ```
 
 **Key rules:**
-- `db/find-`, `db/find-by-`, `db/entity-`, `db/tx-` — the `-` suffixed variants take an explicit DB impl as the first arg
-- `db/tx*` and `m/add-attribute!` operate globally (no scoped variant needed) — they write to the actual database
-- The `m-db` delay ensures the DB impl is created lazily (at migration runtime, not at namespace load time)
-- Schema snapshots should omit validation specs (`:validate`, `:message`, `:present`) — migrations don't need them
+- Every DB-touching call in the migration goes through `@m-db`. Use the `-`-suffixed variants: `db/find-`, `db/find-by-`, `db/entity-`, `db/tx-`, `m/add-attribute!-`, `m/remove-attribute!-`, `m/rename-attribute!-`, `m/install-schema!-`. `db/tx*` is overloaded — `(db/tx* @m-db entities)` is the scoped form.
+- Don't mix global (`db/find`, `m/add-attribute!`) with scoped (`db/find- @m-db`) inside the same migration. The global variants resolve `@api/impl` whose legend includes future attrs, which is exactly what the snapshot exists to avoid.
+- The `m-db` delay ensures the DB impl is created lazily (at migration runtime, not at namespace load time).
+- Schema snapshots should omit validation specs (`:validate`, `:message`, `:present`) — migrations don't need them.
+
+**Testing migrations that use a scoped DB:** in production, `(db/load-config)` returns the real bucket config (e.g. Datomic). In Speclj tests, `db/load-config` returns that same production config — *not* the in-memory test impl that `with-kinds` / `with-schemas` installed. If `sut/up` resolves `@m-db` for real, you get a fresh datomic impl pointed at production config — wrong db, and probably an exception.
+
+Override `sut/m-db` with the test's current impl in an `around` block. The test db's legend matches its installed schema, so `db/find-` against it works:
+
+```clojure
+(ns <project>.migration-specs.20260417-foo-spec
+  (:require [c3kit.bucket.api :as db]
+            [<project>.beatles :as beatles]
+            [<project>.migrations.20260417-foo :as sut]
+            [speclj.core :refer [around describe it should= tags with-redefs]]))
+
+(describe "20260417 Foo Migration"
+  (tags :migration)
+  (beatles/with-schemas)
+
+  (around [it]
+    (with-redefs [sut/m-db (delay @db/impl)]
+      (it)))
+
+  (it "backfills :bar on rows that need it"
+    (let [x (db/tx {:kind :x})]
+      (sut/up)
+      (should= true (:bar (db/entity (:id x)))))))
+```
+
+`@db/impl` is the test memory impl set up by the fixture; `(delay @db/impl)` matches the production shape so the migration body doesn't need to know it's running under test. If the migration adds an attribute the test fixture's schema doesn't already include, call `(m/add-attribute! :kind :attr {...})` inside the test before `tx`-ing rows that reference it — memory's migrator just updates the legend, no Datomic round-trip.
 
 ### 6. Batch `:id IN` lookups and large tx*s on backfills — and log progress
 

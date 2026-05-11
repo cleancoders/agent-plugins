@@ -1,3 +1,21 @@
+## 1.6.0
+  * writing-migrations: harden rule 5 (migration-scoped DB) with a concrete production
+    failure mode and a test pattern. The "behind on migrations" framing was too narrow:
+    a fresh DB is also behind every unrun migration, so any backfill that adds an
+    attribute via the global `db/find` while the schema file already names a sibling
+    attribute installed by a later migration crashes with :db.error/not-an-entity.
+    Documents the real epic 2026-05 incident (webhook-secret + hmac-secret pair).
+  * writing-migrations: reverse prior guidance that `db/tx*` and `m/add-attribute!`
+    could stay global. Once a migration owns an `m-db` snapshot, ALL db-touching calls
+    must go through it — `m/add-attribute!-`, `m/remove-attribute!-`,
+    `(db/tx* @m-db ...)`, etc. Mixing global with scoped re-introduces the same legend
+    pollution the snapshot exists to avoid (the global impl still has the future-attr
+    legend).
+  * writing-migrations: new subsection "Testing migrations that use a scoped DB" —
+    `db/load-config` in tests returns the production config, not the lotr/beatles
+    in-memory impl, so `@m-db` for real would point at the wrong DB. Override via
+    `(around [it] (with-redefs [sut/m-db (delay @db/impl)] (it)))`.
+
 ## 1.5.0
   * writing-reagent-components: two new rules covering Reagent component API design.
     (1) Render subcomponents with brackets `[component]` rather than function calls
