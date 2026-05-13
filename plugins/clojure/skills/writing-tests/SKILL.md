@@ -7,7 +7,15 @@ description: Use when writing or modifying Speclj tests for Clojure or ClojureSc
 
 ## Test File Structure
 
-**One `describe` per file, named after the namespace under test.** Group related tests with nested `(context ...)` forms — never a second top-level `describe`.
+**One `describe` per file, named after the namespace under test.** Group related tests with nested `(context ...)` forms — never a second top-level `describe`. Each `context` is named after the var or behavior it covers (e.g. `(context "prompt-text" ...)`), not the namespace.
+
+Before finishing, **verify** the file has exactly one top-level `describe`:
+
+```bash
+grep -c "^(describe " path/to/spec.clj   # must print 1
+```
+
+If the count is greater than 1, fold the extras into `(context ...)` blocks under the single top-level describe.
 
 ```clojure
 ;; Good
@@ -34,6 +42,51 @@ Backend Clojure tests: `clj -M:test:spec` (one-time) or `clj -M:test:spec -a` (a
 Frontend ClojureScript tests: `clj -M:test:cljs once` (one-time) or `clj -M:test:cljs` (autorunner).
 
 It is **MUCH FASTER** to use the autorunners in the background during TDD — especially for ClojureScript, since a fresh run recompiles the entire project instead of just changed files.
+
+## Test Output Must Be Clean
+
+**Speclj output should be nothing but green/red dots** (or green/red test names in verbose/autorunner mode). Any stray `println`, log line, stack-trace, warning, or printed banner from production code leaking into test output is a defect — fix it before the test counts as passing.
+
+When a test exercises code that legitimately writes to stdout/stderr/logs, **capture** the output rather than letting it leak:
+
+```clojure
+(:require [c3kit.apron.log :as log]
+          [speclj.core :refer [describe context it should=]])
+
+;; Silence c3kit.apron.log output for an entire describe/context block.
+;; This is the most common way to keep log lines out of test output —
+;; reach for it before binding *err* or redefining println.
+(describe "my-ns"
+  (log/capture-logs)
+  ...)
+
+;; Inspect captured log lines inside an `it` (after capture-logs is active):
+(it "logs a warning when foo is missing"
+  (my.code/do-thing! {})
+  (should= ["foo missing"] (log/captured-logs)))   ; or log/captured-logs-str
+
+;; Wrap calls that print to stdout
+(with-out-str (my.code/does-printing arg))
+
+;; Capture stderr (Clojure) — rarely needed if the code uses c3kit.apron.log
+(binding [*err* (java.io.StringWriter.)]
+  (my.code/warns-on-err))
+
+;; ClojureScript: capture-logs works the same way in CLJS specs.
+;; For raw js/console output, with-out-str from cljs.core or redef
+;; js/console.log in a before/after.
+```
+
+**Default to `(log/capture-logs)` for any spec whose code under test calls `log/info`, `log/warn`, `log/error`, `log/debug`, etc.** It is the standard, project-wide mute — preferable to bashing `*err*` or redefining the logger.
+
+After every test run, **scan the output**. If you see anything other than dots (or named tests in verbose mode) and the final summary, treat it as a failure even if the assertion count is green:
+
+- `WARNING:` / `Reflection warning` → fix the warning or `^:dynamic`/type-hint
+- printed exceptions or stack traces → either the test should assert the throw (`should-throw`) or the production code should not be printing
+- raw `println` debug output → remove it or capture it
+- log lines → mute the logger in test setup, or capture
+
+Do not declare a test green when the terminal is full of noise.
 
 ## Test Setup
 

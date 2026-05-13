@@ -1,3 +1,14 @@
+## 1.7.0
+  * writing-tests: enforce one top-level `(describe ...)` per file with nested
+    `(context ...)` blocks for grouping — multiple top-level describes are a defect.
+    Adds a `grep -c "^(describe "` verification step.
+  * writing-tests: new "Test Output Must Be Clean" section. Speclj output should be
+    only green/red dots (or test names in verbose mode); stray println, log lines,
+    stack traces, or reflection warnings count as failures even when assertions pass.
+  * writing-tests: document `(c3kit.apron.log/capture-logs)` as the default mute for
+    log output in specs, plus `log/captured-logs` for asserting on emitted messages.
+    Preferred over rebinding `*err*` or redefining the logger.
+
 ## 1.6.0
   * writing-migrations: harden rule 5 (migration-scoped DB) with a concrete production
     failure mode and a test pattern. The "behind on migrations" framing was too narrow:
