@@ -1,3 +1,9 @@
+## 1.7.1
+  * writing-tests: clarify when to use `context`. Wrap 3+ related `it` blocks only;
+    single-test or two-test groups belong directly under the `describe` with the
+    var/behavior name embedded in the `it` string. Avoids nesting that adds no
+    grouping value.
+
 ## 1.7.0
   * writing-tests: enforce one top-level `(describe ...)` per file with nested
     `(context ...)` blocks for grouping — multiple top-level describes are a defect.

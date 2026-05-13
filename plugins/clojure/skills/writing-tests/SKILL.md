@@ -35,6 +35,28 @@ If the count is greater than 1, fold the extras into `(context ...)` blocks unde
 
 `context` works exactly like `describe` but nests inside it. Shared setup (`with-stubs`, `lotr/with-kinds`, `before`, etc.) goes at the top of the single `describe`; context-specific setup goes inside that context.
 
+**Use `context` only when grouping 3+ related `it` blocks.** A `context` that wraps a single `it` (or just two) is noise — promote those tests up to the `describe` level and embed the var/behavior name in the `it` string instead:
+
+```clojure
+;; Good — single test promoted, var name in the it string
+(describe "c3kit-create.version"
+  (it "current returns the current CLI semver as a string"
+    (should= "0.1.0-SNAPSHOT" (v/current)))
+  (it "semver-compare compares standard releases"
+    (should= -1 (v/semver-compare "0.1.0" "0.2.0"))))
+
+;; Bad — context wrapping a single it adds nesting for no grouping benefit
+(describe "c3kit-create.version"
+  (context "current"
+    (it "returns the current CLI semver as a string"
+      (should= "0.1.0-SNAPSHOT" (v/current))))
+  (context "semver-compare"
+    (it "compares standard releases"
+      (should= -1 (v/semver-compare "0.1.0" "0.2.0")))))
+```
+
+If a file is small enough that every group has 1–2 tests, the file ends up with no contexts — that is fine. Reach for `context` when the grouping earns its keep (shared `before`, shared `let`, or 3+ related cases worth visually clustering).
+
 ## Running Tests
 
 Backend Clojure tests: `clj -M:test:spec` (one-time) or `clj -M:test:spec -a` (autorunner).
