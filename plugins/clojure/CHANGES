@@ -1,3 +1,14 @@
+## 1.8.0
+  * writing-clojure-code: new rule "Long cond branches → extract helpers". When a
+    cond clause's result is a multi-line let, pull it into a named helper so each
+    branch fits on one line and the cond reads as prose. Blank lines between
+    clauses are a symptom that the clauses themselves became opaque.
+  * writing-clojure-code: new rule "Long functions with stage/step comments →
+    extract helpers; names replace comments". Section-labeling comments
+    (`;; stage-1: fetch`, `;; manifest`) signal an over-long function whose
+    sections want to be helper fns. Includes guidance on data-driven exit-code
+    mapping and not duplicating cleanup across catch and finally.
+
 ## 1.7.1
   * writing-tests: clarify when to use `context`. Wrap 3+ related `it` blocks only;
     single-test or two-test groups belong directly under the `describe` with the

@@ -97,6 +97,111 @@ When `let` has multiple bindings, align all values in a single column past the l
   ...)
 ```
 
+### Long `cond` branches → extract helpers so each clause is one prose line
+
+A `cond` reads well only when each test/result pair fits on a line (or close to it). When a clause's result is a multi-line `let`, the cond loses its scannability — the predicates drift apart and the reader has to parse each block to find the next condition. Blank lines between clauses are a symptom: you're forcing visual separation because the clauses themselves became opaque.
+
+Fix: pull each multi-line result into a named helper that returns the value (or tuple) the cond branch needs. The cond collapses to a list of `predicate → action-name` pairs that reads top-to-bottom like prose.
+
+```clojure
+;; Good — each branch is one line, names describe intent, no blank-line gutters
+(defn- step-line [out stack line features db-choice]
+  (cond
+    (line-eq? line stack)    (apply-line-eq      out stack line features)
+    (db-line-eq? line stack) (apply-db-line-eq   out stack line db-choice)
+    (open-marker line)       (push-open          out stack line)
+    (close-marker line)      (pop-close          out stack line)
+    (seq stack)              (emit-inside-block  out stack line features db-choice)
+    :else                    [(conj out line) stack]))
+
+;; Bad — multi-line let bodies, blank lines between clauses, comment to label a branch
+(cond
+  (and (empty? stack) (re-find LINE-EQ-RE line))
+  (let [r (handle-line-eq line features)]
+    (recur rest (if (= r ::drop) out (conj out r)) stack))
+
+  (and (empty? stack) (re-find DB-LINE-EQ-RE line))
+  (let [r (handle-db-line-eq line db-choice)]
+    (recur rest (if (= r ::drop) out (conj out r)) stack))
+
+  ;; Inside an open block: include line iff block resolves "on"
+  (seq stack)
+  (let [{:keys [kind id inverse?]} (first stack)
+        on? (case kind ...)]
+    (recur rest (if on? (conj out line) out) stack)))
+```
+
+If branches must return multiple values (e.g. updated `out` AND `stack`), return a tuple from the helper and destructure once after the cond — keeps the recur call uniform and the branch lines tidy.
+
+### Long functions with stage/step comments → extract helpers; names replace comments
+
+Comments like `;; stage-1: fetch`, `;; render`, `;; cleanup` are a code smell: they're labelling sections of one giant function. The fix is not "better comments" — it's to make each section its own named helper. The helper name takes the comment's job, the top-level function reads as a sequence of intent-revealing calls, and the comments disappear with no loss of information.
+
+```clojure
+;; Good — top-level reads as ordered intent; helpers carry the detail
+(defn- scaffold! [{:keys [name template yes] :as opts}]
+  (let [stage (cfs/stage-dir)
+        tdir  (fs/path stage template)]
+    (try
+      (fetch-template! opts template stage tdir)
+      (let [manifest (manifest/read-manifest (str tdir))
+            nm       (rn/validate-name (or name "my-app") (:tokens manifest))
+            target   (target-path opts nm)]
+        (die-if-target-exists! target stage)
+        (let [features (effective-features manifest (:feature opts))
+              db       (effective-db manifest (:db opts))
+              scaffold (render-into-stage! tdir stage manifest nm features db)]
+          (when-not yes (ui/info "Using defaults …"))
+          (finalize! scaffold target opts)
+          (ui/ok (str "Created " nm))))
+      (catch Exception e (handle-scaffold-failure! e opts))
+      (finally (cfs/cleanup! stage)))))
+
+;; Bad — section comments, repeated cleanup, exit-code cond inline,
+;; multiple unrelated concerns in one body
+(defn- scaffold! [...]
+  (let [...]
+    (try
+      ;; stage-1: fetch
+      (ui/step "fetching template …")
+      (if local ...)
+
+      ;; manifest
+      (let [...]
+        (when (fs/exists? target)
+          (ui/fail ...) (cfs/cleanup! stage) (exit 3))
+
+        ;; effective features + db (CLI override > manifest default)
+        (let [...]
+          ;; stage-2: render
+          (ui/step "rendering tokens …")
+          ;; copy tdir → scaffold and render in place
+          ...
+
+          ;; stage-4: move
+          (ui/step "moving into place …")
+          ...
+
+          ;; stage-5: post-scaffold
+          (when (:git? opts) ...)))
+      (catch Exception e
+        (cfs/cleanup! stage)
+        (let [data (ex-data e)]
+          (ui/fail (.getMessage e))
+          (cond
+            (:manifest? data)     (exit 6)
+            (:collision? data)    (exit 3)
+            (:fetch? data)        (exit 7)
+            :else                 (do (when (:debug opts) (.printStackTrace e))
+                                      (exit 1)))))
+      (finally (cfs/cleanup! stage)))))
+```
+
+Heuristics:
+- A function long enough to need internal section labels is long enough to split.
+- An inline `cond` mapping error keys to exit codes belongs in a small data-driven helper (a map + `some`).
+- Redundant cleanup in both `catch` and `finally` is a hint that the catch is doing too much — let `finally` own teardown.
+
 ## API Handler Style
 
 ### Short-circuit with `or` — never a multi-branch `cond`
