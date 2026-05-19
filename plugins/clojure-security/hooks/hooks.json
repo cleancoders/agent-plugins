@@ -21,6 +21,18 @@
       ]
     }
   ],
+  "PreToolUse": [
+    {
+      "matcher": "Bash",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "${CLAUDE_PLUGIN_ROOT}/hooks/commit-backstop.sh",
+          "timeout": 60
+        }
+      ]
+    }
+  ],
   "PostToolUse": [
     {
       "matcher": "Edit|Write|MultiEdit",

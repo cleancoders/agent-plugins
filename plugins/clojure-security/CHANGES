@@ -1,3 +1,22 @@
+## 0.2.0
+  * `PreToolUse` backstop on `git commit`. Matches the `Bash` tool with
+    a command starting `git commit` (not `git commit-tree`,
+    `git commit --help`, etc.). Runs gitleaks in native `protect --staged`
+    mode against the index, and clj-holmes against the staged content of
+    Clojure files (uses `git show :path` so partial-stage findings are
+    caught even when the working tree was cleaned). Exit 0 lets the
+    commit through; exit 2 blocks it with a structured stderr report.
+    The skill explicitly frames this hook as "for Claude, not for humans
+    with full context" — humans can run the commit themselves to override.
+  * Fix clj-holmes invocation in `security-stop.sh` and `commit-backstop.sh`.
+    Both were using `clj-holmes scan --path` (wrong flag) and parsing free
+    text with a too-broad grep, producing false-positive findings from
+    the help text. Now uses `clj-holmes scan -p <dir> -d <rules> -t json
+    -o <file>` and parses the JSON structure (per-rule × per-finding).
+    Rules dir resolves from `$CLJ_HOLMES_RULES_DIR` or defaults to
+    `/tmp/clj-holmes-rules`. Skips silently if the rules dir is missing
+    (run `clj-holmes fetch-rules` to populate).
+
 ## 0.1.0
   * Initial scaffold. `clojure-security` skill with vulnerability-class
     reference for Clojure / ClojureScript codebases: read-string / EDN

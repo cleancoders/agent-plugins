@@ -27,7 +27,11 @@ findings surface while code is being written rather than after the fact.
   finishing.
 - **`SessionStart` / `SessionEnd` hooks** — manage the diff-base marker
   at `.claude/.security-session-start-sha`. No-op outside git repos.
-- Future: `PreToolUse` backstop on `git commit` for any prior-hook bypass.
+- **`PreToolUse` backstop on `git commit`** — final defense if the
+  PostToolUse and Stop hooks were bypassed. Runs gitleaks (native
+  `protect --staged`) and clj-holmes against the staged index. Blocks
+  the commit (exit 2) on any finding. Humans can override by running
+  the commit themselves.
 
 ## Dependencies
 
@@ -35,7 +39,7 @@ The hook and the `/security-audit` command are best-effort — each tool is
 optional, missing tools are skipped without failure:
 
 - [`clj-kondo`](https://github.com/clj-kondo/clj-kondo) — fast linter (required for the PostToolUse hook to do anything)
-- [`clj-holmes`](https://github.com/clj-holmes/clj-holmes) — Clojure security patterns
+- [`clj-holmes`](https://github.com/clj-holmes/clj-holmes) — Clojure security patterns. After installing, run `clj-holmes fetch-rules` once to populate the rules directory at `/tmp/clj-holmes-rules` (or set `CLJ_HOLMES_RULES_DIR` to a persistent location). Hooks silently skip clj-holmes when the rules dir is missing.
 - [`gitleaks`](https://github.com/gitleaks/gitleaks) — secret scanning
 - [`nvd-clojure`](https://github.com/rm-hull/nvd-clojure) — dependency CVEs
 - [`semgrep`](https://semgrep.dev) — pattern-based SAST

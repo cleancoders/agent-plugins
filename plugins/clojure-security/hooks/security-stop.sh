@@ -130,9 +130,9 @@ done <<<"$CHANGED"
 
 HOLMES_REPORT=""
 HOLMES_COUNT=0
-if [ "$HAVE_HOLMES" -eq 1 ] && [ -n "$CLJ_FILES" ]; then
-  # clj-holmes wants a directory; copy changed files into a tmp tree
-  # mirroring their paths so rule output is still readable.
+HOLMES_RULES_DIR="${CLJ_HOLMES_RULES_DIR:-/tmp/clj-holmes-rules}"
+if [ "$HAVE_HOLMES" -eq 1 ] && [ -n "$CLJ_FILES" ] && [ -d "$HOLMES_RULES_DIR" ]; then
+  # Mirror changed files into a tmp tree so rule output paths stay readable.
   TMP_HOLMES="$(mktemp -d 2>/dev/null || true)"
   if [ -n "$TMP_HOLMES" ]; then
     while IFS= read -r f; do
@@ -141,18 +141,22 @@ if [ "$HAVE_HOLMES" -eq 1 ] && [ -n "$CLJ_FILES" ]; then
       cp "$f" "${TMP_HOLMES}/$f" 2>/dev/null || true
     done <<<"$CLJ_FILES"
 
-    # Try common invocations; clj-holmes CLI has shifted versions, so be
-    # tolerant. Capture both text findings and a count.
-    HOLMES_RAW="$(
-      ( clj-holmes scan --path "$TMP_HOLMES" 2>&1 \
-        || clj-holmes -p "$TMP_HOLMES" 2>&1 \
-        || true ) | sed "s|${TMP_HOLMES}/||g"
-    )"
-    # Findings lines typically contain "rule" / "vulnerab" / "::" markers;
-    # fall back to "anything non-trivial after stripping banners".
-    HOLMES_REPORT="$(printf '%s\n' "$HOLMES_RAW" | grep -Ei 'rule|vulnerab|finding|severity|sink' || true)"
-    if [ -n "$HOLMES_REPORT" ]; then
-      HOLMES_COUNT="$(printf '%s\n' "$HOLMES_REPORT" | wc -l | tr -d ' ')"
+    HOLMES_OUT="${TMP_HOLMES}/__holmes.json"
+    clj-holmes scan -p "$TMP_HOLMES" -d "$HOLMES_RULES_DIR" \
+      -t json -o "$HOLMES_OUT" >/dev/null 2>&1 || true
+
+    if [ -f "$HOLMES_OUT" ]; then
+      # Flatten: one line per (rule × finding within rule).
+      HOLMES_REPORT="$(
+        jq -r --arg prefix "${TMP_HOLMES}/" '
+          .[] as $rule
+          | $rule.findings[]
+          | "\($rule.filename | sub($prefix; "")):\(.row):\(.col)  RISK  [\($rule.name)]  \($rule.message) — \(.code)"
+        ' "$HOLMES_OUT" 2>/dev/null
+      )"
+      if [ -n "$HOLMES_REPORT" ]; then
+        HOLMES_COUNT="$(printf '%s\n' "$HOLMES_REPORT" | wc -l | tr -d ' ')"
+      fi
     fi
     rm -rf "$TMP_HOLMES"
   fi
