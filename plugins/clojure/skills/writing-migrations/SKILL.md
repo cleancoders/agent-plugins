@@ -226,11 +226,27 @@ Override `sut/m-db` with the test's current impl in an `around` block. The test 
 
 `@db/impl` is the test memory impl set up by the fixture; `(delay @db/impl)` matches the production shape so the migration body doesn't need to know it's running under test. If the migration adds an attribute the test fixture's schema doesn't already include, call `(m/add-attribute! :kind :attr {...})` inside the test before `tx`-ing rows that reference it — memory's migrator just updates the legend, no Datomic round-trip.
 
-### 6. Batch `:id IN` lookups and large tx*s on backfills — and log progress
+### 6. Batch IN-list lookups and large tx*s on backfills — and log progress
 
-c3kit's datomic query builder turns `(db/find-by :kind :id [id1 id2 …])` into a nested `(reduce (fn [clauses v] (concat clauses …)) nil values)`. Each value in the IN list adds a lazy `concat` frame; thousands of ids produce a seq that overflows the stack when realized. Dev data rarely hits this — staging/production data does. Symptom: `StackOverflowError` in `clojure.core$concat$fn` / `LazySeq.force` during migration, server restarts in a loop.
+c3kit's datomic query builder turns `(db/find-by :kind :some-attr [v1 v2 …])` into a nested `(reduce (fn [clauses v] (concat clauses …)) nil values)` inside `or-where-clause`. Each value in the IN list adds a lazy `concat` frame; thousands of values produce a seq that overflows the stack when realized. **This is not specific to `:id`** — any attribute passed a sequential/set value hits the same code path. Dev data rarely hits this — staging/production data does. Symptom: `StackOverflowError` with a trace dominated by repeating `LazySeq.seq → RT.seq → concat$fn → LazySeq.force → LazySeq.realize` frames during migration; server restarts in a loop.
 
-**Rule:** when backfilling against real data, partition entity-id lookups AND the writes into batches (~100), and log progress so staging failures tell you which batch died.
+**Rule:** when backfilling against real data, partition IN-list lookups (any attr, not just `:id`) AND the writes into batches (~50–100), realize each batch's results eagerly (`reduce into []` / `into [] (mapcat …)`), and log progress so staging failures tell you which batch died. Don't `mapcat` lazily across batches — that just rebuilds the same lazy-concat chain at the batch level.
+
+```clojure
+;; CORRECT — eager realization per batch
+(defn- find-by-attr-chunked [kind attr values base-kvs]
+  (reduce
+    (fn [acc batch]
+      (into acc (apply db/find-by kind (concat base-kvs [attr (vec batch)]))))
+    []
+    (partition-all 50 values)))
+
+;; WRONG — single huge IN-list, blows stack on realize
+(db/find-by :widget :owner (vec owners))
+
+;; WRONG — lazy mapcat across batches still nests LazySeqs
+(mapcat #(db/find-by :widget :owner (vec %)) (partition-all 50 owners))
+```
 
 ```clojure
 (ns <project>.migrations.20260417-example
@@ -360,5 +376,5 @@ Note: SQL implementations may not allow the kind to change during rename.
 - [ ] Migration helper exists at `src/clj/<project>/migrations/migration_helper.clj`
 - [ ] Migration source in `src/clj/` has only production-safe requires (no `speclj`, no test-only namespaces)
 - [ ] Migration tests (if any) live in a separate spec file under a directory that is NOT `:migration-ns` (e.g., `spec/clj/<project>/migration_specs/`), tagged `(tags :migration)`
-- [ ] Backfills that touch `:id IN [...]` queries or large collections partition into batches (~100) — both the lookup and the `tx*`
+- [ ] Backfills that pass a sequential/set value to `db/find-by` on ANY attribute partition into batches (~50–100) and realize results eagerly (`reduce into []`) — not just `:id`, and not lazy `mapcat`
 - [ ] Backfills log start/end totals at `log/report` and per-batch progress at `log/info` so staging failures point at the dead batch
