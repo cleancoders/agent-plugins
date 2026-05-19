@@ -21,7 +21,7 @@
       "name": "clojure-security",
       "source": "./plugins/clojure-security",
       "description": "Clojure / ClojureScript security skill: vulnerability-class reference, false-positive heuristics, and audit guidance",
-      "version": "0.1.0"
+      "version": "0.3.0"
     }
   ]
 }
