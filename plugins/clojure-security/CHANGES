@@ -1,3 +1,15 @@
+## 0.3.0
+  * `SessionStart` hook now audits the security toolchain in Clojure
+    projects and injects a `additionalContext` notice listing missing
+    tools, their role, and an install hint. Checks `clj-kondo`,
+    `gitleaks`, `clj-holmes` (binary + rules dir at
+    `$CLJ_HOLMES_RULES_DIR` or `/tmp/clj-holmes-rules`), `nvd-clojure`,
+    and `jq`. Skipped silently in non-Clojure projects. Surfaces once
+    per session — no per-edit / per-stop noise. Rationale: silent
+    no-ops on missing tools were invisible; users could ship code
+    believing the hooks had cleared it when in fact the relevant
+    scanner had never run.
+
 ## 0.2.0
   * `PreToolUse` backstop on `git commit`. Matches the `Bash` tool with
     a command starting `git commit` (not `git commit-tree`,
