@@ -1,0 +1,47 @@
+# clojure-security
+
+Security skill for Clojure / ClojureScript codebases. Encodes the
+vulnerability-class judgment that off-the-shelf SAST tools miss for Clojure,
+and gives Claude the framing it needs to triage findings from `clj-kondo`,
+`clj-holmes`, `gitleaks`, `nvd-clojure`, and Semgrep.
+
+Designed to shift security feedback left from CI-only into Claude Code itself:
+findings surface while code is being written rather than after the fact.
+
+## Scope
+
+- **`clojure-security` skill** — vulnerability-class reference and audit
+  methodology. Used both on demand and as the judgment layer behind any
+  automated hooks.
+- **`/security-audit` slash command** — on-demand structured audit of the
+  current repo (or a subscope: `staged` / `diff` / `<path>`).
+- **`PostToolUse` hook (clj-kondo)** — runs against Clojure files immediately
+  after Claude edits them. Surfaces lint findings before the turn completes.
+  Foundation layer: catches the sloppy code where security bugs hide.
+  Sub-second; degrades silently if `clj-kondo` or `jq` is not installed.
+- **`Stop` hook (clj-holmes + gitleaks)** — runs against the session diff
+  when Claude attempts to end its turn. Diff scope is tiered: feature
+  branch → merge-base with `origin/<default>`; default branch → session-start
+  SHA marker; no marker → uncommitted + untracked; non-git → skip.
+  Findings block the Stop (exit 2) so Claude must address them before
+  finishing.
+- **`SessionStart` / `SessionEnd` hooks** — manage the diff-base marker
+  at `.claude/.security-session-start-sha`. No-op outside git repos.
+- Future: `PreToolUse` backstop on `git commit` for any prior-hook bypass.
+
+## Dependencies
+
+The hook and the `/security-audit` command are best-effort — each tool is
+optional, missing tools are skipped without failure:
+
+- [`clj-kondo`](https://github.com/clj-kondo/clj-kondo) — fast linter (required for the PostToolUse hook to do anything)
+- [`clj-holmes`](https://github.com/clj-holmes/clj-holmes) — Clojure security patterns
+- [`gitleaks`](https://github.com/gitleaks/gitleaks) — secret scanning
+- [`nvd-clojure`](https://github.com/rm-hull/nvd-clojure) — dependency CVEs
+- [`semgrep`](https://semgrep.dev) — pattern-based SAST
+- `jq` — required to parse hook input (shipped on most systems; install if absent)
+
+## Background
+
+This plugin is part of Clean Coders Studio's path toward SSDLC maturity and
+SOC 2 Type 2. CSSLP-aligned principles translated to a Clojure stack.

@@ -1,0 +1,43 @@
+## 0.1.0
+  * Initial scaffold. `clojure-security` skill with vulnerability-class
+    reference for Clojure / ClojureScript codebases: read-string / EDN
+    reader exploits, Java deserialization sinks, dynamic code execution,
+    JVM CVE inheritance (Log4Shell-class), XML / YAML parsing, SQL
+    injection via string concatenation, Hiccup / Selmer template
+    injection, CLJS XSS surfaces, atom check-then-act races, reflection
+    in security-sensitive paths, spec / Malli data leaks in error
+    responses, and macros consuming runtime user input. Includes
+    grep/Semgrep starter patterns, false-positive heuristics, severity
+    triage, investigation order, and tool-finding interpretation
+    (clj-kondo, clj-holmes, nvd-clojure, gitleaks, Semgrep).
+  * `/security-audit` slash command. Scope arg: `all` (default),
+    `staged`, `diff`, or a path. Runs the skill's quick-wins pattern
+    sweep, invokes installed tools best-effort (clj-kondo, clj-holmes,
+    gitleaks, nvd-clojure, semgrep), triages each finding through the
+    skill's investigation order, and produces a structured report
+    grouped by severity. Surfaces findings only — never auto-fixes.
+  * `PostToolUse` hook on Edit / Write / MultiEdit for
+    `.clj`/`.cljs`/`.cljc`/`.edn`/`.bb` files. Runs `clj-kondo` against
+    the edited file(s) only. Sub-second (~20ms on a small file). Exit
+    semantics: 0 silent on clean / non-Clojure / missing tools; 1 for
+    warning-only findings (non-blocking); 2 for error-level findings
+    (Claude must address before continuing). Degrades to silent no-op
+    if `clj-kondo` or `jq` is not installed. Bash-3.2 compatible
+    (macOS default). Iteration target: cleancoders `poker` repo.
+  * `SessionStart` hook records the HEAD SHA into
+    `.claude/.security-session-start-sha` so the Stop hook has a stable
+    diff base on default branches. `SessionEnd` hook removes the marker.
+    Both no-op if the cwd is not a git repo.
+  * `Stop` hook runs `clj-holmes` (Clojure SAST patterns) and `gitleaks`
+    (secret scanning) against the session diff. Diff scope tiered:
+    (1) feature branch — merge-base with `origin/<default>`, plus
+    uncommitted + untracked; (2) default branch with marker —
+    `marker..HEAD` + uncommitted + untracked; (3) no marker — uncommitted
+    + untracked only; (4) not a git repo — skip. Exit 0 silent on
+    clean / no diff / missing tools / not git; exit 2 blocks the Stop
+    and surfaces a structured findings report on stderr so Claude must
+    address findings before the turn can end. Reentrancy (`stop_hook_active`)
+    re-blocks with an explicit notice — override escalates to the human.
+    Findings layout: gitleaks first (secrets are highest-impact), then
+    clj-holmes; both link back to the `clojure-security` skill's
+    investigation order.
