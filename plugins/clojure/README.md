@@ -14,6 +14,17 @@ Clojure / ClojureScript skills for the cleancoders stack (c3kit, Reagent, Speclj
 | `/clojure:using-c3kit-bucket` | Working with c3kit bucket (entity lookups, pushing filters into queries, keeping logic in CLJC) |
 | `/clojure:writing-clojure-code` | Writing backend Clojure code — formatting (cond->, as->, continuation args, let alignment) and handler idioms (short-circuit with or, extract guard helpers, extract reusable predicates) |
 
+## Hooks
+
+| Event | Hook | Purpose |
+|---|---|---|
+| `PostToolUse` (`Edit` / `Write` / `MultiEdit`) | `cljfmt-postedit.sh` | Auto-formats `.clj` / `.cljs` / `.cljc` / `.edn` / `.bb` with `cljfmt fix`. If a file was rewritten, notifies Claude on stderr so it re-Reads before the next Edit. Silent no-op when `cljfmt` or `jq` is not installed. |
+
+### Tool dependencies
+
+- [`cljfmt`](https://github.com/weavejester/cljfmt) — needed for the format hook. Install with `brew install --cask cljfmt` or grab the standalone binary from the releases page. The hook silently no-ops without it.
+- `jq` — needed to parse hook input. Almost always already installed; `brew install jq` if not.
+
 ## Installation
 
 With the cleancoders marketplace already added:
