@@ -1,4 +1,15 @@
 {
+  "SessionStart": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-start-toolcheck.sh",
+          "timeout": 5
+        }
+      ]
+    }
+  ],
   "PostToolUse": [
     {
       "matcher": "Edit|Write|MultiEdit",

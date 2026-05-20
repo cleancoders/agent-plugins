@@ -7,11 +7,19 @@
     Auto-format-with-notice (not check-only): keeps tokens out of having
     Claude re-emit the same code in canonical form, and keeps formatting
     decisions out of the chat transcript.
+  * New `SessionStart` hook (`session-start-toolcheck.sh`). In a Clojure
+    project (`deps.edn`, `project.clj`, `shadow-cljs.edn`, `build.boot`, or
+    `bb.edn`), audits the tools the plugin's hooks rely on (`cljfmt`, `jq`)
+    and emits a one-shot SessionStart `additionalContext` notice listing
+    anything missing, with a `brew install` hint. Skipped in non-Clojure
+    projects. Surfaces once per session — the PostToolUse hook itself
+    stays silent on missing tools to avoid per-edit nag. Falls back to
+    plain stderr text if `jq` itself is the missing tool.
   * Hook degrades to a silent no-op if `cljfmt` or `jq` is not installed.
     Real `cljfmt fix` errors (syntax error, parse failure) surface on
     stderr with exit 2 so Claude must address them before continuing.
   * Bash 3.2 compatible (macOS default). Sub-second on small files.
-  * Install hint for users: `brew install --cask cljfmt` (or download the
+  * Install hint for users: `brew install cljfmt` (or download the
     standalone binary from https://github.com/weavejester/cljfmt/releases).
 
 ## 1.8.0

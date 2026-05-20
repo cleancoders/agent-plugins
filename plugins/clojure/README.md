@@ -18,7 +18,8 @@ Clojure / ClojureScript skills for the cleancoders stack (c3kit, Reagent, Speclj
 
 | Event | Hook | Purpose |
 |---|---|---|
-| `PostToolUse` (`Edit` / `Write` / `MultiEdit`) | `cljfmt-postedit.sh` | Auto-formats `.clj` / `.cljs` / `.cljc` / `.edn` / `.bb` with `cljfmt fix`. If a file was rewritten, notifies Claude on stderr so it re-Reads before the next Edit. Silent no-op when `cljfmt` or `jq` is not installed. |
+| `SessionStart` | `session-start-toolcheck.sh` | In a Clojure project, surfaces a one-shot notice listing any missing tools (`cljfmt`, `jq`) with install hints. Skipped in non-Clojure projects. |
+| `PostToolUse` (`Edit` / `Write` / `MultiEdit`) | `cljfmt-postedit.sh` | Auto-formats `.clj` / `.cljs` / `.cljc` / `.edn` / `.bb` with `cljfmt fix`. If a file was rewritten, notifies Claude on stderr so it re-Reads before the next Edit. Silent no-op when `cljfmt` or `jq` is not installed (the SessionStart notice already warned about it). |
 
 ### Tool dependencies
 
