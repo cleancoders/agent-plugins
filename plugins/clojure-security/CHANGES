@@ -1,3 +1,10 @@
+## 0.3.1
+  * Fix plugin install failure: wrap `hooks/hooks.json` contents in a
+    top-level `"hooks"` object so it matches the current Claude Code
+    plugin schema. Previously the loader reported
+    `expected: record, path: ["hooks"], received: undefined` and
+    refused to register any of the plugin's hooks.
+
 ## 0.3.0
   * `SessionStart` hook now audits the security toolchain in Clojure
     projects and injects a `additionalContext` notice listing missing

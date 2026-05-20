@@ -1,3 +1,11 @@
+## 1.9.1
+  * Fix plugin install failure: wrap `hooks/hooks.json` contents in a
+    top-level `"hooks"` object so it matches the current Claude Code
+    plugin schema. Previously the loader reported
+    `expected: record, path: ["hooks"], received: undefined` and
+    refused to register the `SessionStart` toolchain check or the
+    `cljfmt` PostToolUse hook.
+
 ## 1.9.0
   * New `PostToolUse` hook (`cljfmt-postedit.sh`) on Edit / Write / MultiEdit
     for `.clj` / `.cljs` / `.cljc` / `.edn` / `.bb`. Runs `cljfmt fix` on
