@@ -19,6 +19,11 @@ findings surface while code is being written rather than after the fact.
   after Claude edits them. Surfaces lint findings before the turn completes.
   Foundation layer: catches the sloppy code where security bugs hide.
   Sub-second; degrades silently if `clj-kondo` or `jq` is not installed.
+  The plugin ships a baseline clj-kondo config (security-tuned linter levels +
+  Speclj resolution excludes); run `/clojure-security:setup-clj-kondo` to copy
+  it into your project's `.clj-kondo/config.edn` so the per-edit lint matches
+  the documented posture. The SessionStart hook suggests this when no config is
+  present.
 - **`Stop` hook (clj-holmes + gitleaks)** — runs against the session diff
   when Claude attempts to end its turn. Diff scope is tiered: feature
   branch → merge-base with `origin/<default>`; default branch → session-start

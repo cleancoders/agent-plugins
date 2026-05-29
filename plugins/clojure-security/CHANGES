@@ -1,3 +1,20 @@
+## 0.4.0
+  * Ship a baseline clj-kondo config with the plugin and a
+    `/clojure-security:setup-clj-kondo` skill to pull it into a project.
+    The config is security-tuned, not skeleton-silencing: it escalates
+    `:type-mismatch` and `:refer-all` to `:error` and surfaces
+    `:unused-binding`, `:shadowed-var`, and `:unused-private-var` as
+    `:warning` — the sloppy code where security bugs hide. Resolution
+    linters (`:unresolved-*`) stay at clj-kondo defaults because the
+    per-edit hook lints a single file without classpath analysis;
+    `:unresolved-symbol` carries Speclj-DSL excludes only. If a
+    `.clj-kondo/config.edn` already exists, the skill shows a diff and
+    asks whether to overwrite, skip, or merge.
+  * `SessionStart` hook now suggests running
+    `/clojure-security:setup-clj-kondo` when a Clojure project has no
+    `.clj-kondo/config.edn`. Informational, folded into the existing
+    toolchain notice — one message per session, no nag, no blocking.
+
 ## 0.3.2
   * `SessionStart` hook now adds `.security-session-start-sha` to the
     project's `.gitignore` when it creates the session-start marker, so
