@@ -1,3 +1,11 @@
+## 0.3.2
+  * `SessionStart` hook now adds `.security-session-start-sha` to the
+    project's `.gitignore` when it creates the session-start marker, so
+    the marker is never accidentally committed. Idempotent (skips if the
+    entry already exists) and inserts a trailing newline first when the
+    existing `.gitignore` lacks one. Matched by basename so the pattern
+    works regardless of where `.gitignore` sits relative to `.claude/`.
+
 ## 0.3.1
   * Fix plugin install failure: wrap `hooks/hooks.json` contents in a
     top-level `"hooks"` object so it matches the current Claude Code

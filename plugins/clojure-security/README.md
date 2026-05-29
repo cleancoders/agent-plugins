@@ -26,7 +26,8 @@ findings surface while code is being written rather than after the fact.
   Findings block the Stop (exit 2) so Claude must address them before
   finishing.
 - **`SessionStart` / `SessionEnd` hooks** — manage the diff-base marker
-  at `.claude/.security-session-start-sha`, and (in Clojure projects)
+  at `.claude/.security-session-start-sha` (auto-added to `.gitignore`
+  on creation so it is never committed), and (in Clojure projects)
   audit the security toolchain once per session. Missing tools (`clj-kondo`,
   `clj-holmes`, `clj-holmes` rules dir, `gitleaks`, `nvd-clojure`, `jq`)
   are reported as a session-context notice so silent no-ops don't go

@@ -32,12 +32,31 @@ cd "$CWD" 2>/dev/null || exit 0
 
 # --- 1. write session-start marker if in a git repo --------------------------
 
+# Ensure the marker is gitignored so it never gets committed. Match by
+# basename (no leading slash) so the pattern works regardless of where the
+# .gitignore lives relative to .claude/. Idempotent: skip if already ignored.
+ensure_gitignored() {
+  IGNORE_ENTRY=".security-session-start-sha"
+  GITIGNORE="${CWD}/.gitignore"
+  if [ -f "$GITIGNORE" ] && grep -qxF "$IGNORE_ENTRY" "$GITIGNORE" 2>/dev/null; then
+    return 0
+  fi
+  # Append a trailing newline first if the file exists and lacks one.
+  if [ -s "$GITIGNORE" ] && [ -n "$(tail -c1 "$GITIGNORE" 2>/dev/null)" ]; then
+    printf '\n' >> "$GITIGNORE"
+  fi
+  printf '%s\n' "$IGNORE_ENTRY" >> "$GITIGNORE" 2>/dev/null || true
+}
+
 if git rev-parse --git-dir >/dev/null 2>&1; then
   MARKER_DIR="${CWD}/.claude"
   MARKER="${MARKER_DIR}/.security-session-start-sha"
   if mkdir -p "$MARKER_DIR" 2>/dev/null && [ ! -f "$MARKER" ]; then
     HEAD_SHA="$(git rev-parse HEAD 2>/dev/null || true)"
-    [ -n "$HEAD_SHA" ] && printf '%s\n' "$HEAD_SHA" > "$MARKER"
+    if [ -n "$HEAD_SHA" ]; then
+      printf '%s\n' "$HEAD_SHA" > "$MARKER"
+      ensure_gitignored
+    fi
   fi
 fi
 
