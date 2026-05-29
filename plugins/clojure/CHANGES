@@ -1,3 +1,15 @@
+## 1.10.0
+  * Ship a baseline `cljfmt.edn` with the plugin and a
+    `/clojure:setup-cljfmt` skill to pull it into a project. The config
+    carries the Speclj / Reagent / c3kit `:extra-indents` the plugin's
+    cljfmt-postedit hook needs so auto-format matches the documented
+    style instead of cljfmt defaults. If a `cljfmt.edn` already exists,
+    the skill shows a diff and asks whether to overwrite, skip, or merge.
+  * `SessionStart` hook now suggests running `/clojure:setup-cljfmt`
+    when a Clojure project has no cljfmt config (`cljfmt.edn`,
+    `.cljfmt.edn`, or `.cljfmt`). Informational, folded into the existing
+    toolchain notice — one message per session, no nag, no blocking.
+
 ## 1.9.1
   * Fix plugin install failure: wrap `hooks/hooks.json` contents in a
     top-level `"hooks"` object so it matches the current Claude Code
