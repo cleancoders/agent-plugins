@@ -108,9 +108,26 @@ command -v nvd-clojure >/dev/null 2>&1 || note_missing "nvd-clojure" \
   "dependency CVE scanning in \`/security-audit\`" \
   "see https://github.com/rm-hull/nvd-clojure — without it the audit will not check transitive Java deps"
 
-# Build the additionalContext payload only if there is something to report.
-if [ -n "$MISSING" ]; then
-  CONTEXT="$(printf 'clojure-security plugin — toolchain status\n\nThis is a Clojure project but some security-scanning tools are missing. Scanning that depends on them will degrade to a silent no-op until installed. Tell the user once if they ask why scanning is quiet, and otherwise carry on.\n\nMissing:\n\n%s\nAll hooks still load and run; they just skip the missing tool. To verify the full toolchain after installing, restart the session so this check re-runs.\n' "$MISSING")"
+# Suggest pulling in the plugin's clj-kondo config if the project has none.
+# clj-kondo auto-discovers `.clj-kondo/config.edn` from the project root;
+# without one the per-edit lint runs with defaults that omit this plugin's
+# security-tuned linter levels and Speclj resolution excludes.
+CLJ_KONDO_SUGGESTION=""
+if [ ! -f "$CWD/.clj-kondo/config.edn" ]; then
+  CLJ_KONDO_SUGGESTION="No clj-kondo config found in this Clojure project (\`.clj-kondo/config.edn\`). The clj-kondo-postedit hook will lint with defaults, which omit this plugin's security-tuned linter levels (escalated :type-mismatch / :refer-all, surfaced :unused-binding / :shadowed-var) and the Speclj resolution excludes. Suggest the user run \`/clojure-security:setup-clj-kondo\` to pull in the plugin's baseline config. Informational only — do not block on it."
+fi
+
+# Build the additionalContext payload if tools are missing OR no clj-kondo config.
+if [ -n "$MISSING" ] || [ -n "$CLJ_KONDO_SUGGESTION" ]; then
+  CONTEXT="clojure-security plugin — toolchain status"$'\n'
+
+  if [ -n "$MISSING" ]; then
+    CONTEXT="${CONTEXT}"$'\n'"This is a Clojure project but some security-scanning tools are missing. Scanning that depends on them will degrade to a silent no-op until installed. Tell the user once if they ask why scanning is quiet, and otherwise carry on."$'\n\n'"Missing:"$'\n\n'"${MISSING}"$'\n'"All hooks still load and run; they just skip the missing tool. To verify the full toolchain after installing, restart the session so this check re-runs."$'\n'
+  fi
+
+  if [ -n "$CLJ_KONDO_SUGGESTION" ]; then
+    CONTEXT="${CONTEXT}"$'\n'"${CLJ_KONDO_SUGGESTION}"$'\n'
+  fi
 
   if command -v jq >/dev/null 2>&1; then
     jq -n --arg ctx "$CONTEXT" \
