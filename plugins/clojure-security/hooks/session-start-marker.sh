@@ -114,7 +114,7 @@ command -v nvd-clojure >/dev/null 2>&1 || note_missing "nvd-clojure" \
 # security-tuned linter levels and Speclj resolution excludes.
 CLJ_KONDO_SUGGESTION=""
 if [ ! -f "$CWD/.clj-kondo/config.edn" ]; then
-  CLJ_KONDO_SUGGESTION="No clj-kondo config found in this Clojure project (\`.clj-kondo/config.edn\`). The clj-kondo-postedit hook will lint with defaults, which omit this plugin's security-tuned linter levels (escalated :type-mismatch / :refer-all, surfaced :unused-binding / :shadowed-var) and the Speclj resolution excludes. Suggest the user run \`/clojure-security:setup-clj-kondo\` to pull in the plugin's baseline config. Informational only — do not block on it."
+  CLJ_KONDO_SUGGESTION="No clj-kondo config found in this Clojure project (\`.clj-kondo/config.edn\`). The clj-kondo-postedit hook will lint with defaults, which omit this plugin's security-tuned linter levels (escalated :type-mismatch / :refer-all, surfaced :unused-binding / :shadowed-var / :unused-private-var) and the Speclj resolution excludes. Suggest the user run \`/clojure-security:setup-clj-kondo\` to pull in the plugin's baseline config. Informational only — do not block on it."
 fi
 
 # Build the additionalContext payload if tools are missing OR no clj-kondo config.
