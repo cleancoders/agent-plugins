@@ -21,6 +21,10 @@ Clojure / ClojureScript skills for the cleancoders stack (c3kit, Reagent, Speclj
 | `SessionStart` | `session-start-toolcheck.sh` | In a Clojure project, surfaces a one-shot notice listing any missing tools (`cljfmt`, `jq`) with install hints. Skipped in non-Clojure projects. |
 | `PostToolUse` (`Edit` / `Write` / `MultiEdit`) | `cljfmt-postedit.sh` | Auto-formats `.clj` / `.cljs` / `.cljc` / `.edn` / `.bb` with `cljfmt fix`. If a file was rewritten, notifies Claude on stderr so it re-Reads before the next Edit. Silent no-op when `cljfmt` or `jq` is not installed (the SessionStart notice already warned about it). |
 
+### Bundled cljfmt config
+
+The plugin ships a baseline `cljfmt.edn` with Speclj / Reagent / c3kit `:extra-indents`. Run `/clojure:setup-cljfmt` to copy it into your project so the auto-format hook matches the documented style rather than cljfmt defaults. If a `cljfmt.edn` already exists the skill shows a diff and asks whether to overwrite, skip, or merge. The `SessionStart` hook suggests this once when no cljfmt config is present.
+
 ### Tool dependencies
 
 - [`cljfmt`](https://github.com/weavejester/cljfmt) — needed for the format hook. Install with `brew install --cask cljfmt` or grab the standalone binary from the releases page. The hook silently no-ops without it.

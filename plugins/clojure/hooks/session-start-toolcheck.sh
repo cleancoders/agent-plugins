@@ -47,8 +47,24 @@ command -v cljfmt >/dev/null 2>&1 || note_missing "cljfmt" \
   "auto-formats Clojure files after Claude edits them" \
   "\`brew install cljfmt\` — without it, every edit leaves whatever formatting Claude produced (no auto-fix)"
 
-if [ -n "$MISSING" ]; then
-  CONTEXT="$(printf 'clojure plugin — toolchain status\n\nThis is a Clojure project but some tools the clojure plugin'\''s hooks rely on are missing. Hooks that depend on them are degrading to a silent no-op until installed. Tell the user once if they ask why formatting is not running, and otherwise carry on.\n\nMissing:\n\n%s\nThe PostToolUse cljfmt hook will resume working automatically once the missing tools are installed. Restart the session to re-check.\n' "$MISSING")"
+# Suggest pulling in the plugin's cljfmt config if the project has none.
+# cljfmt auto-discovers cljfmt.edn / .cljfmt.edn / .cljfmt from the root;
+# without one it formats with defaults that omit this plugin's indent rules.
+CLJFMT_SUGGESTION=""
+if [ ! -f "$CWD/cljfmt.edn" ] && [ ! -f "$CWD/.cljfmt.edn" ] && [ ! -f "$CWD/.cljfmt" ]; then
+  CLJFMT_SUGGESTION="No cljfmt config found in this Clojure project. The cljfmt-postedit hook will format with cljfmt defaults, which omit the Speclj / Reagent indent rules this plugin's style assumes. Suggest the user run \`/clojure:setup-cljfmt\` to pull in the plugin's baseline cljfmt.edn. Informational only — do not block on it."
+fi
+
+if [ -n "$MISSING" ] || [ -n "$CLJFMT_SUGGESTION" ]; then
+  CONTEXT="clojure plugin — toolchain status"$'\n'
+
+  if [ -n "$MISSING" ]; then
+    CONTEXT="${CONTEXT}"$'\n'"This is a Clojure project but some tools the clojure plugin's hooks rely on are missing. Hooks that depend on them are degrading to a silent no-op until installed. Tell the user once if they ask why formatting is not running, and otherwise carry on."$'\n\n'"Missing:"$'\n\n'"${MISSING}"$'\n'"The PostToolUse cljfmt hook will resume working automatically once the missing tools are installed. Restart the session to re-check."$'\n'
+  fi
+
+  if [ -n "$CLJFMT_SUGGESTION" ]; then
+    CONTEXT="${CONTEXT}"$'\n'"${CLJFMT_SUGGESTION}"$'\n'
+  fi
 
   if command -v jq >/dev/null 2>&1; then
     jq -n --arg ctx "$CONTEXT" \

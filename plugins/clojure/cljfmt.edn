@@ -1,0 +1,34 @@
+;; Baseline cljfmt config shipped by the `clojure` plugin.
+;;
+;; The plugin's PostToolUse hook runs `cljfmt fix` after every Clojure edit.
+;; cljfmt auto-discovers this file when it sits in the project root, so copying
+;; it in makes auto-formatting match the Speclj / Reagent / c3kit indentation
+;; the plugin's skills assume. Pull it into a project with `/clojure:setup-cljfmt`.
+;;
+;; :extra-indents register block-style indentation so cljfmt does not align
+;; bodies under the first argument (which would fight the 2-space body
+;; indentation used throughout).
+;;
+;; Speclj test macros (describe/context/it/etc.) indent their bodies like defn.
+;; c3kit.apron.corec/for-all is a comprehension macro shaped like for.
+;; reagent.core/with-let is a binding macro shaped like let. Both bare and
+;; fully-qualified forms are registered so the rule fires regardless of how the
+;; caller aliases the namespace.
+{:extra-indents
+ {describe                  [[:block 1]]
+  context                   [[:block 1]]
+  it                        [[:block 1]]
+  xit                       [[:block 1]]
+  before                    [[:block 0]]
+  before-all                [[:block 0]]
+  after                     [[:block 0]]
+  after-all                 [[:block 0]]
+  around                    [[:block 1]]
+  with                      [[:block 1]]
+  with-all                  [[:block 1]]
+  redefs-around             [[:block 1]]
+  it-routes                 [[:block 2]]
+  for-all                   [[:block 1]]
+  c3kit.apron.corec/for-all [[:block 1]]
+  with-let                  [[:block 1]]
+  reagent.core/with-let     [[:block 1]]}}
