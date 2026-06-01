@@ -14,16 +14,11 @@
 ;; :unresolved-symbol) cannot resolve cross-namespace references without that
 ;; analysis, so they are left at clj-kondo defaults. :unresolved-symbol carries
 ;; excludes for Speclj / c3kit.wire library macros that clj-kondo cannot resolve
-;; without jar analysis and would otherwise false-flag on every spec file.
+;; without jar analysis and would otherwise false-flag at their call sites.
 ;;
-;; The two :off entries below (:unused-referred-var / :unused-namespace) are the
-;; ONE deliberate exception to "no silencing": Speclj macros are referred
-;; explicitly but used only inside describe/it macro BODIES, which clj-kondo
-;; cannot expand in single-file mode — so it reports every referred Speclj macro
-;; as "referred but never used". Verified reproducible: linting a real spec with
-;; `clj-kondo --lint <spec> --config '{:linters {:unresolved-symbol {:level :off}}}'`
-;; (the hook's exact mode) emits one false unused-referred-var per Speclj refer.
-;; These two linters catch nothing security-relevant, so the trade is sound.
+;; Note: clj-kondo DOES track Speclj macro usage inside describe/it bodies even
+;; in single-file mode, so :unused-referred-var / :unused-namespace stay at
+;; defaults — they correctly flag genuinely dead :refers and :requires in specs.
 {:lint-as
  {;; c3kit's `for-all` is a comprehension macro shaped like `for`.
   c3kit.apron.corec/for-all clojure.core/for
@@ -44,12 +39,6 @@
   :unused-binding     {:level :warning}
   :shadowed-var       {:level :warning}
   :unused-private-var {:level :warning}
-
-  ;; --- Speclj false-positive suppression (see header) --------------------
-  ;; Referred Speclj macros are used only inside describe/it bodies clj-kondo
-  ;; cannot expand in single-file mode; without these every spec is noise.
-  :unused-referred-var {:level :off}
-  :unused-namespace    {:level :off}
 
   ;; --- Speclj / c3kit.wire DSL: symbol-resolution only -------------------
   ;; These macros are referred but cannot be resolved without jar analysis, so

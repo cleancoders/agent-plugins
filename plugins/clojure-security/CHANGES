@@ -8,12 +8,9 @@
     linters (`:unresolved-*`) stay at clj-kondo defaults because the
     per-edit hook lints a single file without classpath analysis;
     `:unresolved-symbol` carries Speclj / c3kit.wire / c3kit.apron.log
-    library-macro excludes only. Two `:off` entries
-    (`:unused-referred-var`, `:unused-namespace`) suppress a verified
-    single-file false-positive where referred Speclj macros used only in
-    `describe`/`it` bodies read as unused; they catch nothing
-    security-relevant. If a `.clj-kondo/config.edn` already exists, the
-    skill shows a diff and asks whether to overwrite, skip, or merge.
+    library-macro excludes only. If a `.clj-kondo/config.edn` already
+    exists, the skill shows a diff and asks whether to overwrite, skip,
+    or merge.
   * `SessionStart` hook now suggests running
     `/clojure-security:setup-clj-kondo` when a Clojure project has no
     `.clj-kondo/config.edn`. Informational, folded into the existing
