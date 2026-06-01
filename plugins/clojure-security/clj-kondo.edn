@@ -12,12 +12,23 @@
 ;; IMPORTANT — the per-edit hook lints a SINGLE file with NO classpath/cache
 ;; analysis. The resolution linters (:unresolved-var / :unresolved-namespace /
 ;; :unresolved-symbol) cannot resolve cross-namespace references without that
-;; analysis, so they are left at clj-kondo defaults. Only :unresolved-symbol
-;; carries excludes — for Speclj DSL macros that clj-kondo cannot resolve
+;; analysis, so they are left at clj-kondo defaults. :unresolved-symbol carries
+;; excludes for Speclj / c3kit.wire library macros that clj-kondo cannot resolve
 ;; without jar analysis and would otherwise false-flag on every spec file.
+;;
+;; The two :off entries below (:unused-referred-var / :unused-namespace) are the
+;; ONE deliberate exception to "no silencing": Speclj macros are referred
+;; explicitly but used only inside describe/it macro BODIES, which clj-kondo
+;; cannot expand in single-file mode — so it reports every referred Speclj macro
+;; as "referred but never used". Verified reproducible: linting a real spec with
+;; `clj-kondo --lint <spec> --config '{:linters {:unresolved-symbol {:level :off}}}'`
+;; (the hook's exact mode) emits one false unused-referred-var per Speclj refer.
+;; These two linters catch nothing security-relevant, so the trade is sound.
 {:lint-as
  {;; c3kit's `for-all` is a comprehension macro shaped like `for`.
   c3kit.apron.corec/for-all clojure.core/for
+  ;; garden's `defstyles` defines the stylesheet var; treat like `def`.
+  garden.def/defstyles      clojure.core/def
   ;; Speclj `with` / `with-all` rebind a value used via deref (`@name`);
   ;; treat like `def` so the binding resolves.
   speclj.core/with          clojure.core/def
@@ -34,10 +45,18 @@
   :shadowed-var       {:level :warning}
   :unused-private-var {:level :warning}
 
-  ;; --- Speclj DSL: symbol-resolution only --------------------------------
-  ;; Speclj's structure / assertion / stub macros are referred but cannot be
-  ;; resolved without jar analysis, so without these excludes every spec file
-  ;; reports unresolved symbols. Resolution only — no behaviour change.
+  ;; --- Speclj false-positive suppression (see header) --------------------
+  ;; Referred Speclj macros are used only inside describe/it bodies clj-kondo
+  ;; cannot expand in single-file mode; without these every spec is noise.
+  :unused-referred-var {:level :off}
+  :unused-namespace    {:level :off}
+
+  ;; --- Speclj / c3kit.wire DSL: symbol-resolution only -------------------
+  ;; These macros are referred but cannot be resolved without jar analysis, so
+  ;; without these excludes every spec file reports unresolved symbols. They are
+  ;; universally-defined library macros (Speclj, c3kit.wire, c3kit.apron.log) —
+  ;; resolution only, no behaviour change. Project-specific symbols do NOT
+  ;; belong here.
   :unresolved-symbol
   {:exclude [;; structure
              describe context it xit
@@ -57,4 +76,11 @@
              should-be-same should-not-be-same
              should< should<= should> should>=
              ;; stubs / fixtures
-             stub with-stubs redefs-around]}}}
+             stub with-stubs redefs-around -fail -to-s
+             ;; c3kit.apron.log macro
+             capture-logs
+             ;; c3kit.wire test helpers
+             should-be-ajax-ok should-be-ajax-fail
+             should-have-invoked-ajax-get should-have-invoked-ajax-post
+             should-have-invoked-ws
+             should-select should-not-select]}}}
