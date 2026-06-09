@@ -1,3 +1,12 @@
+## 1.11.1
+  * `writing-migrations` now warns that the `log/report`/`log/info` calls
+    it tells you to add will leak into Speclj output — a spec with dirty
+    output is not passing even when assertions are green. Documents the
+    fix: silence the migration spec with `(around [run] (log/capture-logs
+    (run)))`, why raising the log level and `with-out-str` don't work, and
+    the clj-kondo `around` gotchas (`:lint-as` entry + avoid an `it`
+    binding name).
+
 ## 1.11.0
   * `writing-clojure-code` now applies to all Clojure code — CLJ, CLJC,
     and CLJS — not just backend handlers. The description was rescoped so

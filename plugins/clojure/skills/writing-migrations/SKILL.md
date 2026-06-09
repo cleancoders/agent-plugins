@@ -281,6 +281,22 @@ c3kit's datomic query builder turns `(db/find-by :kind :some-attr [v1 v2 …])` 
 
 Also batch the `db/tx*`s themselves — a single tx with tens of thousands of datoms can exhaust transactor memory even when the query builds fine.
 
+**CRITICAL — these `log/report`/`log/info` calls leak into Speclj output.** The moment you add logging to a migration, its spec (which calls `up`/the backfill fns) will print those lines mid-run. A spec with dirty output is NOT passing, even if assertions are green. Silence it in the migration spec with an `around` fixture:
+
+```clojure
+(:require [c3kit.apron.log :as log] ...)
+
+(describe "20260417 Foo Migration"
+  (around [run] (log/capture-logs (run)))   ; mutes log/report + log/info for every example
+  ...)
+```
+
+`(log/capture-logs (run))` redirects timbre output into an atom and restores the level after. `log/report` prints regardless of `set-level!` (it's the highest timbre level), so raising the log level does NOT silence it — and `with-out-str` won't catch it either, since these go through the logger, not stdout. See the `writing-tests` skill ("Test Output Must Be Clean"). After running the spec, scan the output: anything but dots/names + summary is a defect to fix before committing.
+
+**clj-kondo gotchas with `around`:**
+- Add `speclj.core/around clojure.core/fn` (and `around-all`) to `:lint-as` in `.clj-kondo/config.edn` so kondo recognizes the binding-vector and resolves the inner call. Without it the binding is an `unresolved-symbol`.
+- Name the binding something *other* than `it` (e.g. `run`). If the spec `:refer`s `it` and you write `(around [it] (it))`, kondo flags either `[invalid-arity] it called with 0 args` (it resolves to the `it` macro) or `[shadowed-var]` (with the lint-as in place). A non-`it` name sidesteps both.
+
 ## Common Patterns
 
 ### Add a new attribute with default value
