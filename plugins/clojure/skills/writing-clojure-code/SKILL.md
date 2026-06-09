@@ -1,6 +1,6 @@
 ---
 name: writing-clojure-code
-description: Use when writing or refactoring Clojure backend code (handlers, domain logic, helpers). Covers formatting for cond->, as->, function-call continuation args, let-binding alignment, and idiomatic patterns for API handlers (short-circuit with or, extract guard helpers, extract reusable predicates).
+description: Use when writing or refactoring any Clojure code — CLJ, CLJC, or CLJS (handlers, domain logic, helpers, defmethods, event handlers). Covers formatting for cond/case (same-line aligned clauses, no blank-line gutters, extract multi-line results), cond->, as->, function-call continuation args, let-binding alignment, and idiomatic patterns for API handlers (short-circuit with or, extract guard helpers, extract reusable predicates). For Reagent-component-specific conventions use writing-reagent-components instead.
 ---
 
 # Writing Clojure Code
@@ -99,9 +99,13 @@ When `let` has multiple bindings, align all values in a single column past the l
 
 ### Long `cond` branches → extract helpers so each clause is one prose line
 
-A `cond` reads well only when each test/result pair fits on a line (or close to it). When a clause's result is a multi-line `let`, the cond loses its scannability — the predicates drift apart and the reader has to parse each block to find the next condition. Blank lines between clauses are a symptom: you're forcing visual separation because the clauses themselves became opaque.
+**Two hard rules for every `cond` (and `case`, `condp`):**
+1. **Each test and its result go on the SAME line**, with results column-aligned. A result that sits on its own line below its predicate is wrong — fix it, don't ship it.
+2. **NEVER put blank lines between clauses.** A blank-line gutter is the tell that a result grew too big to fit on its line. The fix is never the blank line — it's extracting the result.
 
-Fix: pull each multi-line result into a named helper that returns the value (or tuple) the cond branch needs. The cond collapses to a list of `predicate → action-name` pairs that reads top-to-bottom like prose.
+When a clause's result is a multi-line `let`/`if`/`do`, the cond loses its scannability — the predicates drift apart and the reader has to parse each block to find the next condition. The blank lines you feel tempted to add are a symptom: you're forcing visual separation because the clauses themselves became opaque.
+
+Fix: pull each multi-line result into a named helper (`defn`/`defn-`) that returns the value (or tuple) the cond branch needs — even a single-use helper is worth it. The cond then collapses to a list of `predicate → action-name` pairs that reads top-to-bottom like prose — including a `cond` inside a `defmethod` or event handler.
 
 ```clojure
 ;; Good — each branch is one line, names describe intent, no blank-line gutters

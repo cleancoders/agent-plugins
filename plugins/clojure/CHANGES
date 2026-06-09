@@ -1,3 +1,16 @@
+## 1.11.0
+  * `writing-clojure-code` now applies to all Clojure code — CLJ, CLJC,
+    and CLJS — not just backend handlers. The description was rescoped so
+    the skill triggers on `.cljs` (defmethods, event handlers) where the
+    same formatting and altitude rules apply; Reagent-component-specific
+    conventions still live in `writing-reagent-components`.
+  * Hardened the `cond` formatting rule into two explicit hard rules:
+    every test and its result share one line (results column-aligned),
+    and never put blank lines between clauses — a blank-line gutter means
+    a result outgrew its line and must be extracted into a helper
+    (even a single-use one). Applies to `case`/`condp` and to `cond`
+    inside a `defmethod` or event handler.
+
 ## 1.10.0
   * Ship a baseline `cljfmt.edn` with the plugin and a
     `/clojure:setup-cljfmt` skill to pull it into a project. The config
