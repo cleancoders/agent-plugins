@@ -68,9 +68,19 @@ hash_file() {
   fi
 }
 
+# cljfmt discovers cljfmt.edn from the CURRENT WORKING DIRECTORY, not the
+# formatted file's path. The hook's cwd is the session's, which may be an
+# unrelated repo when editing across repos. Run cljfmt from each file's own
+# repo root so that repo's cljfmt.edn applies.
+repo_root_of() {
+  local dir
+  dir="$(cd "$(dirname "$1")" 2>/dev/null && pwd)" || return 1
+  git -C "$dir" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$dir"
+}
+
 for p in "${CLJ_PATHS[@]}"; do
   BEFORE="$(hash_file "$p")"
-  OUT="$(cljfmt fix "$p" 2>&1)"
+  OUT="$(cd "$(repo_root_of "$p")" && cljfmt fix "$p" 2>&1)"
   RC=$?
   if [ "$RC" -ne 0 ]; then
     # Trim cljfmt's noisy JVM stack to the first 5 lines — the leading

@@ -67,18 +67,32 @@ if ! command -v clj-kondo >/dev/null 2>&1; then
   exit 0
 fi
 
-# --- lint -------------------------------------------------------------------
+# --- lint (per file, from its own repo root) --------------------------------
+
+# clj-kondo discovers .clj-kondo/config.edn and its analysis cache from the
+# CURRENT WORKING DIRECTORY, not the linted file's path. The hook's cwd is the
+# session's, which may be an unrelated repo when editing across repos. Run
+# clj-kondo from each file's own repo root so that repo's config + cache apply.
+repo_root_of() {
+  local dir
+  dir="$(cd "$(dirname "$1")" 2>/dev/null && pwd)" || return 1
+  git -C "$dir" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$dir"
+}
 
 # JSON output so we can classify by severity without parsing free text.
-KONDO_OUT="$(clj-kondo --lint "${CLJ_PATHS[@]}" --config '{:output {:format :json}}' 2>/dev/null || true)"
+# Accumulate findings across all files into a single JSON array.
+ALL_FINDINGS="[]"
+for f in "${CLJ_PATHS[@]}"; do
+  root="$(repo_root_of "$f")" || continue
+  out="$(cd "$root" && clj-kondo --lint "$f" --config '{:output {:format :json}}' 2>/dev/null || true)"
+  if printf '%s' "$out" | jq -e . >/dev/null 2>&1; then
+    ALL_FINDINGS="$(jq -n --argjson acc "$ALL_FINDINGS" --argjson cur "$out" \
+                      '$acc + ($cur.findings // [])')"
+  fi
+done
 
-# Empty / non-JSON output → treat as clean.
-if [[ -z "$KONDO_OUT" ]] || ! printf '%s' "$KONDO_OUT" | jq -e . >/dev/null 2>&1; then
-  exit 0
-fi
-
-ERR_COUNT="$(printf '%s' "$KONDO_OUT" | jq '[.findings[] | select(.level == "error")] | length')"
-WARN_COUNT="$(printf '%s' "$KONDO_OUT" | jq '[.findings[] | select(.level == "warning")] | length')"
+ERR_COUNT="$(printf '%s' "$ALL_FINDINGS" | jq '[.[] | select(.level == "error")] | length')"
+WARN_COUNT="$(printf '%s' "$ALL_FINDINGS" | jq '[.[] | select(.level == "warning")] | length')"
 
 if [[ "$ERR_COUNT" -eq 0 && "$WARN_COUNT" -eq 0 ]]; then
   exit 0
@@ -88,8 +102,8 @@ fi
 
 # One line per finding: path:row:col  level  [linter]  message
 FORMATTED="$(
-  printf '%s' "$KONDO_OUT" \
-    | jq -r '.findings[] | "\(.filename):\(.row):\(.col)  \(.level | ascii_upcase)  [\(.type)]  \(.message)"'
+  printf '%s' "$ALL_FINDINGS" \
+    | jq -r '.[] | "\(.filename):\(.row):\(.col)  \(.level | ascii_upcase)  [\(.type)]  \(.message)"'
 )"
 
 {

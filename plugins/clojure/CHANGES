@@ -1,3 +1,11 @@
+## 1.11.2
+  * `cljfmt-postedit` hook now runs cljfmt from the edited file's own repo
+    root instead of the hook's working directory. When editing across repos,
+    cljfmt previously discovered the session repo's `cljfmt.edn` — or none —
+    and reformatted with defaults, causing whole-file reindentation churn that
+    fought the edited repo's actual style. Formats each file from its own
+    `git rev-parse --show-toplevel` root.
+
 ## 1.11.1
   * `writing-migrations` now warns that the `log/report`/`log/info` calls
     it tells you to add will leak into Speclj output — a spec with dirty

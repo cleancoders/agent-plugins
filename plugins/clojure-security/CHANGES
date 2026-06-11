@@ -1,3 +1,13 @@
+## 0.4.1
+  * `clj-kondo-postedit` hook now runs clj-kondo from the edited file's own
+    repo root instead of the hook's working directory. When editing across
+    repos (the hook fires in one repo's session while the edited file lives in
+    a sibling repo), clj-kondo previously discovered the session repo's
+    `.clj-kondo/config.edn` and analysis cache — or none — and surfaced
+    false-positive findings (unresolved symbols, type mismatches) that don't
+    reflect the edited file's actual project config. Lints each file from its
+    own `git rev-parse --show-toplevel` root.
+
 ## 0.4.0
   * Ship a baseline clj-kondo config with the plugin and a
     `/clojure-security:setup-clj-kondo` skill to pull it into a project.
