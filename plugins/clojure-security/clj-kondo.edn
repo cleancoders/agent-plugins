@@ -27,7 +27,10 @@
   ;; Speclj `with` / `with-all` rebind a value used via deref (`@name`);
   ;; treat like `def` so the binding resolves.
   speclj.core/with          clojure.core/def
-  speclj.core/with-all      clojure.core/def}
+  speclj.core/with-all      clojure.core/def
+  ;; Speclj `around` takes a body fn invoked via its bound symbol
+  ;; (`(around [body] (body))`); treat like `fn` so the binding resolves.
+  speclj.core/around        clojure.core/fn}
 
  :linters
  {;; --- security posture: escalate ----------------------------------------

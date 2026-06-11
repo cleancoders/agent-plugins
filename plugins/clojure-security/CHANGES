@@ -1,3 +1,11 @@
+## 0.4.2
+  * Baseline clj-kondo config now treats Speclj `around` like `clojure.core/fn`
+    in `:lint-as`. `around` takes a body fn invoked via its bound symbol
+    (`(around [body] (body))`); without the mapping clj-kondo could not see
+    `body` as a binding and false-flagged the call site as
+    "Unresolved symbol: body". Regression test in
+    `test/clj-kondo-baseline_test.sh`.
+
 ## 0.4.1
   * `clj-kondo-postedit` hook now runs clj-kondo from the edited file's own
     repo root instead of the hook's working directory. When editing across
