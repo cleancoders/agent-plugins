@@ -17,6 +17,8 @@ grep -c "^(describe " path/to/spec.clj   # must print 1
 
 If the count is greater than 1, fold the extras into `(context ...)` blocks under the single top-level describe.
 
+**Boy-scout rule — fix the file before adding to it.** When you open a spec file to add or modify tests and it already has multiple top-level `describe` blocks, consolidate them into one *first*, as a separate step, before your new work. Do **not** append a new test (or a new `describe`) to a file that already violates the one-describe rule — that compounds the problem. The rule applies to every spec you touch, not just ones you create, and "it was already like that" is not an exemption.
+
 ```clojure
 ;; Good
 (describe "Story"

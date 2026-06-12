@@ -1,3 +1,12 @@
+## 1.11.3
+  * `writing-tests` adds a boy-scout rule to the one-describe-per-file
+    structure section: when you open a spec that already has multiple
+    top-level `describe` blocks, consolidate them into one *before*
+    adding or modifying tests, as a separate step. "It was already like
+    that" is not an exemption — the rule applies to every spec you touch,
+    not just ones you create. Stops new tests from being appended onto
+    files that already violate the structure.
+
 ## 1.11.2
   * `cljfmt-postedit` hook now runs cljfmt from the edited file's own repo
     root instead of the hook's working directory. When editing across repos,
