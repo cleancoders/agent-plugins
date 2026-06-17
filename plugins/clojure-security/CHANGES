@@ -1,3 +1,13 @@
+## 0.6.0
+  * Stop and PreToolUse-commit hooks now auto-fetch the clj-holmes rule set
+    when the rules dir (`CLJ_HOLMES_RULES_DIR`, default `/tmp/clj-holmes-rules`)
+    is missing or empty. clj-holmes ships with no rules, so the SAST scan was a
+    silent no-op until someone ran `clj-holmes fetch-rules` by hand. The hooks
+    now run `clj-holmes fetch-rules -o <dir>` first (one-time; reused on later
+    runs), so the session / staged diff is actually scanned. The session-start
+    toolcheck no longer nags to fetch rules manually. Tests in
+    `test/holmes-autofetch_test.sh`.
+
 ## 0.5.0
   * Stop and PreToolUse-commit hooks now pass `--no-verbose` to `clj-holmes
     scan`. The default progrock progress bar computes an ETA interval that

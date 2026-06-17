@@ -131,6 +131,16 @@ done <<<"$CHANGED"
 HOLMES_REPORT=""
 HOLMES_COUNT=0
 HOLMES_RULES_DIR="${CLJ_HOLMES_RULES_DIR:-/tmp/clj-holmes-rules}"
+
+# clj-holmes ships with no rules; without them the scan is a silent no-op.
+# Fetch the canonical rule set into the dir (one-time; reused on later runs)
+# so the session diff is actually scanned instead of skipped.
+if [ "$HAVE_HOLMES" -eq 1 ] && [ -n "$CLJ_FILES" ]; then
+  if [ ! -d "$HOLMES_RULES_DIR" ] || [ -z "$(ls -A "$HOLMES_RULES_DIR" 2>/dev/null)" ]; then
+    clj-holmes fetch-rules -o "$HOLMES_RULES_DIR" >/dev/null 2>&1 || true
+  fi
+fi
+
 if [ "$HAVE_HOLMES" -eq 1 ] && [ -n "$CLJ_FILES" ] && [ -d "$HOLMES_RULES_DIR" ]; then
   # Mirror changed files into a tmp tree so rule output paths stay readable.
   TMP_HOLMES="$(mktemp -d 2>/dev/null || true)"

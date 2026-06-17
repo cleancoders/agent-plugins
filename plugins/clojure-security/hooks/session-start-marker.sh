@@ -91,18 +91,15 @@ command -v gitleaks   >/dev/null 2>&1 || note_missing "gitleaks" \
   "secret scanning in the Stop and PreToolUse hooks" \
   "\`brew install gitleaks\` — without it leaked credentials will not be flagged"
 
-if command -v clj-holmes >/dev/null 2>&1; then
-  RULES_DIR="${CLJ_HOLMES_RULES_DIR:-/tmp/clj-holmes-rules}"
-  if [ ! -d "$RULES_DIR" ]; then
-    note_missing "clj-holmes rules" \
-      "Clojure security-pattern rules dir at \`${RULES_DIR}\`" \
-      "run \`clj-holmes fetch-rules\` once — without rules the Clojure SAST scan runs no-op"
-  fi
-else
+if ! command -v clj-holmes >/dev/null 2>&1; then
   note_missing "clj-holmes" \
     "Clojure security-pattern SAST in the Stop and PreToolUse hooks" \
-    "download from https://github.com/clj-holmes/clj-holmes/releases/latest and then run \`clj-holmes fetch-rules\` — without it Clojure SAST runs no-op"
+    "download from https://github.com/clj-holmes/clj-holmes/releases/latest — the hooks auto-fetch the rule set on first scan, so no separate \`fetch-rules\` step is needed"
 fi
+# Note: when clj-holmes is installed but the rules dir is missing/empty, the
+# Stop and commit-backstop hooks now run `clj-holmes fetch-rules` themselves
+# before scanning — so a missing rules dir is no longer a silent no-op and
+# needs no setup note here.
 
 command -v clj-watson >/dev/null 2>&1 || note_missing "clj-watson" \
   "dependency CVE scanning in \`/security-audit\`" \
