@@ -55,6 +55,23 @@ test_no_clj_kondo_suggestion_when_config_present() {
   assertNotContains "config present -> no suggestion" "${ctx}" "No clj-kondo config found"
 }
 
+test_missing_notice_references_clj_watson_not_nvd_clojure() {
+  printf '{:deps {}}' > "${PROJECT}/deps.edn"
+
+  local ctx
+  ctx="$(run_hook_context)"
+
+  # nvd-clojure was swapped out for clj-watson — the dependency-CVE tool
+  # notice must never name the retired tool.
+  assertNotContains "nvd-clojure should be gone" "${ctx}" "nvd-clojure"
+
+  # The clj-watson notice only appears when clj-watson is absent; skip the
+  # positive assertion when it happens to be installed on this machine.
+  if ! command -v clj-watson >/dev/null 2>&1; then
+    assertContains "missing-tool notice should flag clj-watson" "${ctx}" "clj-watson"
+  fi
+}
+
 test_silent_in_non_clojure_project() {
   # No deps.edn / project.clj / etc. -> is_clojure_project guard exits first.
   local out

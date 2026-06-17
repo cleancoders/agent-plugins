@@ -1,3 +1,17 @@
+## 0.5.0
+  * Stop and PreToolUse-commit hooks now pass `--no-verbose` to `clj-holmes
+    scan`. The default progrock progress bar computes an ETA interval that
+    overflows a 32-bit int on long scans ("Value out of range for int:
+    3625530203", `progrock.core/interval-str`) and crashes clj-holmes before
+    findings are written — the SAST gate was silently dead, not scanning.
+    `--no-verbose` disables the progress feedback and the crash with it.
+    Regression test in `test/security-stop-holmes_test.sh`.
+  * Swapped `nvd-clojure` for `clj-watson` as the dependency-CVE scanner across
+    the toolchain notice, `/security-audit` command, skill reference, and
+    README. clj-watson (clj-holmes org) is actively maintained and checks
+    `deps.edn` against the GitHub Advisory DB / NVD. Coverage assertion in
+    `test/session-start-marker_test.sh`.
+
 ## 0.4.2
   * Baseline clj-kondo config now treats Speclj `around` like `clojure.core/fn`
     in `:lint-as`. `around` takes a body fn invoked via its bound symbol

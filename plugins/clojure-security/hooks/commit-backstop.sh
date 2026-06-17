@@ -127,8 +127,11 @@ if [ "$HAVE_HOLMES" -eq 1 ] && [ -n "$CLJ_STAGED" ] && [ -d "$HOLMES_RULES_DIR" 
     done <<<"$CLJ_STAGED"
 
     HOLMES_OUT="${TMP_HOLMES}/__holmes.json"
+    # --no-verbose disables the progrock progress bar, whose ETA interval
+    # overflows a 32-bit int on long scans ("Value out of range for int")
+    # and crashes clj-holmes before findings are written — a silent dead gate.
     clj-holmes scan -p "$TMP_HOLMES" -d "$HOLMES_RULES_DIR" \
-      -t json -o "$HOLMES_OUT" >/dev/null 2>&1 || true
+      --no-verbose -t json -o "$HOLMES_OUT" >/dev/null 2>&1 || true
 
     if [ -f "$HOLMES_OUT" ]; then
       HOLMES_REPORT="$(

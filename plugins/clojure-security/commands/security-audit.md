@@ -66,7 +66,7 @@ Run each tool only if it is installed (`command -v <tool>` returns 0). For each,
 | `clj-kondo` | `clj-kondo --lint <scope>` — capture warnings + errors |
 | `clj-holmes` | `clj-holmes scan --rules-repository git@github.com:clj-holmes/clj-holmes-rules.git --path <scope>` (or installed equivalent) |
 | `gitleaks` | `gitleaks detect --no-banner --redact --source <scope>` (use `--no-git` for non-git paths) |
-| `nvd-clojure` | Only on `all` scope: dependency-check against `deps.edn` / `project.clj` (use the project's documented invocation) |
+| `clj-watson` | Only on `all` scope: `clj-watson scan -p deps.edn -o stdout` (or the project's `:clj-watson` deps alias) — SCA against `deps.edn` |
 | `semgrep` | Skip unless the repo has a `.semgrep.yml`. If present: `semgrep scan --config .semgrep.yml <scope>` |
 
 If a tool is missing, list it under **Tools not run** in the report — don't pretend it ran.
@@ -97,7 +97,7 @@ Write the report to stdout (the conversation). Do **not** create a file unless t
 ## Summary
   Critical: N    High: N    Medium: N    Low: N    Provisional: N
   Tools run:     clj-kondo (v…)  clj-holmes (v…)  gitleaks (v…)
-  Tools missing: nvd-clojure, semgrep
+  Tools missing: clj-watson, semgrep
 
 ## Critical
   path/to/file.clj:42  [class-name]  <one-line problem>. <fix direction>.

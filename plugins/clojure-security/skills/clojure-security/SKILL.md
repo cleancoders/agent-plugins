@@ -1,6 +1,6 @@
 ---
 name: clojure-security
-description: Use when reviewing Clojure or ClojureScript code for security issues, auditing for RCE via read-string / eval, unsafe Java deserialization, SQL injection through string concatenation, XXE in clojure.xml or data.xml, Hiccup / Selmer template injection, CLJS DOM XSS, atom check-then-act races, spec or Malli error-message data leaks, or interpreting clj-kondo / clj-holmes / gitleaks / nvd-clojure / Semgrep findings on a Clojure codebase.
+description: Use when reviewing Clojure or ClojureScript code for security issues, auditing for RCE via read-string / eval, unsafe Java deserialization, SQL injection through string concatenation, XXE in clojure.xml or data.xml, Hiccup / Selmer template injection, CLJS DOM XSS, atom check-then-act races, spec or Malli error-message data leaks, or interpreting clj-kondo / clj-holmes / gitleaks / clj-watson / Semgrep findings on a Clojure codebase.
 ---
 
 # Clojure Security
@@ -9,7 +9,7 @@ description: Use when reviewing Clojure or ClojureScript code for security issue
 
 Clojure is safer than many ecosystems for memory-safety and state-mutation bugs, but inherits the JVM's attack surface and adds a handful of language-specific footguns. Most vulnerabilities below come from useful features fed untrusted input.
 
-**This skill is the judgment layer.** The mechanical layer — `clj-kondo`, `clj-holmes`, `gitleaks`, `nvd-clojure`, Semgrep — reports raw findings. This skill interprets them: pattern, false-positive notes, severity floor, fix direction.
+**This skill is the judgment layer.** The mechanical layer — `clj-kondo`, `clj-holmes`, `gitleaks`, `clj-watson`, Semgrep — reports raw findings. This skill interprets them: pattern, false-positive notes, severity floor, fix direction.
 
 ## When to apply
 
@@ -129,7 +129,7 @@ nippy/thaw
 
 Every CVE in a transitive Java dep is your CVE. `clojure.tools.logging` delegates to whatever backend is on the classpath — a transitive Log4j carries the Log4Shell risk regardless of call site.
 
-**Detection:** `nvd-clojure` against `deps.edn` / `project.clj`, plus Dependabot alerts.
+**Detection:** `clj-watson` against `deps.edn`, plus Dependabot alerts.
 
 **Severity:** Take from the NVD CVSS; don't re-score.
 
@@ -301,7 +301,7 @@ Most Clojure codebases yield at least one real finding from this set.
 |------|--------|----------|
 | **clj-kondo** | unresolved syms, arity, shadowed locals, reflection warnings | semantics, taint, deserialization, SQLi |
 | **clj-holmes** | known-bad Clojure idioms (`read-string`, `eval`, deserialize sinks) | dataflow; small rule set |
-| **nvd-clojure** | transitive deps vs. NVD | source-level bugs, runtime config |
+| **clj-watson** | transitive deps vs. GitHub Advisory DB / NVD | source-level bugs, runtime config |
 | **gitleaks** | secrets matching regex / entropy heuristics | custom-encoded secrets; keys referenced by path |
 | **Semgrep** | pattern-based source matches (Clojure via experimental tree-sitter) | deep dataflow; semantic equivalence |
 | **CodeQL / Snyk Code** | Java bytecode after AOT — JVM-shaped issues | Clojure idioms |

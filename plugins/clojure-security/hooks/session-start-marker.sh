@@ -6,7 +6,7 @@
 #    arbitrary merge-base.
 #
 # 2. In a Clojure project, audit the security toolchain (clj-kondo,
-#    clj-holmes + rules, gitleaks, nvd-clojure, jq) and inject a status
+#    clj-holmes + rules, gitleaks, clj-watson, jq) and inject a status
 #    notice into the conversation. Missing tools degrade scanning to
 #    silent no-ops, so the user has to be told once per session that
 #    scanning is incomplete — otherwise the absence is invisible.
@@ -104,9 +104,9 @@ else
     "download from https://github.com/clj-holmes/clj-holmes/releases/latest and then run \`clj-holmes fetch-rules\` — without it Clojure SAST runs no-op"
 fi
 
-command -v nvd-clojure >/dev/null 2>&1 || note_missing "nvd-clojure" \
+command -v clj-watson >/dev/null 2>&1 || note_missing "clj-watson" \
   "dependency CVE scanning in \`/security-audit\`" \
-  "see https://github.com/rm-hull/nvd-clojure — without it the audit will not check transitive Java deps"
+  "see https://github.com/clj-holmes/clj-watson — without it the audit will not check transitive deps for known CVEs"
 
 # Suggest pulling in the plugin's clj-kondo config if the project has none.
 # clj-kondo auto-discovers `.clj-kondo/config.edn` from the project root;
