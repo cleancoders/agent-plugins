@@ -1,3 +1,11 @@
+## 1.11.4
+  * `writing-clojure-code` corrects the `cond->` / `cond->>` / `as->`
+    formatting rule: clauses use the standard 2-space body indent with the
+    predicate and its result on the same line, not aligned under the initial
+    expression. The previous "Good" example showed alignment that the
+    plugin's own cljfmt hook reindents away on the next edit, so following it
+    produced churn. Updated the rule text and both example blocks.
+
 ## 1.11.3
   * `writing-tests` adds a boy-scout rule to the one-describe-per-file
     structure section: when you open a spec that already has multiple

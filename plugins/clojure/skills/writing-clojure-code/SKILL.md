@@ -7,30 +7,31 @@ description: Use when writing or refactoring any Clojure code — CLJ, CLJC, or 
 
 ## Formatting
 
-### `cond->` / `cond->>` / `as->` — align clauses under the initial expression
+### `cond->` / `cond->>` / `as->` — one clause per line, predicate and result together
 
-Each clause goes on its own line, indented to align under the initial expression (not under the macro name).
+Each clause goes on its own line with the predicate (test) and its result on the **same line** — the same rule as `cond`. For `as->`, each threading step is its own line. Use the standard 2-space body indent; this is what cljfmt enforces, so don't hand-align clauses under the initial expression — the formatter hook reindents them on the next edit.
 
 ```clojure
-;; Good
+;; Good — predicate and result on one line, 2-space body indent
 (cond-> record
-        true (assoc :id (datomic/tempid) :created-at (:now ctx))
-        true (dissoc :draft-refs)
-        (external-source? record) (assoc :sync-status :pending))
-
-(as-> (get-record request) rec
-      (assoc rec :user (:id user))
-      (apply update-fn rec args)
-      (model/compile rec user))
-
-;; Bad — 2-space body indent breaks visual alignment of clauses
-(cond-> record
-  true (assoc :id (datomic/tempid))
+  true (assoc :id (datomic/tempid) :created-at (:now ctx))
   true (dissoc :draft-refs)
   (external-source? record) (assoc :sync-status :pending))
+
+(as-> (get-record request) rec
+  (assoc rec :user (:id user))
+  (apply update-fn rec args)
+  (model/compile rec user))
+
+;; Bad — predicate and result split across two lines (loses scannability)
+(cond-> record
+  true
+  (assoc :id (datomic/tempid))
+  (external-source? record)
+  (assoc :sync-status :pending))
 ```
 
-The aligned style makes it easy to scan conditions on the left and their transformations on the right.
+Keeping each predicate beside its result lets you scan tests on the left and transformations on the right. cljfmt does **not** join a split clause back together — write it on one line yourself. When a result is long or multi-line, extract it into a named helper (see the `cond` guidance below) rather than letting it wrap.
 
 ### Function-call continuation args align with the first arg
 
@@ -290,17 +291,17 @@ When a predicate expression (especially a set-membership check) is used in more 
 
 (defn- prep-record [record ctx]
   (cond-> record
-          true (assoc :id (datomic/tempid) :created-at (:now ctx))
-          true (dissoc :draft-refs)
-          (external-source? record) (assoc :sync-status :sync-status/pending)))
+    true (assoc :id (datomic/tempid) :created-at (:now ctx))
+    true (dissoc :draft-refs)
+    (external-source? record) (assoc :sync-status :sync-status/pending)))
 
 ;; Bad — set literal inline in cond-> clause, opaque at the call site
 (defn- prep-record [record ctx]
   (cond-> record
-          true (assoc :id (datomic/tempid) :created-at (:now ctx))
-          true (dissoc :draft-refs)
-          (#{:source/gateway-a :source/gateway-b :source/gateway-c} (:source record))
-          (assoc :sync-status :sync-status/pending)))
+    true (assoc :id (datomic/tempid) :created-at (:now ctx))
+    true (dissoc :draft-refs)
+    (#{:source/gateway-a :source/gateway-b :source/gateway-c} (:source record))
+    (assoc :sync-status :sync-status/pending)))
 ```
 
 Making the predicate public is the default — if it describes a meaningful concept in the domain (e.g., "which sources route through the external gateway?"), other namespaces will likely want it too. Only keep it private when the predicate is genuinely local (e.g., a one-off tuple check).
