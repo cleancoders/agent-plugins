@@ -1,3 +1,14 @@
+## 0.7.0
+  * All cwd-scoped hooks now no-op outside a Clojure project. Previously the
+    SessionStart marker hook wrote `.claude/.security-session-start-sha` (and
+    added it to `.gitignore`) in *any* git repo, and the Stop / PreToolUse-commit
+    hooks ran gitleaks / clj-holmes in any git repo — so the plugin fired in
+    unrelated non-Clojure projects. The marker hook only gated its toolchain
+    audit on `is_clojure_project`, not the marker write. All three hooks now
+    apply the gate (`deps.edn` / `project.clj` / `shadow-cljs.edn` / `build.boot`
+    / `bb.edn`) up front. Per-file post-edit hooks (clj-kondo) stay extension-gated
+    to keep cross-repo edits working. Tests in `test/non-clojure-gating_test.sh`.
+
 ## 0.6.0
   * Stop and PreToolUse-commit hooks now auto-fetch the clj-holmes rule set
     when the rules dir (`CLJ_HOLMES_RULES_DIR`, default `/tmp/clj-holmes-rules`)

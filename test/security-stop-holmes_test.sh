@@ -43,6 +43,7 @@ EOF
   git -C "${PROJECT}" init -q
   git -C "${PROJECT}" config user.email t@t.t
   git -C "${PROJECT}" config user.name t
+  printf '{:deps {}}' > "${PROJECT}/deps.edn"   # mark as a Clojure project
   printf '(ns foo)' > "${PROJECT}/foo.clj"
   git -C "${PROJECT}" add -A
   git -C "${PROJECT}" commit -qm init >/dev/null 2>&1

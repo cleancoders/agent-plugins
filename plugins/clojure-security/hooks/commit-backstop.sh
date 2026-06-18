@@ -53,6 +53,18 @@ CWD="$(printf '%s' "$INPUT" | jq -r '.cwd // empty')"
 cd "$CWD" 2>/dev/null || exit 0
 git rev-parse --git-dir >/dev/null 2>&1 || exit 0
 
+# --- skip outside a Clojure project ----------------------------------------
+# This plugin only scans Clojure repos. Without this gate the backstop would
+# run gitleaks on every `git commit` in any repo the session touches.
+
+is_clojure_project() {
+  [ -f "$CWD/deps.edn" ] || [ -f "$CWD/project.clj" ] || \
+    [ -f "$CWD/shadow-cljs.edn" ] || [ -f "$CWD/build.boot" ] || \
+    [ -f "$CWD/bb.edn" ]
+}
+
+is_clojure_project || exit 0
+
 # --- enumerate staged files ------------------------------------------------
 
 STAGED="$(git diff --cached --name-only --diff-filter=ACMR 2>/dev/null || true)"

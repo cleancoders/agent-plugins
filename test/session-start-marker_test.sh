@@ -80,4 +80,32 @@ test_silent_in_non_clojure_project() {
   assertEquals "non-clojure project produces no output" "" "${out}"
 }
 
+test_no_marker_written_in_non_clojure_git_repo() {
+  # Regression: the marker + .gitignore write must be gated on
+  # is_clojure_project, not just "is a git repo". A non-Clojure repo must be
+  # left completely untouched.
+  git -C "${PROJECT}" init -q
+  printf '{"cwd":"%s"}' "${PROJECT}" | bash "${HOOK}" >/dev/null 2>&1
+
+  assertFalse "no .security-session-start-sha marker in non-Clojure repo" \
+    "[ -f '${PROJECT}/.claude/.security-session-start-sha' ]"
+  assertFalse "no .gitignore created in non-Clojure repo" \
+    "[ -f '${PROJECT}/.gitignore' ]"
+}
+
+test_marker_written_in_clojure_git_repo() {
+  # The marker SHOULD still be written for a real Clojure project so the
+  # Stop-hook can diff against the session-start SHA.
+  git -C "${PROJECT}" init -q
+  printf '{:deps {}}' > "${PROJECT}/deps.edn"
+  git -C "${PROJECT}" add -A >/dev/null 2>&1
+  git -C "${PROJECT}" -c user.email=t@t -c user.name=t commit -qm init >/dev/null 2>&1
+  printf '{"cwd":"%s"}' "${PROJECT}" | bash "${HOOK}" >/dev/null 2>&1
+
+  assertTrue "marker written in Clojure repo" \
+    "[ -f '${PROJECT}/.claude/.security-session-start-sha' ]"
+  assertContains "marker gitignored" \
+    "$(cat "${PROJECT}/.gitignore" 2>/dev/null)" ".security-session-start-sha"
+}
+
 . "${SCRIPT_DIR}/../lib/shunit2"

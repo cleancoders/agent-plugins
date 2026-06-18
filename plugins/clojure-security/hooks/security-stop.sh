@@ -49,6 +49,18 @@ if ! git rev-parse --git-dir >/dev/null 2>&1; then
   exit 0
 fi
 
+# --- skip outside a Clojure project ------------------------------------------
+# This plugin only scans Clojure repos. Without this gate the Stop hook would
+# run gitleaks / clj-holmes on every git repo the session touches.
+
+is_clojure_project() {
+  [ -f "$CWD/deps.edn" ] || [ -f "$CWD/project.clj" ] || \
+    [ -f "$CWD/shadow-cljs.edn" ] || [ -f "$CWD/build.boot" ] || \
+    [ -f "$CWD/bb.edn" ]
+}
+
+is_clojure_project || exit 0
+
 # --- skip if neither security tool is installed ------------------------------
 
 HAVE_HOLMES=0

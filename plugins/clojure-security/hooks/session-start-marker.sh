@@ -30,6 +30,21 @@ fi
 
 cd "$CWD" 2>/dev/null || exit 0
 
+# --- gate: do nothing outside a Clojure project ------------------------------
+# Everything below — the session-start marker, the .gitignore entry, and the
+# toolchain audit — is meaningful only for Clojure repos. Writing the marker
+# (and editing .gitignore) in an unrelated project was the bug this guards
+# against: the Stop-hook only scans Clojure projects, so a marker elsewhere is
+# dead weight that also dirties the user's .gitignore.
+
+is_clojure_project() {
+  [ -f "$CWD/deps.edn" ] || [ -f "$CWD/project.clj" ] || \
+    [ -f "$CWD/shadow-cljs.edn" ] || [ -f "$CWD/build.boot" ] || \
+    [ -f "$CWD/bb.edn" ]
+}
+
+is_clojure_project || exit 0
+
 # --- 1. write session-start marker if in a git repo --------------------------
 
 # Ensure the marker is gitignored so it never gets committed. Match by
@@ -61,16 +76,7 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
 fi
 
 # --- 2. toolchain audit (only in Clojure projects) ---------------------------
-
-is_clojure_project() {
-  [ -f "$CWD/deps.edn" ] || [ -f "$CWD/project.clj" ] || \
-    [ -f "$CWD/shadow-cljs.edn" ] || [ -f "$CWD/build.boot" ] || \
-    [ -f "$CWD/bb.edn" ]
-}
-
-if ! is_clojure_project; then
-  exit 0
-fi
+# (Non-Clojure projects already exited at the gate above.)
 
 MISSING=""
 
