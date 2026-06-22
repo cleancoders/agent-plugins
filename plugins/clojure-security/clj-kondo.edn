@@ -24,13 +24,24 @@
   c3kit.apron.corec/for-all clojure.core/for
   ;; garden's `defstyles` defines the stylesheet var; treat like `def`.
   garden.def/defstyles      clojure.core/def
-  ;; Speclj `with` / `with-all` rebind a value used via deref (`@name`);
-  ;; treat like `def` so the binding resolves.
-  speclj.core/with          clojure.core/def
-  speclj.core/with-all      clojure.core/def
   ;; Speclj `around` takes a body fn invoked via its bound symbol
   ;; (`(around [body] (body))`); treat like `fn` so the binding resolves.
   speclj.core/around        clojure.core/fn}
+
+ ;; Speclj `with` / `with!` / `with-all` / `with-all!` declare a lazily
+ ;; evaluated, deref-able symbol accessed as `@name`. :lint-as def would bind
+ ;; the symbol to its value, making `@name` a deref of a non-derefable type and
+ ;; (with :type-mismatch escalated below) flagging every `@with-binding` as an
+ ;; error. The hook rewrites them to `(def sym (atom (do body...)))` so `@sym`
+ ;; type-checks while the body is still analysed. The hook fires because spec
+ ;; files `:refer` these macros, letting clj-kondo resolve them without jar
+ ;; analysis.
+ :hooks
+ {:analyze-call
+  {speclj.core/with      hooks.speclj-with/with-binding
+   speclj.core/with!     hooks.speclj-with/with-binding
+   speclj.core/with-all  hooks.speclj-with/with-binding
+   speclj.core/with-all! hooks.speclj-with/with-binding}}
 
  :linters
  {;; --- security posture: escalate ----------------------------------------
@@ -52,7 +63,8 @@
   :unresolved-symbol
   {:exclude [;; structure
              describe context it xit
-             before before-all after after-all around around-all with with-all
+             before before-all after after-all around around-all
+             with with! with-all with-all!
              focus-describe focus-context focus-it
              tags pending
              ;; assertions
