@@ -1,5 +1,5 @@
 {
   "name": "clojure-security",
   "description": "Clojure / ClojureScript security skill: vulnerability-class reference, false-positive heuristics, and audit guidance for SSDLC / SOC 2 workflows",
-  "version": "0.7.0"
+  "version": "0.8.0"
 }
