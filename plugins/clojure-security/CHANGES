@@ -1,3 +1,18 @@
+## 0.8.0
+  * clj-kondo baseline config now handles Speclj `with` / `with!` / `with-all` /
+    `with-all!` via a real `:hooks {:analyze-call ...}` hook instead of
+    `:lint-as clojure.core/def`. These macros declare a lazily-evaluated,
+    deref-able symbol accessed as `@name`; mapping them to `def` bound the symbol
+    to its value, so `@name` linted as a deref of a non-derefable — and with
+    `:type-mismatch` escalated to `:error`, every `@with-binding` was flagged
+    "Expected: deref, received: <type>" (468 false errors in cleancoders.com's
+    suite). The bundled hook (`clj-kondo.hooks/speclj_with.clj`) rewrites
+    `(with sym & body)` to `(def sym (atom (do body...)))` so `@sym` type-checks
+    while the body is still analysed. `with!` / `with-all!`, previously omitted
+    from `:lint-as` entirely, are now covered too. The `setup-clj-kondo` skill
+    now copies BOTH the config and the hook file into the project's
+    `.clj-kondo/` (the config is inert without the hook).
+
 ## 0.7.0
   * All cwd-scoped hooks now no-op outside a Clojure project. Previously the
     SessionStart marker hook wrote `.claude/.security-session-start-sha` (and
