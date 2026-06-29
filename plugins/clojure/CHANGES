@@ -1,3 +1,15 @@
+## 1.11.5
+  * `writing-clojure-code` now fires when Clojure is authored outside
+    `.clj`/`.cljc`/`.cljs` files. The description trigger surface adds
+    implementation plans, design specs, scaffolding examples, and
+    code-review prompts/comments — plan/spec code blocks are transcribed
+    into the codebase verbatim, so they must already be idiomatic. Added
+    an "Applies to plans, specs, and reviews" body section making
+    plan-writing and diff-review explicit trigger moments (e.g. API
+    handlers must use an or-chain of `maybe-*` guards, never a
+    multi-branch guard `cond`; same-line cond/case clauses, no blank
+    gutters). Style violations in a reviewed diff are findings, not nits.
+
 ## 1.11.4
   * `writing-clojure-code` corrects the `cond->` / `cond->>` / `as->`
     formatting rule: clauses use the standard 2-space body indent with the

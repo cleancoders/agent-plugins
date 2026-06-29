@@ -1,9 +1,16 @@
 ---
 name: writing-clojure-code
-description: Use when writing or refactoring any Clojure code — CLJ, CLJC, or CLJS (handlers, domain logic, helpers, defmethods, event handlers). Covers formatting for cond/case (same-line aligned clauses, no blank-line gutters, extract multi-line results), cond->, as->, function-call continuation args, let-binding alignment, and idiomatic patterns for API handlers (short-circuit with or, extract guard helpers, extract reusable predicates). For Reagent-component-specific conventions use writing-reagent-components instead.
+description: Use when writing or refactoring any Clojure code — CLJ, CLJC, or CLJS (handlers, domain logic, helpers, defmethods, event handlers). Covers formatting for cond/case (same-line aligned clauses, no blank-line gutters, extract multi-line results), cond->, as->, function-call continuation args, let-binding alignment, and idiomatic patterns for API handlers (short-circuit with or, extract guard helpers, extract reusable predicates). Also applies to Clojure you write into implementation plans, design specs, scaffolding examples, or code-review prompts/comments — plan/spec code blocks get transcribed into the codebase verbatim, so they must already follow these rules (e.g. API handlers use an or-chain of maybe-* guards, never a multi-branch guard cond; cond/case clauses are same-line with no blank-gutter). For Reagent-component-specific conventions use writing-reagent-components instead.
 ---
 
 # Writing Clojure Code
+
+## Applies to plans, specs, and reviews
+
+These rules are not only for editing `.clj`/`.cljc`/`.cljs` files. They are explicit trigger moments:
+
+- **Writing a plan or spec** — any Clojure you put in an implementation plan, design spec, or scaffolding example must *already* satisfy every rule in this skill. Plan/spec code blocks get copied into the codebase verbatim (often by a subagent who transcribes without re-judging style), so a non-idiomatic block in the plan becomes non-idiomatic production code. Don't defer cleanup to "when it's a real file."
+- **Reviewing a Clojure diff** — check the diff against these rules and flag violations as findings, not nits. In particular: multi-branch guard `cond` in an API handler instead of an or-chain of `maybe-*-response` helpers; `cond`/`case` clauses split across lines or with blank-line gutters; misaligned `let` / `cond->` / `as->`. These are style findings the review must raise.
 
 ## Formatting
 
