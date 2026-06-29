@@ -10,7 +10,7 @@ description: Use when writing or refactoring any Clojure code — CLJ, CLJC, or 
 These rules are not only for editing `.clj`/`.cljc`/`.cljs` files. They are explicit trigger moments:
 
 - **Writing a plan or spec** — any Clojure you put in an implementation plan, design spec, or scaffolding example must *already* satisfy every rule in this skill. Plan/spec code blocks get copied into the codebase verbatim (often by a subagent who transcribes without re-judging style), so a non-idiomatic block in the plan becomes non-idiomatic production code. Don't defer cleanup to "when it's a real file."
-- **Reviewing a Clojure diff** — check the diff against these rules and flag violations as findings, not nits. In particular: multi-branch guard `cond` in an API handler instead of an or-chain of `maybe-*-response` helpers; `cond`/`case` clauses split across lines or with blank-line gutters; misaligned `let` / `cond->` / `as->`. These are style findings the review must raise.
+- **Reviewing a Clojure diff** — check the diff against these rules and flag violations as findings, not nits. In particular: multi-branch guard `cond` in an API handler instead of an or-chain of `maybe-*-response` helpers; `cond`/`case` clauses split across lines or with blank-line gutters; misaligned `let` / `cond->` / `as->`; a wire `:ok` handler whose `db/tx`/`db/tx*` (or seq vs single access) disagrees with the `ajax/ok` payload shape it consumes; and `apply`-spreading an already-parsed opts map back through a varargs fn. These are findings the review must raise.
 
 ## Formatting
 
@@ -312,3 +312,49 @@ When a predicate expression (especially a set-membership check) is used in more 
 ```
 
 Making the predicate public is the default — if it describes a meaningful concept in the domain (e.g., "which sources route through the external gateway?"), other namespaces will likely want it too. Only keep it private when the predicate is genuinely local (e.g., a one-off tuple check).
+
+## Wire ajax handler/response contract
+
+A wire `:ok` handler that **throws** never shows its real error. `c3kit.wire.api/handle-payload` wraps every handler in a `try`/`catch` and, on any exception, logs it and flashes `"Oh no!  I choked on some data.  Doh!"`. So that flash does not mean the server sent bad data — it means **a client `:ok` handler threw**, and the actual error is hidden behind the generic message. When you see it, suspect the handler, not the payload. Two recurring causes:
+
+### Payload shape must match `db/tx` / `db/tx*` (and seq vs single access)
+
+The backend's `ajax/ok` shape and the frontend handler must agree on whether the payload is **one entity** or a **collection**. Crossing them throws inside the handler → choked.
+
+```clojure
+;; Good — single entity both sides
+;; backend
+(ajax/ok user)
+;; frontend handler
+(fn [user] (db/tx user) (reset! current (:id user)))
+
+;; Good — collection both sides
+;; backend
+(ajax/ok [user])
+;; frontend handler
+(fn [users] (db/tx* users) (reset! ids (map :id users)))
+
+;; Bad — backend sends one entity, frontend treats it as a collection
+;; backend
+(ajax/ok user)
+;; frontend handler — db/tx* / map / into expect a seq of entities, throw on a single map
+(fn [payload] (db/tx* payload))
+```
+
+`db/tx` transacts one entity; `db/tx*` transacts a collection. Using `db/tx*` on a single entity map, or `db/tx` / `map` / `into` on a single map you assumed was a vector (or vice versa), throws. When you change the shape on one side, change the other.
+
+### Don't `apply`-spread an already-parsed opts map
+
+A varargs wrapper that has already run `ccc/->options` holds a **map**. Re-issuing the call with `(apply f url params handler opts)` spreads that map's MapEntries back into the varargs, and `->options` re-parses them with `(apply hash-map …)` — which throws on an odd count (e.g. a lone `:on-fail`). Inside a handler (such as an MFA-retry thunk) that throw surfaces as the choked flash.
+
+```clojure
+;; Good — pass the parsed map as a single leading-map arg; ->options merges it back
+(let [opts  (ccc/->options opts)
+      retry (fn [] (f url params handler opts))]
+  ...)
+
+;; Bad — re-spreads the parsed map through varargs, throws on re-parse
+(let [opts  (ccc/->options opts)
+      retry (fn [] (apply f url params handler opts))]
+  ...)
+```

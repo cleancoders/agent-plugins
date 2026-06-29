@@ -1,3 +1,14 @@
+## 1.11.6
+  * `writing-clojure-code` adds a "Wire ajax handler/response contract"
+    section targeting the recurring `"Oh no!  I choked on some data.  Doh!"`
+    flash. Explains that the flash means a wire `:ok` handler threw (caught by
+    `c3kit.wire.api/handle-payload`) and the real error is hidden — so suspect
+    the handler, not the payload. Documents the two common triggers: an
+    `ajax/ok` payload shape that disagrees with the frontend's `db/tx`/`db/tx*`
+    (single vs collection), and `apply`-spreading an already-parsed opts map
+    back through a varargs fn (re-parse throws on an odd count). Added matching
+    review-trigger bullets so a diff review flags both.
+
 ## 1.11.5
   * `writing-clojure-code` now fires when Clojure is authored outside
     `.clj`/`.cljc`/`.cljs` files. The description trigger surface adds
