@@ -1,3 +1,15 @@
+## 1.12.0
+  * New skill `trunk-based-development`: keeps work mergeable to master and
+    deployable to production without *releasing* the feature. Teaches the
+    deploy≠release split and a decision flow for gating — feature flag (default
+    off), environment darklaunch (`when-not production?` / `darklaunch?`), or
+    branch-by-abstraction. Stresses that abstraction impls (`defmethod` on an
+    extensible `defmulti`, protocol impls) release nothing on their own, so only
+    the *integration point* (the route reaching them) gets gated. Examples are
+    sanitized generic patterns (`config/`, `flag/`, `"my-feature"`), no
+    proprietary names. `creating-pages` now cross-links it at the route step,
+    calling the route the release point.
+
 ## 1.11.6
   * `writing-clojure-code` adds a "Wire ajax handler/response contract"
     section targeting the recurring `"Oh no!  I choked on some data.  Doh!"`

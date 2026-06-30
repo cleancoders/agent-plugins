@@ -13,6 +13,7 @@ Clojure / ClojureScript skills for the cleancoders stack (c3kit, Reagent, Speclj
 | `/clojure:writing-reagent-components` | Writing or refactoring Reagent components (`with-let`, `after-render`, event handlers) |
 | `/clojure:using-c3kit-bucket` | Working with c3kit bucket (entity lookups, pushing filters into queries, keeping logic in CLJC) |
 | `/clojure:writing-clojure-code` | Writing backend Clojure code — formatting (cond->, as->, continuation args, let alignment) and handler idioms (short-circuit with or, extract guard helpers, extract reusable predicates) |
+| `/clojure:trunk-based-development` | Adding a feature/page/route to a continuously-deployed project — gate behind a feature flag, environment darklaunch, or branch-by-abstraction so it deploys to prod without releasing |
 
 ## Hooks
 

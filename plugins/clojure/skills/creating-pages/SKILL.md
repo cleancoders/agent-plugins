@@ -33,6 +33,12 @@ description: Use when creating a new page or route in a ClojureScript SPA. Cover
    - Without backend route, users get 404 on refresh or direct navigation
    - Backend route serves the web-rich-client, then ClojureScript routing takes over
 
+   **The route is the release point.** The `defmethod page/render` and the
+   `main.cljs` registration release nothing — they are inert until a route
+   reaches them. Gate the frontend and backend routes (feature flag or
+   darklaunch) so the page is demo-able in staging but dark in production until
+   explicitly released. See `trunk-based-development`.
+
 4. **CRITICAL: Register namespace in `main.cljs`**:
    ```clojure
    [<project>.feature.my-page]  ; <- Without this, page won't render!
