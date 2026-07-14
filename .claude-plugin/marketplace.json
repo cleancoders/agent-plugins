@@ -15,7 +15,7 @@
       "name": "clojure",
       "source": "./plugins/clojure",
       "description": "Clojure / ClojureScript skills for c3kit, Reagent, Speclj, and cleancoders forms",
-      "version": "1.12.1"
+      "version": "1.13.0"
     },
     {
       "name": "clojure-security",
