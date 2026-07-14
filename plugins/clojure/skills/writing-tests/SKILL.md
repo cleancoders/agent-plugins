@@ -17,6 +17,8 @@ grep -c "^(describe " path/to/spec.clj   # must print 1
 
 If the count is greater than 1, fold the extras into `(context ...)` blocks under the single top-level describe.
 
+This rule is also enforced by a `PostToolUse` hook (`hooks/spec-describe-check.sh`): editing a `*_spec.clj[cs]` file that ends up with more than one top-level `describe` returns feedback asking you to consolidate. The hook is the backstop for when this skill is not loaded (e.g. a subagent writing a spec from a plan); it does not replace applying the rule as you write.
+
 **Boy-scout rule — fix the file before adding to it.** When you open a spec file to add or modify tests and it already has multiple top-level `describe` blocks, consolidate them into one *first*, as a separate step, before your new work. Do **not** append a new test (or a new `describe`) to a file that already violates the one-describe rule — that compounds the problem. The rule applies to every spec you touch, not just ones you create, and "it was already like that" is not an exemption.
 
 ```clojure
@@ -154,20 +156,40 @@ Do not declare a test green when the terminal is full of noise.
 
 ## Test Selectors and Element IDs / Classes
 
-Prefer asserting on **meaningful attributes** (like `href`) rather than just existence:
+**Never select an element by an attribute and then assert that same attribute.** Selecting `a[href='#cleanflow']` and then reading its `href` back is a tautology — the selector already guaranteed the value, so the assertion can only pass. It tests nothing. IDs are unique, so an id locates the element on its own; you never need an attribute selector to reach it.
 
 ```clojure
-;; Bad — only checks existence, duplicates the href in the selector
-(should= "/products" (.getAttribute (wire/select ".feature-card a[href='/products']") "href"))
-
-;; Bad — equivalent to the above but less informative
-(should-select ".feature-card a[href='/products']")
-
-;; Good — test-specific id selects, assertion checks the meaningful attribute.
-;; Note: wire/href returns the full URL (e.g., "file:///products" in tests),
-;; so always use should-contain, not should=.
-(should-contain "/products" (wire/href "#-product-card.feature-card a"))
+;; Bad — selects by href, then asserts the href it selected by (tautology, can't fail)
+(it "CleanFlow card links to #cleanflow anchor"
+  (should= "#cleanflow"
+           (.getAttribute (wire/select "#-open-source-catalog a[href='#cleanflow']") "href")))
 ```
+
+Two fixes, in order of preference:
+
+```clojure
+;; Best — select by a stable id, assert the actual href with should-contain.
+(should-contain "#cleanflow" (wire/href "#-cleanflow-link"))
+
+;; OK — when you only care that the link exists, assert existence directly.
+(should-select "#-open-source-catalog a[href='#cleanflow']")
+```
+
+**Always use `should-contain`, never `should=`, with `wire/href`.** `wire/href`
+reads the DOM `.href` *property*, which resolves **every** href — paths *and*
+bare fragments — against the document base into a full `file://` URL. In the
+test environment `/products` becomes `file:///products` and a bare `#cleanflow`
+becomes `file:///…/specs.html#cleanflow` — neither comes back verbatim, so a
+`should=` against the authored value can only fail:
+
+```clojure
+(should-contain "#cleanflow" (wire/href "#-cleanflow-link"))  ; fragment — contains
+(should-contain "/products"  (wire/href "#-product-card a"))  ; path — contains
+```
+
+(If you genuinely need an exact-match assertion on the *raw* authored attribute,
+read it with `(.getAttribute node "href")`, not `wire/href` — but prefer
+`should-contain` on `wire/href` for hrefs.)
 
 **Adding IDs/classes for test selection:** It's fine to add them *solely* for test selection, but they **must be prefixed with a hyphen** to signal they are test/dev hooks, not styling hooks:
 

@@ -1,3 +1,26 @@
+## 1.12.1
+  * `writing-tests` rewrites the selector-assertion guidance to name the
+    tautology directly: selecting an element by an attribute (e.g.
+    `a[href='#cleanflow']`) and then asserting that same attribute can only
+    pass, so it tests nothing. IDs are unique, so an id locates the element
+    on its own — no attribute selector needed. Shows two fixes in preference
+    order (`(should-contain "#cleanflow" (wire/href "#-id"))`, or
+    `should-select` for existence-only). Reaffirms the "always `should-contain`
+    with `wire/href`" rule with the reason: `wire/href` reads the DOM `.href`
+    property, which resolves *every* href — paths and bare fragments alike —
+    to a full `file://` URL in tests, so nothing comes back verbatim and
+    `should=` against the authored value can only fail (verified empirically
+    against `wire/href` in the test env).
+  * New `PostToolUse` hook `spec-describe-check.sh` enforces the `writing-tests`
+    "one top-level `describe` per spec file" rule: an Edit/Write/MultiEdit that
+    leaves a `*_spec.clj[cs]` file with more than one top-level `(describe ...)`
+    returns exit-2 feedback naming the offending file and how to fix it (fold
+    extras into `context` forms; promote <3-`it` groups to describe-level
+    `it`s). This is the enforcement backstop for fan-out/subagent workflows
+    where the skill prose never loads into the writing agent's context. Silent
+    no-op without `jq`; only column-0 `(describe ` forms count as top-level.
+    `writing-tests` cross-references the hook.
+
 ## 1.12.0
   * New skill `trunk-based-development`: keeps work mergeable to master and
     deployable to production without *releasing* the feature. Teaches the
