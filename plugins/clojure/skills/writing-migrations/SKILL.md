@@ -65,6 +65,7 @@ Key points:
 - **Migration source stays lean** — only `c3kit.bucket.*` requires. No `speclj`, no test helpers, no schema-building test namespaces. Anything in `src/clj/` must load cleanly in production.
 - **`(tags :migration)`** — the default speclj runner (`:spec` alias with `-t=~migration`) excludes these; run them via `clj -M:test:migration`.
 - **`sut/` alias** — the spec lives in a different namespace, so refer to the migration via `[<project>.migrations.20260417-foo :as sut]` and call `sut/backfill!`, `sut/up`, etc.
+- **Enforced by a hook.** The `migration-path-check.sh` PostToolUse hook flags (exit-2 feedback) a `*_spec.clj[c]` written under a `migrations/` dir, a migration source that requires a test-only namespace (`speclj`/`beatles`), and same-date migrations lacking `a`/`b` suffixes — so these land correctly even when the writing agent never loaded this skill.
 
 ## Naming Convention
 

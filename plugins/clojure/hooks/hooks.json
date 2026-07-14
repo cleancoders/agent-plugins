@@ -24,6 +24,11 @@
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/spec-describe-check.sh",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/migration-path-check.sh",
+            "timeout": 5
           }
         ]
       }

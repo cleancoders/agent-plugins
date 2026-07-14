@@ -1,3 +1,18 @@
+## 1.13.0
+  * New `PostToolUse` hook `migration-path-check.sh` enforces `writing-migrations`
+    placement/naming rules after an Edit/Write/MultiEdit touches a c3kit
+    migration or spec. Exit-2 feedback for: (1) a `*_spec.clj[c]` written under a
+    `migrations/` dir — its namespace lands under `:migration-ns`, so the migrator
+    would call `(up)` on the spec; it must move to a sibling `migration_specs/`
+    dir (`<project>.migration-specs.*`, `(tags :migration)`); (2) a migration
+    source that requires a test-only namespace (`speclj`/`beatles`) — src is on
+    the production classpath; (3) two same-date migrations without `a`/`b` letter
+    suffixes — the migrator sorts by filename string comparison, so run order is
+    otherwise undefined. This is the enforcement backstop for fan-out/subagent
+    workflows where the skill prose never loads into the writing agent's context.
+    Silent no-op without `jq`; Bash 3.2 compatible. `writing-migrations`
+    cross-references the hook. New test `migration-path-check_test.sh`.
+
 ## 1.12.1
   * `writing-tests` rewrites the selector-assertion guidance to name the
     tautology directly: selecting an element by an attribute (e.g.
