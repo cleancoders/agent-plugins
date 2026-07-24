@@ -5,6 +5,15 @@
 ;; it in makes auto-formatting match the Speclj / Reagent / c3kit indentation
 ;; the plugin's skills assume. Pull it into a project with `/clojure:setup-cljfmt`.
 ;;
+;; :function-arguments-indentation :cursive — the house style indents wrapped
+;; function arguments and ns :require entries two spaces past the enclosing form
+;; (Cursive's default), NOT cljfmt's :community one-space-past-symbol. Every repo
+;; here is a Cursive/IntelliJ project, so :cursive is the standard. Without it,
+;; cljfmt reindents nearly every multi-line call to community style; with it,
+;; cljfmt leaves the intentional 2-space indentation alone and only fixes genuine
+;; problems (trailing close-parens on their own lines, blank lines before a
+;; close, etc.).
+;;
 ;; :extra-indents register block-style indentation so cljfmt does not align
 ;; bodies under the first argument (which would fight the 2-space body
 ;; indentation used throughout).
@@ -14,7 +23,9 @@
 ;; reagent.core/with-let is a binding macro shaped like let. Both bare and
 ;; fully-qualified forms are registered so the rule fires regardless of how the
 ;; caller aliases the namespace.
-{:extra-indents
+{:function-arguments-indentation :cursive
+
+ :extra-indents
  {describe                  [[:block 1]]
   context                   [[:block 1]]
   it                        [[:block 1]]

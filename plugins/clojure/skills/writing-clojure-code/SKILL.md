@@ -57,31 +57,31 @@ When a call's args wrap to new lines, align the continuation args under the firs
   workflowc/apply-update update user)
 ```
 
-### Fully-wrapped call args use 1-space indent
+### Fully-wrapped call args use 2-space indent
 
-When no args fit on the function-name line, indent args 1 space past the opening paren (not 2).
+When no args fit on the function-name line, indent args 2 spaces past the opening paren (the Cursive standard — this is what cljfmt enforces here via `:function-arguments-indentation :cursive`).
 
 ```clojure
-;; Good — 1-space indent under opening paren
-(audit/log-failure!
- {:ip      (request/extract-ip request)
-  :user-id (:id user)
-  :action  (:action op)
-  :error   (:error op)
-  :context (:context op)})
-
-(reduce
- (fn [acc item]
-   (if (already-processed? acc item)
-     acc
-     (workflowc/process-item acc item)))
- acc
- items)
-
-;; Bad — 2-space body indent
+;; Good — 2-space indent under opening paren
 (audit/log-failure!
   {:ip      (request/extract-ip request)
-   :user-id (:id user)})
+   :user-id (:id user)
+   :action  (:action op)
+   :error   (:error op)
+   :context (:context op)})
+
+(reduce
+  (fn [acc item]
+    (if (already-processed? acc item)
+      acc
+      (workflowc/process-item acc item)))
+  acc
+  items)
+
+;; Bad — 1-space indent under opening paren
+(audit/log-failure!
+ {:ip      (request/extract-ip request)
+  :user-id (:id user)})
 ```
 
 ### `let` bindings: column-align values to the longest name

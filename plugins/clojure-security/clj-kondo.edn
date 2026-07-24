@@ -24,9 +24,10 @@
   c3kit.apron.corec/for-all clojure.core/for
   ;; garden's `defstyles` defines the stylesheet var; treat like `def`.
   garden.def/defstyles      clojure.core/def
-  ;; Speclj `around` takes a body fn invoked via its bound symbol
+  ;; Speclj `around` / `around-all` take a body fn invoked via its bound symbol
   ;; (`(around [body] (body))`); treat like `fn` so the binding resolves.
-  speclj.core/around        clojure.core/fn}
+  speclj.core/around        clojure.core/fn
+  speclj.core/around-all    clojure.core/fn}
 
  ;; Speclj `with` / `with!` / `with-all` / `with-all!` declare a lazily
  ;; evaluated, deref-able symbol accessed as `@name`. :lint-as def would bind

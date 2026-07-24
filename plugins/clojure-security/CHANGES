@@ -1,3 +1,8 @@
+## 0.9.0
+  * clj-kondo baseline adds `speclj.core/around-all` to `:lint-as` (mapped to
+    `clojure.core/fn`), completing the `around` pair. `around-all` takes the same
+    body-fn shape as `around`, so its bound symbol now resolves the same way.
+
 ## 0.8.0
   * clj-kondo baseline config now handles Speclj `with` / `with!` / `with-all` /
     `with-all!` via a real `:hooks {:analyze-call ...}` hook instead of

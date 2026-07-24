@@ -1,3 +1,12 @@
+## 1.14.0
+  * cljfmt baseline now sets `:function-arguments-indentation :cursive` — the
+    house standard across these repos (all Cursive/IntelliJ projects): wrapped
+    function arguments and ns `:require` entries indent two spaces past the
+    enclosing form, not cljfmt's `:community` one-space-past-symbol. Fully-wrapped
+    call args therefore indent two spaces past the opening paren. The
+    `writing-clojure-code` skill's "fully-wrapped call args" rule is corrected to
+    match (it previously prescribed the 1-space `:community` indentation).
+
 ## 1.13.0
   * New `PostToolUse` hook `migration-path-check.sh` enforces `writing-migrations`
     placement/naming rules after an Edit/Write/MultiEdit touches a c3kit
