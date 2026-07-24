@@ -24,6 +24,9 @@
   c3kit.apron.corec/for-all clojure.core/for
   ;; garden's `defstyles` defines the stylesheet var; treat like `def`.
   garden.def/defstyles      clojure.core/def
+  ;; reagent's `with-let` is a binding macro shaped like `let` (bindings vector
+  ;; then body); treat like `let` so its bindings resolve in the body.
+  reagent.core/with-let     clojure.core/let
   ;; Speclj `around` / `around-all` take a body fn invoked via its bound symbol
   ;; (`(around [body] (body))`); treat like `fn` so the binding resolves.
   speclj.core/around        clojure.core/fn
@@ -42,7 +45,13 @@
   {speclj.core/with      hooks.speclj-with/with-binding
    speclj.core/with!     hooks.speclj-with/with-binding
    speclj.core/with-all  hooks.speclj-with/with-binding
-   speclj.core/with-all! hooks.speclj-with/with-binding}}
+   speclj.core/with-all! hooks.speclj-with/with-binding
+   ;; secretary's `defroute` is `(defroute path [route-params] & body)`; the
+   ;; hook rewrites it to a `fn` binding the route-params so they resolve in the
+   ;; body (clj-kondo can't see through the macro). Fires only where
+   ;; secretary.core/defroute is actually called, so it is inert in non-SPA
+   ;; repos. Hook file: .clj-kondo/hooks/secretary.clj.
+   secretary.core/defroute hooks.secretary/defroute}}
 
  :linters
  {;; --- security posture: escalate ----------------------------------------

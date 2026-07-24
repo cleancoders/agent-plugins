@@ -38,3 +38,12 @@ baseline config into the project.
 
 5. **Suggest committing.** Remind the user that `cljfmt.edn` belongs in version
    control so teammates and CI format the same way.
+
+## Project-specific body-macros
+
+The bundled config covers the common Speclj / Reagent / c3kit macros. Projects
+that define their own **body-macros** (a `defmacro` taking `& body` — auth
+guards, `with-*`/`ensure-*` wrappers, DSL blocks) must add a
+`macro-name [[:block N]]` entry per macro or cljfmt deep-indents their call-site
+bodies. The `defmacro-indent-check` hook flags unregistered ones; see the
+`cljfmt-body-macros` skill for how to compute `N` and add the entry.

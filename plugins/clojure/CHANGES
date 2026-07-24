@@ -1,3 +1,15 @@
+## 1.15.0
+  * New `cljfmt-body-macros` skill + `defmacro-indent-check.sh` PostToolUse hook.
+    Under `:function-arguments-indentation :cursive` cljfmt deep-indents the body
+    of any macro it doesn't recognize (it can't tell a macro from a function), so
+    each project body-macro (`defmacro … & body`) needs a `name [[:block N]]`
+    entry in the repo's cljfmt.edn `:extra-indents`. The hook flags a new variadic
+    `defmacro` whose unqualified name isn't registered and exit-2s with the exact
+    rule to add (N = fixed params before `& body`); the skill documents recognition,
+    computing N, and why no global default is possible. Notify-only — it never edits
+    cljfmt.edn. jq-guarded no-op, Bash 3.2. New test `defmacro-indent-check_test.sh`.
+    `setup-cljfmt` cross-references the skill.
+
 ## 1.14.0
   * cljfmt baseline now sets `:function-arguments-indentation :cursive` — the
     house standard across these repos (all Cursive/IntelliJ projects): wrapped

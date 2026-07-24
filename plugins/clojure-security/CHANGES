@@ -1,3 +1,18 @@
+## 0.10.0
+  * clj-kondo baseline now bundles a secretary `defroute` hook
+    (`clj-kondo.hooks/secretary.clj`) and registers `secretary.core/defroute` in
+    `:hooks {:analyze-call ...}`, so route-param bindings resolve without a
+    per-repo hook. Previously epic/poker/wilson each carried their own identical
+    copy; pala and cleancoders had none and hid the resulting unresolved-symbol
+    errors behind a blanket `:unresolved-symbol :off`. The hook fires only where
+    `secretary.core/defroute` is actually called, so it is inert in non-SPA repos
+    (the c3kit libraries).
+  * clj-kondo baseline adds `reagent.core/with-let` to `:lint-as` (mapped to
+    `clojure.core/let`) so its bindings resolve in the body — universal across
+    the reagent SPA repos.
+  * `setup-clj-kondo` now copies the secretary hook file alongside
+    `speclj_with.clj` (the config references both).
+
 ## 0.9.0
   * clj-kondo baseline adds `speclj.core/around-all` to `:lint-as` (mapped to
     `clojure.core/fn`), completing the `around` pair. `around-all` takes the same
