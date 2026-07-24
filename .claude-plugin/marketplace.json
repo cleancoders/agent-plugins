@@ -15,13 +15,13 @@
       "name": "clojure",
       "source": "./plugins/clojure",
       "description": "Clojure / ClojureScript skills for c3kit, Reagent, Speclj, and cleancoders forms",
-      "version": "1.13.0"
+      "version": "1.14.0"
     },
     {
       "name": "clojure-security",
       "source": "./plugins/clojure-security",
       "description": "Clojure / ClojureScript security skill: vulnerability-class reference, false-positive heuristics, and audit guidance",
-      "version": "0.8.0"
+      "version": "0.9.0"
     }
   ]
 }
