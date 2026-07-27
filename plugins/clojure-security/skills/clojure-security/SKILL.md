@@ -48,7 +48,8 @@ Classes live in `references/`. Load only the file you need — do not read them 
 | `dynamic-eval` | 94 | A05 | injection |
 | `sql-injection` | 89 | A05 | injection |
 | `hiccup-injection` | 79 | A05 | injection |
-| `cljs-dom-xss` | 79 | A05 | injection |
+| `cljs-dom-xss` | 79, 94 | A05 | injection |
+| `command-injection` | 78, 77 | A05 | injection |
 | `macro-runtime-input` | 94 | A05 | injection |
 | `xxe` | 611 | A02 | injection |
 | `java-deserialization` | 502 | A08 | deserialization |

@@ -148,6 +148,51 @@ set-html!
 
 **Severity floor:** High when the rendered string crosses a trust boundary.
 
+Note this class carries **CWE-79 and CWE-94**: `.-innerHTML` and
+`:dangerouslySetInnerHTML` are XSS, while `js/eval` and `(js/Function. ...)` are
+code injection. Same sink family, two taxonomy entries.
+
+**Detected in CI by:** `cc-cljs-innerhtml`, `cc-cljs-eval`,
+`cc-dangerously-set-html` (semgrep).
+
+### command-injection
+
+**CWE-78, CWE-77 · OWASP A05**
+
+`clojure.java.shell/sh` invoked through a shell interpreter runs its argument as a
+command line, so any interpolated value is command injection. The tell is a `-c`
+flag: that is what makes `bash`/`sh`/`zsh` parse the next argument as syntax rather
+than treat it as a filename.
+
+```clojure
+;; Vulnerable — the shell parses the whole string
+(sh "bash" "-c" (str "convert " path " out.png"))
+
+;; Safe — fixed argv, the OS never parses user data as syntax
+(sh "convert" path "out.png")
+```
+
+**Grep:**
+```
+clojure\.java\.shell
+"-c"
+ProcessBuilder
+Runtime/getRuntime
+```
+
+**False positives:** a `-c` invocation whose command string is built entirely from
+constants. Still prefer fixed argv — a later edit that interpolates one variable
+turns it into a finding without changing the call shape.
+
+**Fix direction:** pass a fixed argv vector. Where a shell is genuinely required
+(pipelines, redirection), allowlist the variable portion against a static set
+rather than escaping it; escaping is defeated by argument-boundary tricks.
+
+**Severity floor:** Critical when the interpolated value is network-reachable;
+High otherwise.
+
+**Detected in CI by:** `cc-shell-exec` (semgrep).
+
 ### macro-runtime-input
 
 Macros consuming runtime user input.

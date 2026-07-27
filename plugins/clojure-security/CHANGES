@@ -10,6 +10,15 @@
     OWASP A01 has been #1 for four editions and maps to five CWE Top 25 entries,
     and the skill previously had no authorization class at all. No SAST tool
     covers this, so it could only be closed here.
+  * Adds a `command-injection` class (CWE-78, CWE-77). CWE-78 is #9 on the CWE
+    Top 25 and the skill had no class for OS command injection at all — shell
+    sinks would have been filed under `dynamic-eval`, which is code injection
+    (CWE-94) and a different weakness. Found by cross-checking the class index
+    against the github-actions scanner rules, which is exactly the drift the
+    shared ID vocabulary exists to surface.
+  * `cljs-dom-xss` now records CWE-79 **and** CWE-94: `.-innerHTML` and
+    `:dangerouslySetInnerHTML` are XSS, while `js/eval` and `(js/Function. ...)`
+    are code injection. Same sink family, two taxonomy entries.
   * Adds `references/route-inventory.md`, a route sweep that finds missing and
     inconsistent guards by comparing each route to its siblings rather than
     applying absolute rules — so it needs no codebase convention and stays quiet
