@@ -36,244 +36,54 @@ Three axes; combine by judgment, don't compute:
 | **Impact** | RCE / auth bypass → data exfil / SSRF / SQLi → XSS / CSRF → info disclosure |
 | **Prerequisites** | none → timing window → specific config → attacker-on-host |
 
-Per-class severity floors are listed inline below. Override down only with explicit reachability evidence.
+Per-class severity floors are listed in each class's entry under `references/`. Override down only with explicit reachability evidence.
 
 ## Vulnerability classes
 
-### 1. `clojure.core/read-string` on untrusted input — RCE
-
-`clojure.core/read-string` honors the `#=` reader-eval tag → arbitrary code execution.
-
-```clojure
-;; Vulnerable
-(read-string user-input)
-
-;; Safe default
-(clojure.edn/read-string user-input)
-```
-
-**Sharp edges that defeat `clojure.edn`:**
-- Custom `:readers` map running on attacker-controlled tag data
-- `data_readers.clj` / `data_readers.cljc` at the project root is loaded automatically — audit it
-- `clojure.edn/read` wrapping an attacker-controlled stream with a non-empty `:readers`
-
-**Grep:**
-```
-\bread-string\b
-\bedn/read\b
-:readers\s*\{
-data_readers\.cljc?
-```
-
-**False positives:** `read-string` on a string literal, or on a value sourced entirely from build-time config (`deps.edn`, `resources/*.edn`) is fine. Trace provenance, not the call site.
-
-**Severity floor:** Critical if input is network-reachable; High if local-file-reachable; Medium if reachable only via authenticated admin tooling.
-
-### 2. Dynamic code execution — `eval`, `load-string`, `load-file`, `requiring-resolve`
-
-Any path that resolves a symbol or form from user input and invokes it is RCE.
-
-```clojure
-;; Vulnerable
-(eval (read-string body))
-((requiring-resolve (symbol ns-name fn-name)) arg)
-(load-string code-string)
-
-;; Safe — hard-coded allowlist
-(def handlers
-  {"greet"  #'my.app/greet
-   "report" #'my.app/report})
-(if-let [f (handlers action)] (f arg) (throw (ex-info "unknown action" {:action action})))
-```
-
-**Grep:**
-```
-\beval\b
-\bload-string\b
-\bload-file\b
-\brequiring-resolve\b
-\(resolve\s+\(symbol
-```
-
-**False positives:** `eval` inside macros operating on compile-time forms is normal. `requiring-resolve` with a static symbol literal is fine. The risk is exclusively `symbol` / `resolve` / `eval` consuming runtime user data.
-
-**Fix direction:** allowlist (map from user-facing key to resolved var), never blocklist. Reject unknown keys with a 4xx.
-
-**Severity floor:** Critical when input is network-reachable.
-
-### 3. Java deserialization sinks
-
-JVM deserialization gadget chains (Apache Commons Collections, etc.) → RCE.
-
-Sinks to flag:
-- `java.io.ObjectInputStream/readObject` on untrusted bytes
-- `java.beans.XMLDecoder`
-- SnakeYAML pre-2.0 default `Yaml()` constructor (use `SafeConstructor` or upgrade)
-- `nippy/thaw` on untrusted bytes without `:incl-class-allowlist`
-- Kryo without a registered class allowlist
-
-**Grep:**
-```
-ObjectInputStream
-XMLDecoder
-new\s+Yaml\s*\(\s*\)
-nippy/thaw
-\bKryo\b
-```
-
-**False positives:** Deserializing bytes you wrote on the same JVM, never network-sourced, is materially safer. Still prefer a transit/EDN/JSON envelope; lower severity.
-
-**Severity floor:** Critical for network input; High for filesystem input that other users can write to.
-
-### 4. Transitive JVM CVEs (Log4Shell class)
-
-Every CVE in a transitive Java dep is your CVE. `clojure.tools.logging` delegates to whatever backend is on the classpath — a transitive Log4j carries the Log4Shell risk regardless of call site.
-
-**Detection:** `clj-watson` against `deps.edn`, plus Dependabot alerts.
-
-**Severity:** Take from the NVD CVSS; don't re-score.
-
-### 5. XML and YAML parsing — XXE
-
-`clojure.xml/parse` and `clojure.data.xml/parse` use JVM SAX defaults that historically permit external-entity resolution. Hardening must be explicit.
-
-```clojure
-(let [factory (doto (javax.xml.parsers.SAXParserFactory/newInstance)
-                (.setFeature "http://apache.org/xml/features/disallow-doctype-decl" true)
-                (.setFeature "http://xml.org/sax/features/external-general-entities" false)
-                (.setFeature "http://xml.org/sax/features/external-parameter-entities" false)
-                (.setXIncludeAware false))]
-  ...)
-```
-
-**Grep:**
-```
-clojure\.xml/parse
-data\.xml/parse
-SAXParserFactory
-DocumentBuilderFactory
-```
-
-**SnakeYAML:** Same risk on pre-2.0; default `Yaml()` deserializes arbitrary classes. Use `(Yaml. (SafeConstructor.))` or upgrade to 2.0+.
-
-**Severity floor:** High for any internet-reachable parser; Medium for authenticated input; Low for build artifacts.
-
-### 6. SQL injection via string concatenation
-
-Parameterized forms in `clojure.java.jdbc` and `next.jdbc` are safe. Raw-string execution isn't.
-
-```clojure
-;; Vulnerable
-(jdbc/execute! db (str "SELECT * FROM users WHERE name = '" name "'"))
-
-;; Safe
-(jdbc/execute! db ["SELECT * FROM users WHERE name = ?" name])
-```
-
-**The trap is dynamic SQL where parameters can't help:**
-- `ORDER BY <col>` from a query string
-- `<table>` from a query string
-- Dynamic `WHERE` fragments
-
-**Fix:** allowlist columns / tables / directions to a static set. HoneySQL / HugSQL handle this idiomatically.
-
-**Grep:**
-```
-\(str\s+"[^"]*\b(SELECT|INSERT|UPDATE|DELETE)\b
-ORDER BY\s+"\s*\)
-jdbc/execute!\s+\S+\s+\(str
-```
-
-**False positives:** `str` building a constant query template, or composing fully-parameterized clauses via HoneySQL DSL.
-
-**Severity floor:** Critical if reachable from unauthenticated request; High otherwise.
-
-### 7. Hiccup / Selmer template injection and unsafe HTML
-
-Hiccup auto-escapes string content. Risks:
-
-- `hiccup.core/raw` or `hiccup.util/raw-string` on user-controlled strings
-- Selmer templates loaded from user-controlled paths, or rendering user data through tags like `{% include %}` / `{% safe %}`
-- `href` / `src` attributes with user-controlled values not URL-validated → `javascript:` schemes execute
-
-**Grep:**
-```
-hiccup\.(core|util)/raw
-\braw-string\b
-selmer/render-file
-\{%\s*(include|safe)
-:href\s+[^]]*\(str
-javascript:
-```
-
-**Fix direction:** sanitize HTML with OWASP Java HTML Sanitizer (or equivalent). For URL attributes, validate scheme against `#{"http" "https" "mailto"}` allowlist.
-
-**Severity floor:** High for stored XSS (rendered to other users); Medium for reflected.
-
-### 8. ClojureScript DOM XSS surfaces
-
-CLJS can call into JS directly. Sinks:
-
-- `js/eval`
-- `(new js/Function ...)`
-- `:dangerouslySetInnerHTML` in Reagent
-- `dommy/set-html!`
-- `(set! (.-innerHTML el) ...)`
-
-**Grep:**
-```
-\bjs/eval\b
-\bjs/Function\b
-:dangerouslySetInnerHTML
-set-html!
-\.-innerHTML
-```
-
-**Fix:** DOMPurify before any innerHTML-equivalent. No `js/eval` of user input — ever.
-
-**Severity floor:** High when the rendered string crosses a trust boundary.
-
-### 9. Atom / ref check-then-act races in security state
-
-```clojure
-;; Vulnerable — TOCTOU between deref and swap!
-(when (authorized? @session)
-  (swap! resource update-fn))
-
-;; Safe — single transition
-(swap! resource
-       (fn [r] (if (authorized? @session) (update-fn r) r)))
-;; or dosync across multiple refs for transactional semantics
-```
-
-Search auth-relevant namespaces for `@session` / `@auth` / `@current-user` followed by a separate mutation, especially across function boundaries. Hard to grep precisely — flag during human review of auth code.
-
-**Severity floor:** Medium — exploitable but typically narrow timing windows. Higher when the resource is a counter, capability, token, or rate-limit bucket.
-
-### 10. Reflection in security-sensitive code
-
-Not a vuln itself; an auditability and performance smell that occasionally surfaces unexpected method resolution under adversarial input.
-
-**Action:** `(set! *warn-on-reflection* true)` at the top of any ns handling auth, authz, or input parsing. Add type hints to clear warnings. Tightens the auditable surface.
-
-### 11. Spec / Malli error messages leaking data
-
-`s/explain-data` and Malli's humanizers include the offending value. In a 4xx response body, that's a free dump of internal structures and likely PII.
-
-**Fix:** Strip values, generalize messages, or use a middleware that maps validation failures to a flat `{"errors": ["field is required"]}` shape. Never return raw `explain-data` to clients.
-
-**Grep:**
-```
-explain-data
-m/explain
-me/humanize
-```
-
-### 12. Macros consuming runtime user input
-
-A macro that builds code from a string or symbol derived from runtime input is `eval` in disguise.
-
-**Rule:** macros consume compile-time-known data only. Runtime input goes through functions, never macros.
+Classes live in `references/`. Load only the file you need — do not read them all.
+
+| class | CWE | OWASP 2025 | ref |
+|-------|-----|------------|-----|
+| `read-string-rce` | 94 | A05 | injection |
+| `dynamic-eval` | 94 | A05 | injection |
+| `sql-injection` | 89 | A05 | injection |
+| `hiccup-injection` | 79 | A05 | injection |
+| `cljs-dom-xss` | 79 | A05 | injection |
+| `macro-runtime-input` | 94 | A05 | injection |
+| `xxe` | 611 | A02 | injection |
+| `java-deserialization` | 502 | A08 | deserialization |
+| `transitive-cve` | varies | A03 | deserialization |
+| `atom-toctou` | 367 | (none) | access-control |
+| `spec-malli-leak` | 209, 550 | A10 | exceptional-conditions |
+| `missing-authn` | 306 | A07 | access-control |
+| `missing-authz` | 862 | A01 | access-control |
+| `incorrect-authz` | 863, 284 | A01 | access-control |
+| `idor` | 639 | A01 | access-control |
+| `csrf` | 352 | A01 | access-control |
+| `path-traversal` | 22 | A01 | access-control |
+| `ssrf` | 918 | A01 | access-control |
+| `mass-assignment` | 915 | A08 | access-control |
+| `fail-open` | 636, 396 | A10 | exceptional-conditions |
+| `security-misconfig` | 16, 614, 1004 | A02 | config-and-ops |
+| `logging-failures` | 778, 532 | A09 | config-and-ops |
+| `unrestricted-upload` | 434 | A06 | config-and-ops |
+| `resource-exhaustion` | 770, 400 | (none) | config-and-ops |
+| `weak-crypto` | 327, 328 | A04 | config-and-ops |
+| `insecure-tls-verification` | 295 | A07 | config-and-ops |
+
+Note `xxe` is **A02 Security Misconfiguration**, not A05 — XXE is a parser-hardening
+failure in the 2025 taxonomy. `atom-toctou` (CWE-367) maps to no 2025 category.
+
+Access-control findings come from a route sweep rather than pattern matching — see
+`references/route-inventory.md`. No scanner covers this; it is the skill's
+highest-value output.
+
+### Reflection — a practice note, not a class
+
+Reflection is not a vulnerability. It is an auditability smell that occasionally
+surfaces unexpected method resolution under adversarial input. Set
+`(set! *warn-on-reflection* true)` at the top of any namespace handling auth, authz,
+or input parsing, and add type hints to clear the warnings.
 
 ## Quick-wins audit
 
@@ -325,8 +135,6 @@ Annotate intentional safe calls inline so the next reviewer doesn't relitigate t
 
 ## Out of scope here
 
-- CSP and security headers — application-config concern; flag absence in an audit but don't pattern-match here
-- TLS / crypto primitive selection — JVM-level, not Clojure-idiom
 - Auth protocol design (OAuth / SAML / OIDC) — separate skill; link from there when written
 
 ## Common mistakes when applying this skill

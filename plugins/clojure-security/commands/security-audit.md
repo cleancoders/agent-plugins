@@ -1,6 +1,6 @@
 ---
 description: Run a Clojure / ClojureScript security audit on the current repo (or a scope arg) and produce a structured findings report.
-argument-hint: "[scope] — optional. One of: <path>, diff, staged, all (default: all)"
+argument-hint: "[scope] [--write] — scope: <path>|diff|staged|all (default: all); --write saves the report to docs/security-audits/"
 ---
 
 # /security-audit
@@ -28,36 +28,27 @@ If the repo doesn't look like a Clojure project (no `deps.edn` / `project.clj` /
 
 ## Step 3 — Pattern sweep
 
-Run the quick-wins grep block from the skill against the scope. Use `rg` (ripgrep) with `--type clojure` plus `--type edn` when the scope is the whole repo; otherwise pass the specific paths.
+Run the `## Quick-wins audit` grep block from `SKILL.md` against the scope, plus the
+**Grep:** block from each reference file relevant to the scope. Use `rg` with
+`--type clojure` and `--type edn` for whole-repo scope; otherwise pass explicit paths.
 
-Patterns (from skill — keep in sync):
-
-```
-\bread-string\b
-\beval\b
-\bload-string\b|\bload-file\b
-\brequiring-resolve\b
-ObjectInputStream
-XMLDecoder
-new\s+Yaml\s*\(\s*\)
-:readers\s*\{
-data_readers\.cljc?
-clojure\.xml/parse|data\.xml/parse|SAXParserFactory|DocumentBuilderFactory
-\(str\s+"[^"]*\b(SELECT|INSERT|UPDATE|DELETE)\b
-ORDER BY\s+"\s*\)
-jdbc/execute!\s+\S+\s+\(str
-hiccup\.(core|util)/raw|\braw-string\b
-selmer/render-file
-\{%\s*(include|safe)
-javascript:
-\bjs/eval\b|\bjs/Function\b|:dangerouslySetInnerHTML|\.-innerHTML
-\bset-html!\b
-explain-data|me/humanize
-```
+Do not restate the patterns here — they live in the skill, and a copy would drift.
 
 Note: `\bread-string\b` matches both `clojure.core/read-string` (vulnerable) and `clojure.edn/read-string` (safe by default). Inspect each hit's namespace prefix before classifying.
 
-## Step 4 — Tool invocation (best effort, skip missing)
+## Step 4 — Route inventory sweep
+
+Load `references/route-inventory.md` and run the procedure.
+
+Run it always on `all` scope. On `diff` / `staged`, run it only if the diff touches
+a route-defining file (matches `route`, `handler`, `middleware`, `api`, or `main` in
+the path, or contains `defroutes` / `defroute` / a reitit route vector). Otherwise
+state `route sweep: skipped (no route files in scope)` in the report.
+
+The resulting matrix goes in its own report section. Rows with a `?` in the authn or
+authz column are provisional findings, not confirmed gaps.
+
+## Step 5 — Tool invocation (best effort, skip missing)
 
 Run each tool only if it is installed (`command -v <tool>` returns 0). For each, report the version you ran and the count of findings.
 
@@ -73,7 +64,7 @@ If a tool is missing, list it under **Tools not run** in the report — don't pr
 
 For each tool finding, look up the matching vulnerability class in the skill and apply the skill's severity heuristic. Don't take the tool's severity at face value; map to the skill's three-axis model (reachability × impact × prerequisites).
 
-## Step 5 — Triage every candidate
+## Step 6 — Triage every candidate
 
 For each pattern hit and tool finding, run the skill's investigation order:
 
@@ -85,7 +76,7 @@ For each pattern hit and tool finding, run the skill's investigation order:
 
 Annotate any finding you've ruled out as a false positive with the reason in one short clause. Don't drop it silently — readers should see what you considered.
 
-## Step 6 — Produce the report
+## Step 7 — Produce the report
 
 Write the report to stdout (the conversation). Do **not** create a file unless the user follows up asking for one.
 
@@ -100,7 +91,7 @@ Write the report to stdout (the conversation). Do **not** create a file unless t
   Tools missing: clj-watson, semgrep
 
 ## Critical
-  path/to/file.clj:42  [class-name]  <one-line problem>. <fix direction>.
+  path/to/file.clj:42  [class-name]  CWE-89 · A05  <one-line problem>. <fix direction>.
   …
 
 ## High
@@ -113,22 +104,47 @@ Write the report to stdout (the conversation). Do **not** create a file unless t
   …
 
 ## Provisional (provenance not traced)
-  path/to/file.clj:101  [class-name]  <reason it could not be confirmed>.
+  path/to/file.clj:101  [class-name]  CWE-639 · A01  <reason it could not be confirmed>.
+
+## Route matrix
+  | route | method | handler | authn | authz | owns-check | notes |
+  |-------|--------|---------|-------|-------|------------|-------|
+  …
+  (or: route sweep: skipped (no route files in scope))
+
+## Coverage
+  Classes checked:  <n> of <total>
+  Classes skipped:  <list with one-clause reasons>
+  CWE Top 25 (2025) touched:   <ids>
+  OWASP Top 10:2025 touched:   <categories>
 
 ## False positives considered
   path/to/file.clj:7  read-string on constant build-config string — safe.
   …
 
 ## Out of scope (flagged for follow-up)
-  - No CSP header configured in <handler ns> — application-config concern; not in this skill.
-  - <other items the skill explicitly defers>
+  - <items the skill explicitly defers — see its "Out of scope here" section>
 ```
 
-**Class names** must come from the skill's section headings (e.g., `read-string-rce`, `dynamic-eval`, `java-deserialization`, `xxe`, `sql-injection`, `hiccup-injection`, `cljs-dom-xss`, `atom-toctou`, `reflection`, `spec-malli-leak`, `macro-runtime-input`, `transitive-cve`). Use them verbatim so findings can be grouped over time.
+**CWE / OWASP tags** come from the class index table in `SKILL.md`. Read them from
+that table — never from memory. The Coverage section is what makes an audit run
+usable as evidence rather than just a list.
+
+**Class names** must come verbatim from the class index table in `SKILL.md`, so findings can be grouped over time. Do not invent a class name; if a finding fits none of the listed classes, report it under **Out of scope (flagged for follow-up)** instead.
 
 **Severity tone:** terse, factual, action-oriented. One line per finding. No paragraphs. No praise. If the audit is clean, the body of each section is the literal text `clean`.
 
-## Step 7 — Stop
+## Step 7b — Optional file output
+
+Default is stdout only. If the arguments contain `--write`, additionally save the
+report to `docs/security-audits/YYYY-MM-DD-<git short SHA>.md`, creating the
+directory if needed, and print the path.
+
+Writing a file is the only side effect this command may ever have, and only on
+explicit request. Everything else in Step 8 still applies: do not edit code, do not
+stage, do not commit.
+
+## Step 8 — Stop
 
 Do not edit code. Do not stage anything. Do not commit. Hand the report back and stop.
 

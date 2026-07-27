@@ -1,3 +1,37 @@
+## 0.11.0
+  * SKILL.md is now an index plus `references/`, loaded on demand. It was 341
+    lines of flat vulnerability classes read on every invoke; adding the
+    access-control classes would have roughly doubled that. It is now 148 lines
+    with 26 classes. The class index table doubles as the manual half of the
+    CWE/OWASP coverage matrix, and a shunit2 test asserts it agrees with the
+    reference files in both directions — a row without a matching heading would
+    claim coverage the skill cannot actually deliver.
+  * Adds 15 vulnerability classes. The eight access-control ones matter most:
+    OWASP A01 has been #1 for four editions and maps to five CWE Top 25 entries,
+    and the skill previously had no authorization class at all. No SAST tool
+    covers this, so it could only be closed here.
+  * Adds `references/route-inventory.md`, a route sweep that finds missing and
+    inconsistent guards by comparing each route to its siblings rather than
+    applying absolute rules — so it needs no codebase convention and stays quiet
+    on genuinely public APIs. Guards that cannot be traced are reported as
+    provisional rather than missing.
+  * Every class now carries its CWE ID and OWASP Top 10:2025 category, and
+    `/security-audit` tags findings with both plus a Coverage section stating
+    which classes were checked versus skipped. Mappings were verified against
+    owasp.org per-category lists; six obvious-looking inferences were wrong
+    (XXE is A02 not A05, CWE-306 is A07 not A01, CWE-915 is A08, CWE-434 is A06,
+    CWE-770/400 map to no category, CWE-295 is A07 not A04) and are pinned by
+    test so a future reader cannot quietly "correct" them back.
+  * `weak-crypto` and `insecure-tls-verification` move from "out of scope" into
+    the class list. clj-holmes already hard-fails on these findings, so the skill
+    could not triage output the pipeline was already producing. The CSP/security
+    headers exclusion also goes, now covered by `security-misconfig`.
+  * `/security-audit` gains `--write` for `docs/security-audits/`. Stdout remains
+    the default, so the command keeps its no-surprise-side-effects property.
+  * Step 3 of `/security-audit` no longer duplicates the skill's grep patterns,
+    and its class-name guidance no longer enumerates classes inline. Both were
+    copies that would have drifted the moment the class list grew.
+
 ## 0.10.0
   * clj-kondo baseline now bundles a secretary `defroute` hook
     (`clj-kondo.hooks/secretary.clj`) and registers `secretary.core/defroute` in
