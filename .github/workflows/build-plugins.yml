@@ -11,17 +11,34 @@ on:
       - 'plugins/*/package.json'
       - 'plugins/*/package-lock.json'
 
+# This workflow commits synced version files and pushes release tags, so it
+# needs write. Declared explicitly rather than inherited: without a permissions
+# block the token gets the repo default, which is broader than the two things
+# this job actually does.
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # SHA-pinned: this job publishes plugin bundles and tags releases, so a
+      # compromised floating tag on a third-party action could tamper with what
+      # every developer's marketplace installs.
+      #
+      # artipacked is suppressed, not fixed. persist-credentials stays ENABLED
+      # because this job pushes commits and tags — unlike a scan-only job, it
+      # needs the credential zizmor would have it discard. Nothing here uploads
+      # an artifact, which is the leak path that audit actually warns about.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1 (node24) # zizmor: ignore[artipacked]
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0 (node24)
         with:
-          node-version: '20'
+          # 22 LTS. No plugin declares an engines constraint and the build is a
+          # plain npm ci / test / build, so this is a straight bump off EOL 20.
+          node-version: '22'
 
       - name: Run bash tests
         run: |
