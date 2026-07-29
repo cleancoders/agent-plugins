@@ -55,12 +55,26 @@ Run each tool only if it is installed (`command -v <tool>` returns 0). For each,
 | Tool | How to run (audit mode) |
 |------|------------------------|
 | `clj-kondo` | `clj-kondo --lint <scope>` — capture warnings + errors |
-| `clj-holmes` | `clj-holmes scan --rules-repository git@github.com:clj-holmes/clj-holmes-rules.git --path <scope>` (or installed equivalent) |
+| `semgrep` | **The primary Clojure engine — run it whenever it is installed.** Resolve the cleancoders rules the way the hooks do: `$CC_SEMGREP_RULES_DIR` if set, else `/tmp/cc-semgrep-rules-v1` if non-empty, else fetch it (see `hooks/lib/semgrep-rules.sh`). Then mirror CI: `semgrep scan --json --config <cc-rules> --config p/owasp-top-ten --config p/default <scope>` |
 | `gitleaks` | `gitleaks detect --no-banner --redact --source <scope>` (use `--no-git` for non-git paths) |
 | `clj-watson` | Only on `all` scope: `clj-watson scan -p deps.edn -o stdout` (or the project's `:clj-watson` deps alias) — SCA against `deps.edn` |
-| `semgrep` | Skip unless the repo has a `.semgrep.yml`. If present: `semgrep scan --config .semgrep.yml <scope>` |
 
 If a tool is missing, list it under **Tools not run** in the report — don't pretend it ran.
+
+**Severity from semgrep.** 13 `cc-*` rules are `ERROR` and gate CI. Three —
+`cc-path-traversal`, `cc-generic-catch`, `cc-clojure-xml-xxe` — are `WARNING` and
+deliberately do **not** gate: without dataflow they cannot be precise enough.
+Report them, but never as blocking.
+
+**Suppressions.** A finding suppressed in source with a `nosemgrep` annotation is
+absent from `--json` output and excluded from CI's table and exit code. Do not
+resurrect it. Reporting a suppressed finding as live contradicts CI and
+re-litigates a decision a developer already made — list it under **False
+positives considered** with `suppressed in source` as the reason, if at all.
+
+**No namespace-alias resolution.** Semgrep enumerates aliases per rule; an
+unusual alias is a silent miss. When the pattern sweep in Step 3 finds a sink
+that semgrep did not report, trust the sweep.
 
 For each tool finding, look up the matching vulnerability class in the skill and apply the skill's severity heuristic. Don't take the tool's severity at face value; map to the skill's three-axis model (reachability × impact × prerequisites).
 
@@ -87,8 +101,8 @@ Write the report to stdout (the conversation). Do **not** create a file unless t
 
 ## Summary
   Critical: N    High: N    Medium: N    Low: N    Provisional: N
-  Tools run:     clj-kondo (v…)  clj-holmes (v…)  gitleaks (v…)
-  Tools missing: clj-watson, semgrep
+  Tools run:     clj-kondo (v…)  semgrep (v…)  gitleaks (v…)
+  Tools missing: clj-watson
 
 ## Critical
   path/to/file.clj:42  [class-name]  CWE-89 · A05  <one-line problem>. <fix direction>.
@@ -113,10 +127,27 @@ Write the report to stdout (the conversation). Do **not** create a file unless t
   (or: route sweep: skipped (no route files in scope))
 
 ## Coverage
-  Classes checked:  <n> of <total>
+  Classes checked:  <n> of 27
   Classes skipped:  <list with one-clause reasons>
-  CWE Top 25 (2025) touched:   <ids>
-  OWASP Top 10:2025 touched:   <categories>
+
+  CWE Top 25 (2025) — 19 of 25 applicable to Clojure
+    findings:        <#rank CWE-<id> list>
+    checked, clean:  <#rank CWE-<id> list>
+    not reachable:   <#rank CWE-<id> list, with a one-clause reason each>
+    no class:        CWE-476 (#13), CWE-20 (#18)
+    not applicable:  CWE-787, 416, 125, 120, 121, 122 (memory safety)
+
+  OWASP Top 10:2025
+    A01  <findings (n) | checked, clean | not reachable — reason>
+    A02  …
+    A03  …
+    A04  …
+    A05  …
+    A06  …
+    A07  …
+    A08  …
+    A09  …
+    A10  …
 
 ## False positives considered
   path/to/file.clj:7  read-string on constant build-config string — safe.
@@ -126,9 +157,15 @@ Write the report to stdout (the conversation). Do **not** create a file unless t
   - <items the skill explicitly defers — see its "Out of scope here" section>
 ```
 
-**CWE / OWASP tags** come from the class index table in `SKILL.md`. Read them from
-that table — never from memory. The Coverage section is what makes an audit run
-usable as evidence rather than just a list.
+**CWE / OWASP tags** come from the class index table in `SKILL.md` — read them
+from that table, never from memory.
+
+**The Coverage rollup** comes from `references/taxonomy-coverage.md`. Load it and
+use its three states literally: `findings (n)`, `checked, clean`, `not reachable`.
+Never collapse the last two. A category with no class and a category with a clean
+result must not print the same way — that distinction is what makes an audit run
+usable as evidence rather than a list, and the current report is the only place a
+reader can learn that 10 of the applicable Top 25 entries need human eyes.
 
 **Class names** must come verbatim from the class index table in `SKILL.md`, so findings can be grouped over time. Do not invent a class name; if a finding fits none of the listed classes, report it under **Out of scope (flagged for follow-up)** instead.
 
