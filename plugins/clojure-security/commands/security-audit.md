@@ -66,10 +66,10 @@ If a tool is missing, list it under **Tools not run** in the report — don't pr
 deliberately do **not** gate: without dataflow they cannot be precise enough.
 Report them, but never as blocking.
 
-CI's gate is not limited to the `cc-*` set. `bin/report-sarif.sh` counts every
-unsuppressed `error`-level result across *all* configs, so an ERROR from
-`p/owasp-top-ten` or `p/default` blocks a PR too. What decides blocking is a
-rule's severity, not which pack it came from.
+**What actually blocks a PR.** CI's gate is not limited to the `cc-*` set.
+`bin/report-sarif.sh` counts every unsuppressed `error`-level result across *all*
+configs, so an ERROR from `p/owasp-top-ten` or `p/default` blocks a PR too. What
+decides blocking is a rule's severity, not which pack it came from.
 
 **Suppressions.** A finding suppressed in source with a `nosemgrep` annotation is
 absent from `--json` output and excluded from CI's table and exit code. Do not
