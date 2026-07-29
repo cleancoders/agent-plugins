@@ -145,4 +145,14 @@ EOF
   assertFalse "clj-holmes must be gone from the Stop hook" "[ -f '${BIN}/holmes-ran' ]"
 }
 
+# A semgrep process killed mid-write (e.g. a timeout) leaves truncated JSON.
+# jq exits 5 on malformed input, which is not `set -e`-exempt as a bare
+# assignment — this must not kill the hook with an uncontracted exit code.
+test_truncated_semgrep_output_does_not_kill_hook() {
+  printf '{"results":[{"check_id":"x"' > "${RESULTS}"
+  local out; out="$(run_hook)"
+  assertEquals "malformed JSON must not crash the hook" "0" "${out%%|*}"
+  assertEquals "malformed JSON must not print anything" "" "${out#*|}"
+}
+
 . "${SCRIPT_DIR}/../lib/shunit2"

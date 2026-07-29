@@ -53,7 +53,7 @@ fi
 
 # --- skip outside a Clojure project ------------------------------------------
 # This plugin only scans Clojure repos. Without this gate the Stop hook would
-# run gitleaks / clj-holmes on every git repo the session touches.
+# run gitleaks / semgrep on every git repo the session touches.
 
 is_clojure_project() {
   [ -f "$CWD/deps.edn" ] || [ -f "$CWD/project.clj" ] || \
@@ -160,12 +160,20 @@ if [ "$HAVE_SEMGREP" -eq 1 ] && [ -n "$CLJ_FILES" ]; then
   if [ -n "$RULES_DIR" ]; then
     SEMGREP_OUT="$(mktemp 2>/dev/null || true)"
     if [ -n "$SEMGREP_OUT" ]; then
-      # No tmp-tree mirror, unlike the clj-holmes block this replaces: semgrep
-      # reads .clj/.cljs/.cljc directly and reports the paths it was given.
+      # No tmp-tree mirror, unlike the scanner this replaces: semgrep reads
+      # .clj/.cljs/.cljc directly and reports the paths it was given.
       # --quiet keeps the progress spinner out of stderr; findings come from JSON.
-      printf '%s' "$CLJ_FILES" | awk 'NF' \
-        | xargs semgrep scan --json --quiet --config "$RULES_DIR" \
-            > "$SEMGREP_OUT" 2>/dev/null || true
+      #
+      # A bash array, not `xargs`, carries the file list: xargs splits its
+      # input on whitespace, so a path containing a space would arrive as two
+      # bogus arguments and that file would silently never be scanned.
+      SG_ARGS=()
+      while IFS= read -r f; do
+        [ -n "$f" ] && SG_ARGS+=("$f")
+      done <<<"$CLJ_FILES"
+
+      semgrep scan --json --quiet --config "$RULES_DIR" "${SG_ARGS[@]}" \
+        > "$SEMGREP_OUT" 2>/dev/null || true
 
       # Findings suppressed in source with `nosemgrep` are absent from --json
       # output entirely, so they need no handling here — and the local gate
@@ -173,15 +181,23 @@ if [ "$HAVE_SEMGREP" -eq 1 ] && [ -n "$CLJ_FILES" ]; then
       #
       # check_id is prefixed with the config path when --config is absolute, so
       # strip to the last dot-segment for display.
-      SEMGREP_ERRORS="$(jq -r '
-        .results[]? | select(.extra.severity == "ERROR")
-        | "\(.path):\(.start.line):\(.start.col)  ERROR  [\(.check_id | split(".") | last)]  \(.extra.message | gsub("\\s+"; " "))"
-      ' "$SEMGREP_OUT" 2>/dev/null)"
+      #
+      # A semgrep process killed mid-write (e.g. by the Stop hook's own
+      # timeout) can leave $SEMGREP_OUT truncated or malformed. jq exits 5 on
+      # that, which is NOT exempt from `set -e` as a bare assignment — so both
+      # calls are guarded by `-s` (skip on empty/missing) and `|| true`
+      # (survive malformed content) rather than trusting well-formed JSON.
+      if [ -s "$SEMGREP_OUT" ]; then
+        SEMGREP_ERRORS="$(jq -r '
+          .results[]? | select(.extra.severity == "ERROR")
+          | "\(.path):\(.start.line):\(.start.col)  ERROR  [\(.check_id | split(".") | last)]  \(.extra.message | gsub("\\s+"; " "))"
+        ' "$SEMGREP_OUT" 2>/dev/null || true)"
 
-      SEMGREP_WARNINGS="$(jq -r '
-        .results[]? | select(.extra.severity == "WARNING")
-        | "\(.path):\(.start.line):\(.start.col)  WARNING  [\(.check_id | split(".") | last)]  \(.extra.message | gsub("\\s+"; " "))"
-      ' "$SEMGREP_OUT" 2>/dev/null)"
+        SEMGREP_WARNINGS="$(jq -r '
+          .results[]? | select(.extra.severity == "WARNING")
+          | "\(.path):\(.start.line):\(.start.col)  WARNING  [\(.check_id | split(".") | last)]  \(.extra.message | gsub("\\s+"; " "))"
+        ' "$SEMGREP_OUT" 2>/dev/null || true)"
+      fi
 
       # `[ -n "$x" ] && y=...` would exit the script under `set -e` when the
       # test is false. Use if-blocks.
