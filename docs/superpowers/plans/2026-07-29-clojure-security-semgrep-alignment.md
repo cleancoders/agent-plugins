@@ -681,7 +681,21 @@ if [ "$SEMGREP_ERROR_COUNT" -eq 0 ] && [ "$SEMGREP_WARN_COUNT" -eq 0 ] \
 fi
 
 {
-  echo "Security scan on the session diff (scope: ${SCOPE_KIND})."
+  # The header and the closing triage block are both about TOOL findings. When
+  # the only content is a ledger-scoped review, neither applies: nothing came
+  # from the diff, and the taint-shaped investigation order does not fit
+  # access-control work.
+  HAVE_TOOL_FINDINGS=0
+  if [ "$SEMGREP_ERROR_COUNT" -gt 0 ] || [ "$SEMGREP_WARN_COUNT" -gt 0 ] \
+     || [ "$GITLEAKS_COUNT" != "0" ]; then
+    HAVE_TOOL_FINDINGS=1
+  fi
+
+  if [ "$HAVE_TOOL_FINDINGS" -eq 1 ]; then
+    echo "Security scan on the session diff (scope: ${SCOPE_KIND})."
+  else
+    echo "Security review of this turn's edits."
+  fi
   echo
   if [ -n "$GITLEAKS_REPORT" ]; then
     echo "## Secrets (gitleaks) — ${GITLEAKS_COUNT}"
@@ -701,14 +715,16 @@ fi
     printf '%s\n' "$SEMGREP_WARNINGS"
     echo
   fi
-  echo "Triage each finding through the clojure-security skill before"
-  echo "ending this turn. Use the skill's investigation order:"
-  echo "  1. source of the tainted value"
-  echo "  2. trust boundary crossed"
-  echo "  3. existing sanitization on the path"
-  echo "  4. whether removing the sink would break legitimate use"
-  echo "  5. other call sites with the same sink shape"
-  echo
+  if [ "$HAVE_TOOL_FINDINGS" -eq 1 ]; then
+    echo "Triage each finding through the clojure-security skill before"
+    echo "ending this turn. Use the skill's investigation order:"
+    echo "  1. source of the tainted value"
+    echo "  2. trust boundary crossed"
+    echo "  3. existing sanitization on the path"
+    echo "  4. whether removing the sink would break legitimate use"
+    echo "  5. other call sites with the same sink shape"
+    echo
+  fi
   if [ "$STOP_HOOK_ACTIVE" = "true" ]; then
     echo "(Stop hook is reentering — findings still present after a prior"
     echo "continuation. Address them or escalate to the human.)"
@@ -1765,6 +1781,40 @@ if [ -n "$REVIEW_FILES" ]; then
 fi
 ```
 
+- [ ] **Step 3b: Make the empty-diff guard ledger-aware**
+
+`security-stop.sh:146-148` currently reads:
+
+```bash
+if [ -z "$CHANGED" ]; then
+  exit 0
+fi
+```
+
+That sits *before* the review block and skips the drain, so a turn with no
+git-visible change banks its ledger into the next turn's list — the cumulative
+repetition this design exists to prevent. It needs the same clause the toolchain
+gate already got:
+
+```bash
+# An empty diff is not sufficient reason to exit: the review below is
+# ledger-scoped, not diff-scoped. Bailing here would leave the ledger to bank
+# into the next turn — exactly the cumulative repetition the ledger prevents.
+# Same reasoning as the toolchain gate above: absent work AND an absent ledger.
+if [ -z "$CHANGED" ] && [ ! -f "${CWD}/.claude/.security-turn-files" ]; then
+  exit 0
+fi
+```
+
+Reachable whenever `.claude/` is gitignored (otherwise the untracked ledger keeps
+`CHANGED` non-empty, which is why the shipped tests cannot catch it) and the turn
+leaves no git trace — an edit-then-revert, or an edit under a gitignored path.
+Both are ordinary agent behaviour.
+
+The downstream blocks are already guarded: semgrep runs only when `CLJ_FILES` is
+non-empty and gitleaks only when `CHANGED` is, so both correctly skip while the
+review still fires.
+
 - [ ] **Step 4: Update the exit decision to account for the review**
 
 Change the early-exit guard from:
@@ -1792,23 +1842,31 @@ Inside the `{ ... } >&2` report block, insert after the semgrep advisory section
     echo "## Scanner-blind classes — review this turn's edits"
     echo
     echo "Semgrep cannot reach these classes: they need dataflow, namespace-alias"
-    echo "resolution, or whole-route reasoning. Review ONLY these files, and"
-    echo "do not sweep the repo:"
+    echo "resolution, or whole-route reasoning. Review these files:"
     printf '%s\n' "$REVIEW_FILES" | sed 's/^/  /'
     echo
+    echo "Scope: every finding you report must be ABOUT one of those files. Read"
+    echo "whatever else you need in order to judge them — a missing authorization"
+    echo "check is rarely visible in the handler alone, so follow the middleware"
+    echo "stack and the route table wherever they live. What you must not do is go"
+    echo "hunting for unrelated findings elsewhere in the repo."
+    echo
     echo "Load the clojure-security skill, then only the references you need:"
-    echo "  references/access-control.md  — atom-toctou, missing-authn,"
-    echo "      missing-authz, incorrect-authz, idor, csrf, ssrf, mass-assignment"
-    echo "  references/config-and-ops.md  — security-misconfig, logging-failures,"
-    echo "      unrestricted-upload, resource-exhaustion"
-    echo "  references/injection.md       — macro-runtime-input"
-    echo "  references/route-inventory.md — the route sweep, if any of these"
-    echo "      files define, wrap, or dispatch routes"
+    echo "  references/access-control.md — atom-toctou, missing-authn,"
+    echo "        missing-authz, incorrect-authz, idor, csrf, ssrf, mass-assignment"
+    echo "  references/config-and-ops.md — security-misconfig, logging-failures,"
+    echo "        unrestricted-upload, resource-exhaustion"
+    echo "  references/injection.md — macro-runtime-input"
+    echo "  references/route-inventory.md — the route sweep, if any of these files"
+    echo "        define, wrap, or dispatch routes"
     echo
     echo "Apply the skill's investigation order and severity heuristic. Report"
     echo "each finding with its class name, CWE and OWASP tag. Provenance you"
     echo "cannot trace is provisional, not a finding. Do not auto-fix — report"
     echo "and let the human choose."
+    echo
+    echo "This directive is issued once per turn. Report your findings and stop;"
+    echo "the hook will not re-issue it."
     echo
   fi
 ```
@@ -1831,7 +1889,9 @@ Add to the header comment block, after the Reentrancy note:
 #   come from turn-ledger.sh via .claude/.security-turn-files — NOT from the
 #   diff, which is cumulative and would re-review the same files every turn.
 #   The directive is one-shot per turn (it has no findings to clear) and the
-#   ledger is drained unconditionally. CC_SKIP_DIFF_REVIEW=1 opts out.
+#   ledger is drained unconditionally — including by the empty-diff guard above,
+#   which must stay ledger-aware or a trace-free turn banks its files into the
+#   next one. CC_SKIP_DIFF_REVIEW opts out on ANY non-empty value, "0" included.
 #
 #   Known limit: files changed by Bash (sed, a script, git checkout) never
 #   enter the ledger. Semgrep still scans those through the cumulative diff;
