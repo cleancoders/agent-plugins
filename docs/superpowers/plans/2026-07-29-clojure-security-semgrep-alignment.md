@@ -2688,7 +2688,7 @@ In `plugins/clojure-security/commands/security-audit.md`, replace the table body
 
 ```markdown
 | `clj-kondo` | `clj-kondo --lint <scope>` — capture warnings + errors |
-| `semgrep` | **The primary Clojure engine — run it whenever it is installed.** Resolve the cleancoders rules the way the hooks do: `$CC_SEMGREP_RULES_DIR` if set, else `/tmp/cc-semgrep-rules-v1` if non-empty, else fetch it (see `hooks/lib/semgrep-rules.sh`). Then mirror CI: `semgrep scan --json --config <cc-rules> --config p/owasp-top-ten --config p/default <scope>` |
+| `semgrep` | **The primary Clojure engine — run it whenever it is installed.** Resolve the cleancoders rules the way the hooks do: `$CC_SEMGREP_RULES_DIR` if set, else `/tmp/cc-semgrep-rules-v1` if non-empty, else fetch it (see `hooks/lib/semgrep-rules.sh`). Then mirror CI: `semgrep scan --json --config <cc-rules> --config p/owasp-top-ten --config p/default <scope>`. Add `--config .security-rules` when that directory exists — CI passes it as a fourth config (`extra-rules-dir`, default `.security-rules`), so skipping it audits blind to rules the PR enforces |
 | `gitleaks` | `gitleaks detect --no-banner --redact --source <scope>` (use `--no-git` for non-git paths) |
 | `clj-watson` | Only on `all` scope: `clj-watson scan -p deps.edn -o stdout` (or the project's `:clj-watson` deps alias) — SCA against `deps.edn` |
 ```
@@ -2700,6 +2700,11 @@ Immediately after the table, before the `If a tool is missing` line, insert:
 `cc-path-traversal`, `cc-generic-catch`, `cc-clojure-xml-xxe` — are `WARNING` and
 deliberately do **not** gate: without dataflow they cannot be precise enough.
 Report them, but never as blocking.
+
+CI's gate is not limited to the `cc-*` set. `bin/report-sarif.sh` counts every
+unsuppressed `error`-level result across *all* configs, so an ERROR from
+`p/owasp-top-ten` or `p/default` blocks a PR too. What decides blocking is a
+rule's severity, not which pack it came from.
 
 **Suppressions.** A finding suppressed in source with a `nosemgrep` annotation is
 absent from `--json` output and excluded from CI's table and exit code. Do not
@@ -2746,6 +2751,19 @@ And line 90-91:
 ```markdown
   Tools run:     clj-kondo (v…)  semgrep (v…)  gitleaks (v…)
   Tools missing: clj-watson
+```
+
+- [ ] **Step 4b: Add a de-duplication rule**
+
+Step 3's pattern sweep and Step 5's semgrep run overlap on several sinks, so the
+same `file:line` can surface from both. The command already says what to do when
+the sweep finds a sink semgrep missed; it says nothing about the reverse overlap.
+Immediately after the existing `**Severity tone:**` paragraph, add:
+
+```markdown
+**One sink, one line.** Step 3's pattern sweep and Step 5's semgrep run overlap on
+several sinks, so the same `file:line` can surface from both. Report it once. A
+duplicated finding inflates the count and makes the report read as padded.
 ```
 
 - [ ] **Step 5: Update the tag-sourcing note**
