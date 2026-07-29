@@ -11,10 +11,10 @@ SKILL="${SKILL_DIR}/SKILL.md"
 REFS="${SKILL_DIR}/references"
 
 # Emit "class ref" for each index-table row. Rows look like:
-#   | `read-string-rce` | 94 | A05 | injection |
+#   | `read-string-rce` | 94 | A05 | semgrep:cc-read-string | injection |
 index_rows() {
   grep -E '^\| `[a-z0-9-]+` \|' "${SKILL}" \
-    | awk -F'|' '{gsub(/[ `]/,"",$2); gsub(/ /,"",$5); print $2, $5}'
+    | awk -F'|' '{gsub(/[ `]/,"",$2); gsub(/ /,"",$6); print $2, $6}'
 }
 
 # Emit "class ref" for each "### class-name" heading in each reference file.
