@@ -15,12 +15,17 @@ test_no_plugin_file_credits_clj_holmes_for_ci() {
   #     rather than weakening the invariant for every other file.
   local hits f body
   hits=""
-  for f in $(find "${PLUGIN}" -type f ! -name CHANGES); do
+  # -print0 into `read -d ''`, not `for f in $(find ...)`: unquoted command
+  # substitution word-splits on whitespace, so a path containing a space is torn
+  # into fragments that name no file, `sed` fails silently with stderr already
+  # discarded, and the file is never scanned — a false PASS. Demonstrated, not
+  # theoretical. This is the one test meant to still matter years from now.
+  while IFS= read -r -d '' f; do
     body="$(sed 's|clj-holmes/clj-watson||g' "${f}" 2>/dev/null)"
     case "${body}" in
       *clj-holmes*) hits="${hits}${f}"$'\n' ;;
     esac
-  done
+  done < <(find "${PLUGIN}" -type f ! -name CHANGES -print0)
   assertEquals "these files still reference clj-holmes" "" "$(printf '%s' "${hits}" | awk 'NF')"
 }
 
