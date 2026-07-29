@@ -1576,9 +1576,13 @@ tearDown() {
 # value; extra env can be prepended via ENV_EXTRA.
 run_hook() {
   local active="${1:-false}" err rc
+  # `env` is required, not decoration: a variable that expands to `NAME=VAL` is
+  # NOT re-parsed as a prefix assignment, so `${ENV_EXTRA:-} bash …` tries to
+  # execute a command literally named `CC_SKIP_DIFF_REVIEW=1` and dies with
+  # exit 127. Verified: `E="FOO=bar"; $E env` → "FOO=bar: command not found".
   err="$(printf '{"cwd":"%s","stop_hook_active":%s}' "${PROJECT}" "${active}" \
     | PATH="${BIN}:${PATH}" CC_SEMGREP_RULES_DIR="${RULES}" \
-      ${ENV_EXTRA:-} bash "${HOOK}" 2>&1 >/dev/null)"
+      env ${ENV_EXTRA:-} bash "${HOOK}" 2>&1 >/dev/null)"
   rc=$?
   printf '%s|%s' "${rc}" "${err}"
 }
@@ -1785,13 +1789,13 @@ Inside the `{ ... } >&2` report block, insert after the semgrep advisory section
     printf '%s\n' "$REVIEW_FILES" | sed 's/^/  /'
     echo
     echo "Load the clojure-security skill, then only the references you need:"
-    echo "  access-control.md  — atom-toctou, missing-authn, missing-authz,"
-    echo "                       incorrect-authz, idor, csrf, ssrf, mass-assignment"
-    echo "  config-and-ops.md  — security-misconfig, logging-failures,"
-    echo "                       unrestricted-upload, resource-exhaustion"
-    echo "  injection.md       — macro-runtime-input"
-    echo "  route-inventory.md — the route sweep, if any of these files define,"
-    echo "                       wrap, or dispatch routes"
+    echo "  references/access-control.md  — atom-toctou, missing-authn,"
+    echo "      missing-authz, incorrect-authz, idor, csrf, ssrf, mass-assignment"
+    echo "  references/config-and-ops.md  — security-misconfig, logging-failures,"
+    echo "      unrestricted-upload, resource-exhaustion"
+    echo "  references/injection.md       — macro-runtime-input"
+    echo "  references/route-inventory.md — the route sweep, if any of these"
+    echo "      files define, wrap, or dispatch routes"
     echo
     echo "Apply the skill's investigation order and severity heuristic. Report"
     echo "each finding with its class name, CWE and OWASP tag. Provenance you"
