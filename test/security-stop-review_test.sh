@@ -42,6 +42,7 @@ EOF
   git -C "${PROJECT}" init -q
   git -C "${PROJECT}" config user.email t@t.t
   git -C "${PROJECT}" config user.name t
+  printf '.claude/\n' > "${PROJECT}/.gitignore"
   printf '{:deps {}}' > "${PROJECT}/deps.edn"
   printf '(ns foo)' > "${PROJECT}/routes.clj"
   git -C "${PROJECT}" add -A
@@ -83,7 +84,8 @@ test_directive_scopes_the_review_to_the_ledger() {
   printf 'routes.clj\n' > "${LEDGER}"
   local out; out="$(run_hook)"
   local err="${out#*|}"
-  assertContains "must forbid a repo-wide sweep" "${err}" "do not sweep the repo"
+  assertContains "must forbid a repo-wide sweep" "${err}" \
+    "hunting for unrelated findings elsewhere in the repo"
   assertContains "must point at the access-control reference" \
     "${err}" "references/access-control.md"
   assertContains "must point at the config-and-ops reference" \
@@ -151,6 +153,61 @@ test_absolute_ledger_paths_are_reported_repo_relative() {
   local err="${out#*|}"
   assertContains "path must be reported repo-relative" "${err}" "routes.clj"
   assertNotContains "the project prefix must be stripped" "${err}" "${PROJECT}/routes.clj"
+}
+
+test_empty_diff_still_fires_the_review_and_drains() {
+  # The review is ledger-scoped, not diff-scoped. If the empty-diff guard
+  # (`[ -z "$CHANGED" ] && exit 0`) bailed here, the ledger would survive to
+  # bank into the next turn — the exact cumulative repetition the ledger
+  # exists to prevent. Commit everything so `git diff` truly has nothing.
+  git -C "${PROJECT}" add -A
+  git -C "${PROJECT}" commit -qm "commit everything" >/dev/null 2>&1
+  printf 'routes.clj\n' > "${LEDGER}"
+
+  local out; out="$(run_hook)"
+  assertEquals "an empty diff must not suppress the review" "2" "${out%%|*}"
+  assertContains "the directive must still name the file" "${out#*|}" "routes.clj"
+  assertFalse "the ledger must still be drained" "[ -f '${LEDGER}' ]"
+}
+
+test_cwd_containing_a_regex_metacharacter_is_still_reviewed() {
+  # A CWD with a sed-metacharacter in its path (`.` matches any character in a
+  # regex) must not corrupt the prefix strip. A ledger entry from a DIFFERENT,
+  # unrelated absolute path that merely resembles CWD at the metachar position
+  # would falsely match `sed "s|^${CWD}/||"`, get wrongly stripped to a bogus
+  # relative path, fail the -f test, and vanish from the review with no
+  # message. This plugin's ledger really can hold paths outside $CWD — see
+  # postedit-hooks-cross-repo_test.sh — so this is not a contrived case. The
+  # strip must be a literal match (bash parameter expansion), not an
+  # interpolated regex: an unrelated absolute path should be reported as-is,
+  # not silently dropped.
+  local base dotted other
+  base="$(mktemp -d)"
+  dotted="${base}/a.b"
+  other="${base}/aXb"
+  mkdir -p "${dotted}" "${other}"
+
+  git -C "${dotted}" init -q
+  git -C "${dotted}" config user.email t@t.t
+  git -C "${dotted}" config user.name t
+  printf '{:deps {}}' > "${dotted}/deps.edn"
+  git -C "${dotted}" add -A
+  git -C "${dotted}" commit -qm init >/dev/null 2>&1
+  mkdir -p "${dotted}/.claude"
+
+  # A file that genuinely exists, but OUTSIDE ${dotted} — a cross-repo edit.
+  printf '(ns bar)\n(def y 2)\n' > "${other}/file.clj"
+  printf '%s/file.clj\n' "${other}" > "${dotted}/.claude/.security-turn-files"
+
+  local err rc
+  err="$(printf '{"cwd":"%s","stop_hook_active":false}' "${dotted}" \
+    | PATH="${BIN}:${PATH}" CC_SEMGREP_RULES_DIR="${RULES}" \
+      bash "${HOOK}" 2>&1 >/dev/null)"
+  rc=$?
+  rm -rf "${base}"
+  assertEquals "an unrelated absolute path must still block on the review" "2" "${rc}"
+  assertContains "the cross-repo file must still be named, not silently dropped" \
+    "${err}" "file.clj"
 }
 
 . "${SCRIPT_DIR}/../lib/shunit2"

@@ -34,7 +34,13 @@
 #   come from turn-ledger.sh via .claude/.security-turn-files — NOT from the
 #   diff, which is cumulative and would re-review the same files every turn.
 #   The directive is one-shot per turn (it has no findings to clear) and the
-#   ledger is drained unconditionally. CC_SKIP_DIFF_REVIEW=1 opts out.
+#   ledger is drained unconditionally. CC_SKIP_DIFF_REVIEW suppresses the
+#   review on ANY non-empty value, "0" included — it is a presence check,
+#   not a boolean parse.
+#
+#   The empty-diff exit below stays ledger-aware for the same reason: the
+#   review is ledger-scoped, not diff-scoped, so an empty diff is not
+#   sufficient reason to skip it while the ledger is still populated.
 #
 #   Known limit: files changed by Bash (sed, a script, git checkout) never
 #   enter the ledger. Semgrep still scans those through the cumulative diff;
@@ -143,7 +149,11 @@ else
   SCOPE_KIND="uncommitted-only"
 fi
 
-if [ -z "$CHANGED" ]; then
+# An empty diff is not sufficient reason to exit: the review below is
+# ledger-scoped, not diff-scoped. Bailing here would leave the ledger to bank
+# into the next turn — exactly the cumulative repetition the ledger prevents.
+# Same reasoning as the toolchain gate above: absent work AND an absent ledger.
+if [ -z "$CHANGED" ] && [ ! -f "${CWD}/.claude/.security-turn-files" ]; then
   exit 0
 fi
 
@@ -229,12 +239,7 @@ LEDGER="${CWD}/.claude/.security-turn-files"
 REVIEW_FILES=""
 
 if [ -f "$LEDGER" ]; then
-  # Claude Code puts an ABSOLUTE path in .tool_input.file_path, so the ledger
-  # holds absolute paths. Strip the project prefix: the semgrep block in this
-  # same report prints repo-relative paths, and one report mixing both formats
-  # reads like two unrelated tools. The hook has already cd'd to $CWD, so the
-  # relative form still satisfies the -f test below.
-  REVIEW_FILES="$(awk 'NF' "$LEDGER" 2>/dev/null | sed "s|^${CWD}/||" | sort -u)"
+  REVIEW_FILES="$(awk 'NF' "$LEDGER" 2>/dev/null | sort -u)"
   # Drain BEFORE deciding whether to review. A suppressed or skipped review
   # must not leave its files to pile up into the next turn's list.
   rm -f "$LEDGER"
@@ -246,13 +251,23 @@ if [ "$STOP_HOOK_ACTIVE" = "true" ] || [ -n "${CC_SKIP_DIFF_REVIEW:-}" ]; then
   REVIEW_FILES=""
 fi
 
-# Drop paths deleted later in the same turn.
+# Drop paths deleted later in the same turn, then shorten for display.
+#
+# Test existence on the ABSOLUTE path — unambiguous regardless of cwd — and
+# only then strip the project prefix, so the directive's paths match the
+# repo-relative ones the semgrep block prints in the same report.
+#
+# The strip is parameter expansion, deliberately NOT sed: $CWD in a regex lets
+# a metacharacter match the wrong directory, and this plugin supports
+# cross-repo edits (test/postedit-hooks-cross-repo_test.sh), so the ledger
+# really can hold paths outside $CWD. Quoting inside ${f#"$CWD"/} forces a
+# literal match, and a path outside the project simply keeps its absolute form.
 if [ -n "$REVIEW_FILES" ]; then
   KEPT=""
   while IFS= read -r f; do
     [ -z "$f" ] && continue
     if [ -f "$f" ]; then
-      KEPT="${KEPT}${f}"$'\n'
+      KEPT="${KEPT}${f#"$CWD"/}"$'\n'
     fi
   done <<<"$REVIEW_FILES"
   REVIEW_FILES="$(printf '%s' "$KEPT" | awk 'NF')"
@@ -266,7 +281,21 @@ if [ "$SEMGREP_ERROR_COUNT" -eq 0 ] && [ "$SEMGREP_WARN_COUNT" -eq 0 ] \
 fi
 
 {
-  echo "Security scan on the session diff (scope: ${SCOPE_KIND})."
+  # The header and the closing triage block are both about TOOL findings. When
+  # the only content is a ledger-scoped review, neither applies: nothing came
+  # from the diff, and the taint-shaped investigation order does not fit
+  # access-control work.
+  HAVE_TOOL_FINDINGS=0
+  if [ "$SEMGREP_ERROR_COUNT" -gt 0 ] || [ "$SEMGREP_WARN_COUNT" -gt 0 ] \
+     || [ "$GITLEAKS_COUNT" != "0" ]; then
+    HAVE_TOOL_FINDINGS=1
+  fi
+
+  if [ "$HAVE_TOOL_FINDINGS" -eq 1 ]; then
+    echo "Security scan on the session diff (scope: ${SCOPE_KIND})."
+  else
+    echo "Security review of this turn's edits."
+  fi
   echo
   if [ -n "$GITLEAKS_REPORT" ]; then
     echo "## Secrets (gitleaks) — ${GITLEAKS_COUNT}"
@@ -290,35 +319,43 @@ fi
     echo "## Scanner-blind classes — review this turn's edits"
     echo
     echo "Semgrep cannot reach these classes: they need dataflow, namespace-alias"
-    echo "resolution, or whole-route reasoning. Review ONLY these files, and"
-    echo "do not sweep the repo:"
+    echo "resolution, or whole-route reasoning. Review these files:"
     printf '%s\n' "$REVIEW_FILES" | sed 's/^/  /'
     echo
+    echo "Scope: every finding you report must be ABOUT one of those files. Read"
+    echo "whatever else you need in order to judge them — a missing authorization"
+    echo "check is rarely visible in the handler alone, so follow the middleware"
+    echo "stack and the route table wherever they live. What you must not do is go"
+    echo "hunting for unrelated findings elsewhere in the repo."
+    echo
     echo "Load the clojure-security skill, then only the references you need:"
-    echo "  references/access-control.md  — atom-toctou, missing-authn,"
-    echo "                       missing-authz, incorrect-authz, idor, csrf,"
-    echo "                       ssrf, mass-assignment"
-    echo "  references/config-and-ops.md  — security-misconfig,"
-    echo "                       logging-failures, unrestricted-upload,"
-    echo "                       resource-exhaustion"
-    echo "  references/injection.md       — macro-runtime-input"
-    echo "  references/route-inventory.md — the route sweep, if any of these"
-    echo "                       files define, wrap, or dispatch routes"
+    echo "  references/access-control.md — atom-toctou, missing-authn,"
+    echo "        missing-authz, incorrect-authz, idor, csrf, ssrf, mass-assignment"
+    echo "  references/config-and-ops.md — security-misconfig, logging-failures,"
+    echo "        unrestricted-upload, resource-exhaustion"
+    echo "  references/injection.md — macro-runtime-input"
+    echo "  references/route-inventory.md — the route sweep, if any of these files"
+    echo "        define, wrap, or dispatch routes"
     echo
     echo "Apply the skill's investigation order and severity heuristic. Report"
     echo "each finding with its class name, CWE and OWASP tag. Provenance you"
     echo "cannot trace is provisional, not a finding. Do not auto-fix — report"
     echo "and let the human choose."
     echo
+    echo "This directive is issued once per turn. Report your findings and stop;"
+    echo "the hook will not re-issue it."
+    echo
   fi
-  echo "Triage each finding through the clojure-security skill before"
-  echo "ending this turn. Use the skill's investigation order:"
-  echo "  1. source of the tainted value"
-  echo "  2. trust boundary crossed"
-  echo "  3. existing sanitization on the path"
-  echo "  4. whether removing the sink would break legitimate use"
-  echo "  5. other call sites with the same sink shape"
-  echo
+  if [ "$HAVE_TOOL_FINDINGS" -eq 1 ]; then
+    echo "Triage each finding through the clojure-security skill before"
+    echo "ending this turn. Use the skill's investigation order:"
+    echo "  1. source of the tainted value"
+    echo "  2. trust boundary crossed"
+    echo "  3. existing sanitization on the path"
+    echo "  4. whether removing the sink would break legitimate use"
+    echo "  5. other call sites with the same sink shape"
+    echo
+  fi
   if [ "$STOP_HOOK_ACTIVE" = "true" ]; then
     echo "(Stop hook is reentering — findings still present after a prior"
     echo "continuation. Address them or escalate to the human.)"
