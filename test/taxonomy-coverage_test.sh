@@ -30,6 +30,13 @@ index_classes() {
     | awk -F'|' '{gsub(/[ `]/,"",$2); print $2}' | sort -u
 }
 
+# "<category>|<classes>|<route>" per OWASP row.
+owasp_rows() {
+  grep -E '^\| A(0[1-9]|10) ' "${COVERAGE}" \
+    | awk -F'|' '{gsub(/^ +| +$/,"",$2); gsub(/^ +| +$/,"",$3); gsub(/^ +| +$/,"",$4);
+                  print $2 "|" $3 "|" $4}'
+}
+
 test_coverage_file_exists() {
   assertTrue "references/taxonomy-coverage.md must exist" "[ -f '${COVERAGE}' ]"
 }
@@ -154,6 +161,56 @@ test_reverse_index_routes_agree_with_the_forward_index() {
 
   assertEquals "reverse-index routes must agree with the class index" \
     "" "$(printf '%s' "${bad}" | awk 'NF')"
+}
+
+test_owasp_routes_agree_with_the_forward_index() {
+  # The CWE table is route-enforced; without this the OWASP half of the same file
+  # was hand-verified only. Both halves feed /security-audit's Coverage rollup, so
+  # an unguarded OWASP route drifts into a report that claims coverage it lacks —
+  # and a future editor would reasonably assume both tables are guarded alike.
+  local bad cat classes route c fwd want_llm want_semgrep want_watson
+  bad=""
+  while IFS='|' read -r cat classes route; do
+    [ -z "${cat}" ] && continue
+
+    want_llm=0
+    want_semgrep=0
+    want_watson=0
+    for c in $(printf '%s' "${classes}" | grep -oE '`[a-z0-9-]+`' | tr -d '`'); do
+      fwd="$(awk -F'|' -v k="${c}" '
+        /^\| `/ { gsub(/[ `]/,"",$2); if ($2 == k) { gsub(/ /,"",$5); print $5 } }' "${SKILL}")"
+      case "${fwd}" in
+        llm-review) want_llm=1 ;;
+        semgrep:*)  want_semgrep=1 ;;
+        clj-watson) want_watson=1 ;;
+      esac
+    done
+
+    case "${route}" in
+      *llm-review*) [ "${want_llm}" -eq 1 ] || bad="${bad}${cat}: claims llm-review, unbacked"$'\n' ;;
+      *)            [ "${want_llm}" -eq 0 ] || bad="${bad}${cat}: omits llm-review"$'\n' ;;
+    esac
+    case "${route}" in
+      *semgrep*) [ "${want_semgrep}" -eq 1 ] || bad="${bad}${cat}: claims semgrep, unbacked"$'\n' ;;
+      *)         [ "${want_semgrep}" -eq 0 ] || bad="${bad}${cat}: omits semgrep"$'\n' ;;
+    esac
+    case "${route}" in
+      *clj-watson*) [ "${want_watson}" -eq 1 ] || bad="${bad}${cat}: claims clj-watson, unbacked"$'\n' ;;
+      *)            [ "${want_watson}" -eq 0 ] || bad="${bad}${cat}: omits clj-watson"$'\n' ;;
+    esac
+  done < <(owasp_rows)
+
+  assertEquals "OWASP routes must agree with the class index" \
+    "" "$(printf '%s' "${bad}" | awk 'NF')"
+}
+
+test_no_class_rows_claim_no_route() {
+  # CWE-20 and CWE-476 hit the `continue` guard in the route check, so nothing
+  # otherwise asserts their route stays n/a — a row could be labelled "(no class)"
+  # and still claim coverage.
+  local bad
+  bad="$(cwe_rows | awk -F'|' '$3 ~ /no class|not applicable/ && $4 != "n/a" {print $1 " => " $4}')"
+  assertEquals "rows with no class must route to n/a" "" "${bad}"
 }
 
 test_sources_are_cited() {
