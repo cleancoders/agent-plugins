@@ -24,7 +24,7 @@ is a recorded judgment instead of an oversight.
 | 3 | CWE-352 | `csrf` | llm-review |
 | 4 | CWE-862 | `missing-authz` | llm-review |
 | 5 | CWE-787 | (memory safety) | n/a |
-| 6 | CWE-22 | `path-traversal` | semgrep+llm-review |
+| 6 | CWE-22 | `path-traversal` | semgrep (WARNING) |
 | 7 | CWE-416 | (memory safety) | n/a |
 | 8 | CWE-125 | (memory safety) | n/a |
 | 9 | CWE-78 | `command-injection` | semgrep |
@@ -46,7 +46,9 @@ is a recorded judgment instead of an oversight.
 | 25 | CWE-770 | `resource-exhaustion` | llm-review |
 
 **The two real gaps.** CWE-476 (NULL pointer dereference) is a correctness
-concern that clj-kondo and reflection warnings address; it is not modelled
+concern that clj-kondo and reflection warnings address (deliberately
+unbackticked — a backticked tool name here reads as an invented class to
+`test_every_class_in_the_coverage_file_is_a_real_class`); it is not modelled
 as a security class here. CWE-20 (improper input validation) is a parent
 category whose Clojure-specific children — `read-string-rce`, `sql-injection`,
 `mass-assignment` — each have their own class, so a CWE-20 class would only
@@ -85,7 +87,8 @@ Three states, and never collapse the last two:
 - **`findings (n)`** — looked, found something.
 - **`checked, clean`** — looked, found nothing.
 - **`not reachable`** — did not look. Either no class exists, the class is
-  clj-watson and the tool is missing, or the scope excluded the relevant files.
+  clj-watson (deliberately unbackticked, same reason as above) and the tool is
+  missing, or the scope excluded the relevant files.
 
 A category with no class and a category with a clean result must never print the
 same way.
