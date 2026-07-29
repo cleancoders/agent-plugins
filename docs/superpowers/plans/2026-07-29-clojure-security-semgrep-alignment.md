@@ -1023,7 +1023,7 @@ Update the header comment at lines 17-18 to name semgrep instead of clj-holmes, 
 bash test/security-stop-semgrep_test.sh
 ```
 
-Expected: `Ran 11 tests.` / `OK`
+Expected: `Ran 11 tests.` / `OK` — ten from the brief plus the route-agreement check.
 
 - [ ] **Step 7: Commit**
 
@@ -2239,6 +2239,44 @@ test_every_class_in_the_coverage_file_is_a_real_class() {
   assertEquals "coverage file names classes the index does not define" "" "${invented}"
 }
 
+test_reverse_index_routes_agree_with_the_forward_index() {
+  # A coverage matrix claiming a route the class index does not have is worse than
+  # no matrix: it asserts coverage that does not exist. This is the check that
+  # catches it — CWE-22 shipped claiming llm-review when `path-traversal` is
+  # semgrep-only, because the row names one class and nothing cross-checked it.
+  #
+  # A row naming several classes may legitimately be mixed (rank 10 aggregates
+  # three semgrep classes and one llm-review one), so the rule is presence-based
+  # in both directions rather than string equality.
+  local bad rank cwe classes route c fwd want_llm
+  bad=""
+  while IFS='|' read -r rank cwe classes route; do
+    [ -z "${rank}" ] && continue
+    case "${classes}" in *"not applicable"*|*"no class"*) continue ;; esac
+
+    want_llm=0
+    for c in $(printf '%s' "${classes}" | grep -oE '`[a-z0-9-]+`' | tr -d '`'); do
+      fwd="$(awk -F'|' -v k="${c}" '
+        /^\| `/ { gsub(/[ `]/,"",$2); if ($2 == k) { gsub(/ /,"",$5); print $5 } }' "${SKILL}")"
+      case "${fwd}" in llm-review) want_llm=1 ;; esac
+    done
+
+    case "${route}" in
+      *llm-review*)
+        if [ "${want_llm}" -eq 0 ]; then
+          bad="${bad}rank ${rank}: claims llm-review but no named class routes there"$'\n'
+        fi ;;
+      *)
+        if [ "${want_llm}" -eq 1 ]; then
+          bad="${bad}rank ${rank}: omits llm-review but a named class routes there"$'\n'
+        fi ;;
+    esac
+  done < <(cwe_rows)
+
+  assertEquals "reverse-index routes must agree with the class index" \
+    "" "$(printf '%s' "${bad}" | awk 'NF')"
+}
+
 test_sources_are_cited() {
   # Six CWE-to-OWASP mappings in this plugin were wrong on inference before
   # being checked. Taxonomy data gets a source line or it does not go in.
@@ -2290,7 +2328,7 @@ is a recorded judgment instead of an oversight.
 | 3 | CWE-352 | `csrf` | llm-review |
 | 4 | CWE-862 | `missing-authz` | llm-review |
 | 5 | CWE-787 | (memory safety) | n/a |
-| 6 | CWE-22 | `path-traversal` | semgrep+llm-review |
+| 6 | CWE-22 | `path-traversal` | semgrep (WARNING) |
 | 7 | CWE-416 | (memory safety) | n/a |
 | 8 | CWE-125 | (memory safety) | n/a |
 | 9 | CWE-78 | `command-injection` | semgrep |
@@ -2363,7 +2401,7 @@ same way.
 bash test/taxonomy-coverage_test.sh
 ```
 
-Expected: `Ran 11 tests.` / `OK`
+Expected: `Ran 11 tests.` / `OK` — ten from the brief plus the route-agreement check.
 
 - [ ] **Step 5: Confirm the index-consistency test still holds**
 
