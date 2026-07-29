@@ -15,7 +15,12 @@
 - **TDD, no exceptions.** Run the existing suite before touching anything. Write the failing test, watch it fail, then implement.
 - **Run the whole suite** with `for t in test/*_test.sh; do bash "$t" || echo "FAIL $t"; done` from the repo root.
 - **bash 3.2 compatible.** No `mapfile`, no associative arrays, no `${var,,}`. Use `while IFS= read -r` to build lists.
-- **Never `[ -n "$x" ] && cmd` in a `set -e` script.** The test returns 1 when false and `set -e` exits. Use `if` blocks. This bug already bit `cleancoders/github-actions` — see the comment at `.github/workflows/security.yml:365`.
+- **`cond && assignment` under `set -e` — know the exact rule.** Verified empirically, not assumed. A failing `[ -n "$x" ] && y=1` as a **standalone statement** is safe: `set -e` exempts a command that is not the last in an AND-OR list. It is **fatal as the last statement of a function body or sourced file**, because the function then returns 1 and the *call site* is a plain failing command. So:
+  - `command -v semgrep >/dev/null 2>&1 && HAVE_SEMGREP=1` mid-script — **fine**, and the existing hook already does this.
+  - Any function that could end on a failing test — **must** end with an explicit `return 0`.
+  - Where the assignment's result is needed later, prefer an `if` block for legibility regardless.
+
+  This is what bit `cleancoders/github-actions` (`.github/workflows/security.yml:365`): the statement was last in a `run:` block, so its status became the step's.
 - **No test may touch the network.** Stub `curl` earlier on `PATH`, or set `CC_SEMGREP_RULES_DIR` to a fixture directory.
 - **Do not delete test coverage.** Where a behaviour goes away, its test asserts the replacement.
 - **Do not rename or renumber vulnerability classes.** The CI rules key on `metadata.class`; a rename silently breaks the join.
@@ -35,7 +40,9 @@
 - `test/security-stop-semgrep_test.sh` — replaces `security-stop-holmes_test.sh`
 - `test/turn-ledger_test.sh`
 - `test/security-stop-review_test.sh`
-- `test/taxonomy-coverage_test.sh`
+- `test/taxonomy-coverage_test.sh` — the reverse index only
+- `test/security-audit-alignment_test.sh` — the audit command's prose
+- `test/no-clj-holmes_test.sh` — the plugin-wide invariant
 
 **Modify:**
 - `plugins/clojure-security/hooks/security-stop.sh` — semgrep block, review block, exit decision
@@ -2172,14 +2179,19 @@ were already wrong on inference once."
 
 - [ ] **Step 1: Write the failing test**
 
-Add to `test/taxonomy-coverage_test.sh`, before the final `. "${SCRIPT_DIR}/../lib/shunit2"`:
+Create `test/security-audit-alignment_test.sh` — its own file, not appended to
+`taxonomy-coverage_test.sh`: these assert the audit *command*, not the taxonomy
+data, and a file that tests both drifts into a grab bag.
 
 ```bash
-# --- /security-audit --------------------------------------------------------
+#!/usr/bin/env bash
+# Tests for plugins/clojure-security/commands/security-audit.md
+#
 # The command is prose, so these are text assertions. They exist because an
 # audit that contradicts CI is worse than no audit: it re-litigates decisions a
 # developer already made and teaches them to distrust the report.
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUDIT="${SCRIPT_DIR}/../plugins/clojure-security/commands/security-audit.md"
 
 test_audit_does_not_run_clj_holmes() {
@@ -2212,15 +2224,17 @@ test_audit_distinguishes_clean_from_unexamined() {
   assertContains "must have a clean state" "${body}" "checked, clean"
   assertContains "must have an unexamined state" "${body}" "not reachable"
 }
+
+. "${SCRIPT_DIR}/../lib/shunit2"
 ```
 
 - [ ] **Step 2: Run it to verify it fails**
 
 ```bash
-bash test/taxonomy-coverage_test.sh
+bash test/security-audit-alignment_test.sh
 ```
 
-Expected: the five new tests fail.
+Expected: all five tests fail.
 
 - [ ] **Step 3: Replace the Step 5 tool table**
 
@@ -2307,16 +2321,16 @@ reader can learn that 10 of the applicable Top 25 entries need human eyes.
 - [ ] **Step 6: Run the test to verify it passes**
 
 ```bash
-bash test/taxonomy-coverage_test.sh
+bash test/security-audit-alignment_test.sh
 ```
 
-Expected: `Ran 16 tests.` / `OK`
+Expected: `Ran 5 tests.` / `OK`
 
 - [ ] **Step 7: Full suite and commit**
 
 ```bash
 for t in test/*_test.sh; do bash "$t" >/dev/null 2>&1 || echo "FAIL $t"; done; echo done
-git add plugins/clojure-security/commands/security-audit.md test/taxonomy-coverage_test.sh
+git add plugins/clojure-security/commands/security-audit.md test/security-audit-alignment_test.sh
 git commit -m "feat(clojure-security): /security-audit mirrors CI and rolls up taxonomy
 
 Step 5 told the auditor to skip semgrep unless the repo had a .semgrep.yml.
@@ -2343,14 +2357,18 @@ report imply coverage it did not have."
 
 - [ ] **Step 1: Write the failing test**
 
-Add to `test/taxonomy-coverage_test.sh`, before the final `. "${SCRIPT_DIR}/../lib/shunit2"`:
+Create `test/no-clj-holmes_test.sh` — its own file. This is a plugin-wide
+invariant, not a fact about the taxonomy data or the audit command, and it is the
+one test that will still be meaningful years from now.
 
 ```bash
-# --- no file may still credit clj-holmes ------------------------------------
+#!/usr/bin/env bash
 # Definition of done #1 from the handoff brief: no file in the plugin claims
-# clj-holmes is part of CI. A stale attribution is worse than silence — it
-# tells the reader a finding will be caught by something that no longer runs.
+# clj-holmes is part of CI. A stale attribution is worse than silence — it tells
+# the reader a finding will be caught by something that no longer runs, and it
+# points them at software abandoned since October 2022.
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN="${SCRIPT_DIR}/../plugins/clojure-security"
 
 test_no_plugin_file_credits_clj_holmes_for_ci() {
@@ -2368,15 +2386,17 @@ test_detected_in_ci_lines_name_real_cc_rules() {
     | grep -v 'cc-' || true)"
   assertEquals "CI attributions must name a cc-* rule" "" "${bad}"
 }
+
+. "${SCRIPT_DIR}/../lib/shunit2"
 ```
 
 - [ ] **Step 2: Run it to verify it fails**
 
 ```bash
-bash test/taxonomy-coverage_test.sh
+bash test/no-clj-holmes_test.sh
 ```
 
-Expected: both new tests fail, listing `config-and-ops.md` and `README.md`.
+Expected: both tests fail, listing `config-and-ops.md` and `README.md`.
 
 - [ ] **Step 3: Fix config-and-ops.md**
 
@@ -2457,17 +2477,17 @@ by an edit tool do not enter the ledger; semgrep still scans those.
 - [ ] **Step 5: Run the test to verify it passes**
 
 ```bash
-bash test/taxonomy-coverage_test.sh
+bash test/no-clj-holmes_test.sh
 ```
 
-Expected: `Ran 18 tests.` / `OK`
+Expected: `Ran 2 tests.` / `OK`
 
 - [ ] **Step 6: Full suite and commit**
 
 ```bash
 for t in test/*_test.sh; do bash "$t" >/dev/null 2>&1 || echo "FAIL $t"; done; echo done
 git add plugins/clojure-security/skills/clojure-security/references/config-and-ops.md \
-        plugins/clojure-security/README.md test/taxonomy-coverage_test.sh
+        plugins/clojure-security/README.md test/no-clj-holmes_test.sh
 git commit -m "docs(clojure-security): CI attributions name the rules that run
 
 weak-crypto and insecure-tls-verification credited five clj-holmes rules
