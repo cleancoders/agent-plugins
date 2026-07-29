@@ -1023,7 +1023,7 @@ Update the header comment at lines 17-18 to name semgrep instead of clj-holmes, 
 bash test/security-stop-semgrep_test.sh
 ```
 
-Expected: `Ran 11 tests.` / `OK` — ten from the brief plus the route-agreement check.
+Expected: `OK`, with the three new tests added to everything already in the file (Task 2 and its fix round left nine there).
 
 - [ ] **Step 7: Commit**
 
