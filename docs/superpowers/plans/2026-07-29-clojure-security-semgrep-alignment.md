@@ -1122,7 +1122,28 @@ command -v semgrep >/dev/null 2>&1 || note_missing "semgrep" \
   "\`brew install semgrep\` — the hooks fetch the 16 cleancoders \`cc-*\` rules on first scan and cache them; set \`CC_SEMGREP_RULES_DIR\` to a \`cleancoders/github-actions\` checkout to skip the fetch entirely"
 ```
 
-Update line 9's header comment from `clj-holmes + rules, gitleaks, clj-watson, jq` to `semgrep, gitleaks, clj-watson, jq`, and line 112's clj-watson note to drop any implication that clj-holmes is a sibling in the pipeline (keep the `https://github.com/clj-holmes/clj-watson` URL — that is clj-watson's real home, unrelated to clj-holmes being retired).
+Update line 9's header comment from `clj-holmes + rules, gitleaks, clj-watson, jq` to `semgrep, gitleaks, clj-watson, jq`, and line 112's clj-watson note to drop any implication that clj-holmes is a sibling in the pipeline. **Keep the `https://github.com/clj-holmes/clj-watson` URL** — clj-watson genuinely lives under that GitHub org, and the URL is correct. Task 10's invariant strips that exact substring before matching, so it does not collide.
+
+Also reword `hooks/lib/semgrep-rules.sh:24`, which no other task covers:
+
+```bash
+# `clj-holmes fetch-rules` on a cold cache in exactly the same place.
+```
+
+becomes
+
+```bash
+# the retired scanner's own rule fetch on a cold cache, in the same place.
+```
+
+Task 10's invariant would otherwise fail on it, and the sentence loses nothing —
+which tool it was is recorded in `CHANGES`.
+
+When done, this must print nothing:
+
+```bash
+git grep -n 'clj-holmes' plugins/clojure-security/hooks/
+```
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
@@ -2443,10 +2464,20 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN="${SCRIPT_DIR}/../plugins/clojure-security"
 
 test_no_plugin_file_credits_clj_holmes_for_ci() {
-  # CHANGES is history and must keep its record of why the tool was dropped.
-  local hits
-  hits="$(grep -rln 'clj-holmes' "${PLUGIN}" 2>/dev/null | grep -v '/CHANGES$' || true)"
-  assertEquals "these files still reference clj-holmes" "" "${hits}"
+  # Two deliberate exemptions:
+  #   - CHANGES is history and must keep its record of why the tool was dropped.
+  #   - clj-watson genuinely lives at github.com/clj-holmes/clj-watson. That URL
+  #     is correct and must not be "fixed"; strip the substring before matching
+  #     rather than weakening the invariant for every other file.
+  local hits f body
+  hits=""
+  for f in $(find "${PLUGIN}" -type f ! -name CHANGES); do
+    body="$(sed 's|clj-holmes/clj-watson||g' "${f}" 2>/dev/null)"
+    case "${body}" in
+      *clj-holmes*) hits="${hits}${f}"$'\n' ;;
+    esac
+  done
+  assertEquals "these files still reference clj-holmes" "" "$(printf '%s' "${hits}" | awk 'NF')"
 }
 
 test_detected_in_ci_lines_name_real_cc_rules() {
