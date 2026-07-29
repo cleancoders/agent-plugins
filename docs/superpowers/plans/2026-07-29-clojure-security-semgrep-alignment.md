@@ -703,7 +703,13 @@ Expected: `Ran 8 tests.` / `OK`
 for t in test/*_test.sh; do bash "$t" >/dev/null 2>&1 || echo "FAIL $t"; done; echo done
 ```
 
-Expected: `FAIL test/non-clojure-gating_test.sh` (it stubs clj-holmes; Task 4 fixes it) and nothing else. `security-stop-holmes_test.sh` is deleted in the next step.
+Expected: `FAIL test/security-stop-holmes_test.sh` and nothing else — Step 8 deletes it.
+
+`non-clojure-gating_test.sh` will **pass**, even though it still stubs `clj-holmes`.
+`security-stop.sh` runs `is_clojure_project || exit 0` *before* tool detection, so
+in a non-Clojure repo the hook exits before it ever looks for a tool, and the
+stubs are never reached whichever tool is named. Task 4 renames them for hygiene,
+not to fix a failure.
 
 - [ ] **Step 8: Delete the superseded test and commit**
 
@@ -1025,7 +1031,13 @@ bash test/session-start-marker_test.sh
 bash test/non-clojure-gating_test.sh
 ```
 
-Expected: the two new marker tests fail (the hook still says `clj-holmes`). `non-clojure-gating` should now **pass** — it was failing after Task 2 because it stubbed the wrong tool.
+Expected: the two new marker tests fail (the hook still says `clj-holmes`).
+
+`non-clojure-gating_test.sh` passes both before and after your edit to it — it was
+never failing. The hook exits at `is_clojure_project || exit 0` before tool
+detection, so its stubs are never reached whichever tool they name. Renaming them
+to `semgrep` is hygiene: it keeps the test honest about what the hook would call
+if the gate ever let it through. Do not expect a red-to-green transition here.
 
 - [ ] **Step 3: Update the tool check**
 
