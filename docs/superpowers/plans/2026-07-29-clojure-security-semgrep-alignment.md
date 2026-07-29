@@ -2248,19 +2248,26 @@ test_reverse_index_routes_agree_with_the_forward_index() {
   # A row naming several classes may legitimately be mixed (rank 10 aggregates
   # three semgrep classes and one llm-review one), so the rule is presence-based
   # in both directions rather than string equality.
-  local bad rank cwe classes route c fwd want_llm
+  local bad rank cwe classes route c fwd want_llm want_semgrep
   bad=""
   while IFS='|' read -r rank cwe classes route; do
     [ -z "${rank}" ] && continue
     case "${classes}" in *"not applicable"*|*"no class"*) continue ;; esac
 
     want_llm=0
+    want_semgrep=0
     for c in $(printf '%s' "${classes}" | grep -oE '`[a-z0-9-]+`' | tr -d '`'); do
       fwd="$(awk -F'|' -v k="${c}" '
         /^\| `/ { gsub(/[ `]/,"",$2); if ($2 == k) { gsub(/ /,"",$5); print $5 } }' "${SKILL}")"
-      case "${fwd}" in llm-review) want_llm=1 ;; esac
+      case "${fwd}" in
+        llm-review) want_llm=1 ;;
+        semgrep:*)  want_semgrep=1 ;;
+      esac
     done
 
+    # Both axes, both directions. Checking only llm-review would still let a row
+    # whose classes are all llm-review claim `semgrep+llm-review` and pass — the
+    # same over-claim on the other axis.
     case "${route}" in
       *llm-review*)
         if [ "${want_llm}" -eq 0 ]; then
@@ -2269,6 +2276,17 @@ test_reverse_index_routes_agree_with_the_forward_index() {
       *)
         if [ "${want_llm}" -eq 1 ]; then
           bad="${bad}rank ${rank}: omits llm-review but a named class routes there"$'\n'
+        fi ;;
+    esac
+
+    case "${route}" in
+      *semgrep*)
+        if [ "${want_semgrep}" -eq 0 ]; then
+          bad="${bad}rank ${rank}: claims semgrep but no named class routes there"$'\n'
+        fi ;;
+      *)
+        if [ "${want_semgrep}" -eq 1 ]; then
+          bad="${bad}rank ${rank}: omits semgrep but a named class routes there"$'\n'
         fi ;;
     esac
   done < <(cwe_rows)
@@ -2377,7 +2395,7 @@ have at least one class.
 | A07 Authentication Failures | `missing-authn`, `insecure-tls-verification` | llm-review + semgrep |
 | A08 Software or Data Integrity Failures | `java-deserialization`, `mass-assignment` | semgrep + llm-review |
 | A09 Security Logging and Alerting Failures | `logging-failures` | llm-review |
-| A10 Mishandling of Exceptional Conditions | `spec-malli-leak`, `fail-open` | semgrep |
+| A10 Mishandling of Exceptional Conditions | `spec-malli-leak`, `fail-open` | semgrep (one ERROR, one WARNING) |
 
 `atom-toctou` (CWE-367) and `resource-exhaustion` (CWE-770, 400) map to no 2025
 category. That is a fact about the taxonomy, not a coverage gap.
