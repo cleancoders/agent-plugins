@@ -211,4 +211,33 @@ test_commit_backstop_truncated_semgrep_output_does_not_crash() {
   assertEquals "malformed JSON must not print anything" "" "${out#*|}"
 }
 
+# Every other fixture hardcodes "path":"foo.clj", so the prefix-strip `sub()`
+# in the jq filter never actually matches anything in those tests — it's a
+# no-op in disguise. This test makes the stub report the real tmp-mirror path
+# semgrep was invoked with, so the rewrite back to a repo-relative path is
+# pinned rather than merely exercised.
+test_commit_backstop_rewrites_tmp_mirror_prefix_to_repo_relative_path() {
+  stage_a_clojure_file
+  cat > "${BIN}/semgrep" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" > "${ARGS_LOG}"
+last="\${@: -1}"
+cat <<JSON
+{"results":[{"check_id":"private.tmp.cc-semgrep-rules-v1.cc-sql-string-concat",
+  "path":"\$last","start":{"line":2,"col":12},"end":{"line":2,"col":30},
+  "extra":{"severity":"ERROR","message":"unsafe thing"}}],"errors":[]}
+JSON
+exit 0
+EOF
+  chmod +x "${BIN}/semgrep"
+
+  local out; out="$(run_commit_hook)"
+  local body="${out#*|}"
+  local tmp_dir; tmp_dir="$(tail -1 "${ARGS_LOG}" | awk '{print $NF}')"
+  tmp_dir="${tmp_dir%/*}"
+
+  assertContains "reported path must be repo-relative" "${body}" "bar.clj:"
+  assertNotContains "tmp-mirror prefix must be stripped from the reported path" "${body}" "${tmp_dir}"
+}
+
 . "${SCRIPT_DIR}/../lib/shunit2"

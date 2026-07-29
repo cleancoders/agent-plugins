@@ -93,6 +93,8 @@ fi
 
 # shellcheck source=lib/semgrep-rules.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/semgrep-rules.sh"
+# shellcheck source=lib/semgrep-scan.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/semgrep-scan.sh"
 
 # --- gitleaks against the staged index ------------------------------------
 
@@ -147,43 +149,7 @@ if [ "$HAVE_SEMGREP" -eq 1 ] && [ -n "$CLJ_STAGED" ]; then
         SG_FILES="${SG_FILES}${TMP_SG}/${f}"$'\n'
       done <<<"$CLJ_STAGED"
 
-      SG_OUT="${TMP_SG}/__semgrep.json"
-
-      # A bash array, not `xargs` — see the Stop hook for why: xargs splits on
-      # whitespace and would silently drop a path containing a space.
-      SG_ARGS=()
-      while IFS= read -r f; do
-        [ -n "$f" ] && SG_ARGS+=("$f")
-      done <<<"$SG_FILES"
-
-      semgrep scan --json --quiet --config "$RULES_DIR" "${SG_ARGS[@]}" \
-        > "$SG_OUT" 2>/dev/null || true
-
-      # Strip the tmp-tree prefix so reported paths are repo-relative, and the
-      # config-path prefix off check_id so the rule name is the bare id.
-      #
-      # `|| true` on both, and the `-s` guard: jq exits 5 on the truncated JSON a
-      # semgrep killed mid-write leaves behind, and a bare `X="$(cmd)"` is not
-      # exempt from `set -e`. Unguarded, this blocks a commit with an
-      # uncontracted exit 5 and no message.
-      if [ -s "$SG_OUT" ]; then
-        SEMGREP_ERRORS="$(jq -r --arg prefix "${TMP_SG}/" '
-          .results[]? | select(.extra.severity == "ERROR")
-          | "\(.path | sub($prefix; "")):\(.start.line):\(.start.col)  ERROR  [\(.check_id | split(".") | last)]  \(.extra.message | gsub("\\s+"; " "))"
-        ' "$SG_OUT" 2>/dev/null || true)"
-
-        SEMGREP_WARNINGS="$(jq -r --arg prefix "${TMP_SG}/" '
-          .results[]? | select(.extra.severity == "WARNING")
-          | "\(.path | sub($prefix; "")):\(.start.line):\(.start.col)  WARNING  [\(.check_id | split(".") | last)]  \(.extra.message | gsub("\\s+"; " "))"
-        ' "$SG_OUT" 2>/dev/null || true)"
-      fi
-
-      if [ -n "$SEMGREP_ERRORS" ]; then
-        SEMGREP_ERROR_COUNT="$(printf '%s\n' "$SEMGREP_ERRORS" | wc -l | tr -d ' ')"
-      fi
-      if [ -n "$SEMGREP_WARNINGS" ]; then
-        SEMGREP_WARN_COUNT="$(printf '%s\n' "$SEMGREP_WARNINGS" | wc -l | tr -d ' ')"
-      fi
+      run_semgrep_scan "$RULES_DIR" "$SG_FILES" "${TMP_SG}/"
 
       rm -rf "$TMP_SG"
     fi
