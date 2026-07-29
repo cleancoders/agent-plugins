@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+# Tests for plugins/clojure-security/hooks/security-stop.sh — semgrep call.
+#
+# CI dropped clj-holmes for 16 cc-* semgrep rules, so the Stop hook had to move
+# too or a developer's local gate and their PR check would enforce different
+# rule sets. The pins that matter:
+#
+#   - ERROR blocks (exit 2), WARNING does not (exit 1). Three rules are WARNING
+#     in CI on purpose — without dataflow they cannot be precise enough to gate,
+#     and cc-generic-catch fires on ordinary (catch Exception e ...). A local
+#     gate stricter than CI gets muted, which costs more than it buys.
+#   - check_id is displayed short. semgrep prefixes it with the config path when
+#     --config is absolute, which would print
+#     ".private.tmp.cc-semgrep-rules-v1.cc-read-string" as the rule name.
+#   - a missing rules dir or missing semgrep skips silently.
+#
+# Replaces security-stop-holmes_test.sh.
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HOOK="${SCRIPT_DIR}/../plugins/clojure-security/hooks/security-stop.sh"
+
+oneTimeSetUp() {
+  if ! command -v jq >/dev/null 2>&1 || ! command -v git >/dev/null 2>&1; then
+    echo "jq or git not installed — skipping security-stop semgrep tests"
+    startSkipping
+  fi
+}
+
+setUp() {
+  PROJECT="$(mktemp -d)"
+  BIN="$(mktemp -d)"
+  RULES="$(mktemp -d)"
+  ARGS_LOG="${BIN}/semgrep-args.txt"
+  RESULTS="${BIN}/results.json"
+
+  printf 'rules:\n' > "${RULES}/cc-read-string.yaml"
+  printf '{"results":[],"errors":[]}' > "${RESULTS}"
+
+  # Stub semgrep: record args, emit whatever RESULTS holds on stdout.
+  cat > "${BIN}/semgrep" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" > "${ARGS_LOG}"
+cat "${RESULTS}"
+exit 0
+EOF
+  chmod +x "${BIN}/semgrep"
+
+  git -C "${PROJECT}" init -q
+  git -C "${PROJECT}" config user.email t@t.t
+  git -C "${PROJECT}" config user.name t
+  printf '{:deps {}}' > "${PROJECT}/deps.edn"
+  printf '(ns foo)' > "${PROJECT}/foo.clj"
+  git -C "${PROJECT}" add -A
+  git -C "${PROJECT}" commit -qm init >/dev/null 2>&1
+  printf '(ns foo)\n(def x 1)\n' > "${PROJECT}/foo.clj"
+}
+
+tearDown() {
+  rm -rf "${PROJECT}" "${BIN}" "${RULES}"
+}
+
+# Emit a semgrep JSON result at the given severity. The check_id deliberately
+# carries an absolute-config path prefix, as real semgrep produces.
+set_finding() {
+  local sev="$1" rule="$2"
+  cat > "${RESULTS}" <<EOF
+{"results":[{"check_id":"private.tmp.cc-semgrep-rules-v1.${rule}",
+  "path":"foo.clj","start":{"line":2,"col":12},"end":{"line":2,"col":30},
+  "extra":{"severity":"${sev}","message":"unsafe thing"}}],"errors":[]}
+EOF
+}
+
+# Run the hook; echo "<exit-code>|<stderr>".
+run_hook() {
+  local err rc
+  err="$(printf '{"cwd":"%s","stop_hook_active":false}' "${PROJECT}" \
+    | PATH="${BIN}:${PATH}" CC_SEMGREP_RULES_DIR="${RULES}" \
+      CC_SKIP_DIFF_REVIEW=1 \
+      bash "${HOOK}" 2>&1 >/dev/null)"
+  rc=$?
+  printf '%s|%s' "${rc}" "${err}"
+}
+
+test_semgrep_invoked_with_json_and_the_rules_dir() {
+  run_hook >/dev/null
+  assertTrue "semgrep should have been invoked" "[ -f '${ARGS_LOG}' ]"
+  local args; args="$(cat "${ARGS_LOG}")"
+  assertContains "must request JSON" "${args}" "--json"
+  assertContains "must pass the resolved rules dir" "${args}" "${RULES}"
+}
+
+test_error_severity_blocks() {
+  set_finding "ERROR" "cc-read-string"
+  local out; out="$(run_hook)"
+  assertEquals "an ERROR finding must block the stop" "2" "${out%%|*}"
+  assertContains "the finding must be reported" "${out#*|}" "unsafe thing"
+}
+
+test_warning_severity_does_not_block() {
+  set_finding "WARNING" "cc-generic-catch"
+  local out; out="$(run_hook)"
+  assertEquals "a WARNING finding must not block (exit 1, advisory)" "1" "${out%%|*}"
+  assertContains "the warning must still be reported" "${out#*|}" "cc-generic-catch"
+}
+
+test_warning_reported_under_a_separate_heading() {
+  set_finding "WARNING" "cc-path-traversal"
+  local out; out="$(run_hook)"
+  assertContains "warnings need their own advisory heading" "${out#*|}" "advisory"
+}
+
+test_check_id_displayed_without_the_config_path_prefix() {
+  set_finding "ERROR" "cc-read-string"
+  local out; out="$(run_hook)"
+  assertContains "rule name must be the bare id" "${out#*|}" "[cc-read-string]"
+  assertNotContains "config path prefix must be stripped" "${out#*|}" "private.tmp"
+}
+
+test_clean_scan_exits_zero_silently() {
+  local out; out="$(run_hook)"
+  assertEquals "no findings -> exit 0" "0" "${out%%|*}"
+  assertEquals "no findings -> no output" "" "${out#*|}"
+}
+
+test_missing_rules_dir_skips_the_scan() {
+  local out
+  out="$(printf '{"cwd":"%s","stop_hook_active":false}' "${PROJECT}" \
+    | PATH="${BIN}:${PATH}" CC_SEMGREP_RULES_DIR="${BIN}/nope" \
+      CC_SEMGREP_RULES_CACHE_ROOT="${BIN}/cache" \
+      CC_SEMGREP_RULES_URL_BASE="file:///nonexistent" \
+      CC_SKIP_DIFF_REVIEW=1 \
+      bash "${HOOK}" 2>&1 >/dev/null; printf '|%s' "$?")"
+  assertEquals "unresolvable rules -> exit 0, no crash" "0" "${out#*|}"
+  assertFalse "semgrep must not run without rules" "[ -f '${ARGS_LOG}' ]"
+}
+
+test_clj_holmes_is_never_invoked() {
+  cat > "${BIN}/clj-holmes" <<'EOF'
+#!/usr/bin/env bash
+touch "$(dirname "$0")/holmes-ran"
+exit 0
+EOF
+  chmod +x "${BIN}/clj-holmes"
+  run_hook >/dev/null
+  assertFalse "clj-holmes must be gone from the Stop hook" "[ -f '${BIN}/holmes-ran' ]"
+}
+
+. "${SCRIPT_DIR}/../lib/shunit2"

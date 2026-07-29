@@ -9,8 +9,10 @@
 #            forces Claude to keep working until findings are addressed)
 #
 # Tools (each best-effort; missing tools are skipped silently):
-#   - clj-holmes : pattern-based SAST for Clojure idioms
-#   - gitleaks   : secret scanning
+#   - semgrep  : the 16 cc-* rules that gate CI (see lib/semgrep-rules.sh).
+#                ERROR blocks; the three WARNING rules are advisory, exactly as
+#                in CI — without dataflow they cannot be precise enough to gate.
+#   - gitleaks : secret scanning
 #
 # Diff scoping (tiered fallback):
 #   1. On a non-default branch with an origin remote:
@@ -63,13 +65,21 @@ is_clojure_project || exit 0
 
 # --- skip if neither security tool is installed ------------------------------
 
-HAVE_HOLMES=0
+HAVE_SEMGREP=0
 HAVE_GITLEAKS=0
-command -v clj-holmes >/dev/null 2>&1 && HAVE_HOLMES=1
-command -v gitleaks   >/dev/null 2>&1 && HAVE_GITLEAKS=1
-if [ "$HAVE_HOLMES" -eq 0 ] && [ "$HAVE_GITLEAKS" -eq 0 ]; then
+command -v semgrep  >/dev/null 2>&1 && HAVE_SEMGREP=1
+command -v gitleaks >/dev/null 2>&1 && HAVE_GITLEAKS=1
+
+# The ledger review (below) needs neither tool, so an absent toolchain is no
+# longer sufficient reason to exit — only an absent toolchain AND an absent
+# ledger is.
+if [ "$HAVE_SEMGREP" -eq 0 ] && [ "$HAVE_GITLEAKS" -eq 0 ] \
+   && [ ! -f "${CWD}/.claude/.security-turn-files" ]; then
   exit 0
 fi
+
+# shellcheck source=lib/semgrep-rules.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/semgrep-rules.sh"
 
 # --- compute diff scope ------------------------------------------------------
 
@@ -130,7 +140,7 @@ while IFS= read -r f; do
 done <<<"$CHANGED"
 CHANGED="$EXISTING"
 
-# Clojure-shaped subset (for clj-holmes).
+# Clojure-shaped subset (for semgrep).
 CLJ_FILES=""
 while IFS= read -r f; do
   case "$f" in
@@ -138,52 +148,52 @@ while IFS= read -r f; do
   esac
 done <<<"$CHANGED"
 
-# --- run clj-holmes ---------------------------------------------------------
+# --- run semgrep ------------------------------------------------------------
 
-HOLMES_REPORT=""
-HOLMES_COUNT=0
-HOLMES_RULES_DIR="${CLJ_HOLMES_RULES_DIR:-/tmp/clj-holmes-rules}"
+SEMGREP_ERRORS=""
+SEMGREP_WARNINGS=""
+SEMGREP_ERROR_COUNT=0
+SEMGREP_WARN_COUNT=0
 
-# clj-holmes ships with no rules; without them the scan is a silent no-op.
-# Fetch the canonical rule set into the dir (one-time; reused on later runs)
-# so the session diff is actually scanned instead of skipped.
-if [ "$HAVE_HOLMES" -eq 1 ] && [ -n "$CLJ_FILES" ]; then
-  if [ ! -d "$HOLMES_RULES_DIR" ] || [ -z "$(ls -A "$HOLMES_RULES_DIR" 2>/dev/null)" ]; then
-    clj-holmes fetch-rules -o "$HOLMES_RULES_DIR" >/dev/null 2>&1 || true
-  fi
-fi
+if [ "$HAVE_SEMGREP" -eq 1 ] && [ -n "$CLJ_FILES" ]; then
+  RULES_DIR="$(resolve_semgrep_rules)"
+  if [ -n "$RULES_DIR" ]; then
+    SEMGREP_OUT="$(mktemp 2>/dev/null || true)"
+    if [ -n "$SEMGREP_OUT" ]; then
+      # No tmp-tree mirror, unlike the clj-holmes block this replaces: semgrep
+      # reads .clj/.cljs/.cljc directly and reports the paths it was given.
+      # --quiet keeps the progress spinner out of stderr; findings come from JSON.
+      printf '%s' "$CLJ_FILES" | awk 'NF' \
+        | xargs semgrep scan --json --quiet --config "$RULES_DIR" \
+            > "$SEMGREP_OUT" 2>/dev/null || true
 
-if [ "$HAVE_HOLMES" -eq 1 ] && [ -n "$CLJ_FILES" ] && [ -d "$HOLMES_RULES_DIR" ]; then
-  # Mirror changed files into a tmp tree so rule output paths stay readable.
-  TMP_HOLMES="$(mktemp -d 2>/dev/null || true)"
-  if [ -n "$TMP_HOLMES" ]; then
-    while IFS= read -r f; do
-      [ -z "$f" ] && continue
-      mkdir -p "${TMP_HOLMES}/$(dirname "$f")"
-      cp "$f" "${TMP_HOLMES}/$f" 2>/dev/null || true
-    done <<<"$CLJ_FILES"
+      # Findings suppressed in source with `nosemgrep` are absent from --json
+      # output entirely, so they need no handling here — and the local gate
+      # matches CI's, which excludes them from both its table and its exit code.
+      #
+      # check_id is prefixed with the config path when --config is absolute, so
+      # strip to the last dot-segment for display.
+      SEMGREP_ERRORS="$(jq -r '
+        .results[]? | select(.extra.severity == "ERROR")
+        | "\(.path):\(.start.line):\(.start.col)  ERROR  [\(.check_id | split(".") | last)]  \(.extra.message | gsub("\\s+"; " "))"
+      ' "$SEMGREP_OUT" 2>/dev/null)"
 
-    HOLMES_OUT="${TMP_HOLMES}/__holmes.json"
-    # --no-verbose disables the progrock progress bar, whose ETA interval
-    # overflows a 32-bit int on long scans ("Value out of range for int")
-    # and crashes clj-holmes before findings are written — a silent dead gate.
-    clj-holmes scan -p "$TMP_HOLMES" -d "$HOLMES_RULES_DIR" \
-      --no-verbose -t json -o "$HOLMES_OUT" >/dev/null 2>&1 || true
+      SEMGREP_WARNINGS="$(jq -r '
+        .results[]? | select(.extra.severity == "WARNING")
+        | "\(.path):\(.start.line):\(.start.col)  WARNING  [\(.check_id | split(".") | last)]  \(.extra.message | gsub("\\s+"; " "))"
+      ' "$SEMGREP_OUT" 2>/dev/null)"
 
-    if [ -f "$HOLMES_OUT" ]; then
-      # Flatten: one line per (rule × finding within rule).
-      HOLMES_REPORT="$(
-        jq -r --arg prefix "${TMP_HOLMES}/" '
-          .[] as $rule
-          | $rule.findings[]
-          | "\($rule.filename | sub($prefix; "")):\(.row):\(.col)  RISK  [\($rule.name)]  \($rule.message) — \(.code)"
-        ' "$HOLMES_OUT" 2>/dev/null
-      )"
-      if [ -n "$HOLMES_REPORT" ]; then
-        HOLMES_COUNT="$(printf '%s\n' "$HOLMES_REPORT" | wc -l | tr -d ' ')"
+      # `[ -n "$x" ] && y=...` would exit the script under `set -e` when the
+      # test is false. Use if-blocks.
+      if [ -n "$SEMGREP_ERRORS" ]; then
+        SEMGREP_ERROR_COUNT="$(printf '%s\n' "$SEMGREP_ERRORS" | wc -l | tr -d ' ')"
       fi
+      if [ -n "$SEMGREP_WARNINGS" ]; then
+        SEMGREP_WARN_COUNT="$(printf '%s\n' "$SEMGREP_WARNINGS" | wc -l | tr -d ' ')"
+      fi
+
+      rm -f "$SEMGREP_OUT"
     fi
-    rm -rf "$TMP_HOLMES"
   fi
 fi
 
@@ -225,7 +235,8 @@ fi
 
 # --- emit report and exit ---------------------------------------------------
 
-if [ "$HOLMES_COUNT" -eq 0 ] && [ "$GITLEAKS_COUNT" = "0" ]; then
+if [ "$SEMGREP_ERROR_COUNT" -eq 0 ] && [ "$SEMGREP_WARN_COUNT" -eq 0 ] \
+   && [ "$GITLEAKS_COUNT" = "0" ]; then
   exit 0
 fi
 
@@ -237,9 +248,17 @@ fi
     printf '%s\n' "$GITLEAKS_REPORT"
     echo
   fi
-  if [ -n "$HOLMES_REPORT" ]; then
-    echo "## Clojure security patterns (clj-holmes) — ${HOLMES_COUNT}"
-    printf '%s\n' "$HOLMES_REPORT"
+  if [ -n "$SEMGREP_ERRORS" ]; then
+    echo "## Clojure security patterns (semgrep, blocking) — ${SEMGREP_ERROR_COUNT}"
+    printf '%s\n' "$SEMGREP_ERRORS"
+    echo
+  fi
+  if [ -n "$SEMGREP_WARNINGS" ]; then
+    echo "## Clojure security patterns (semgrep, advisory) — ${SEMGREP_WARN_COUNT}"
+    echo "Non-blocking, and non-blocking in CI too: these rules have no dataflow,"
+    echo "so they cannot be precise enough to gate a build. Read them, judge them,"
+    echo "act if warranted."
+    printf '%s\n' "$SEMGREP_WARNINGS"
     echo
   fi
   echo "Triage each finding through the clojure-security skill before"
@@ -256,5 +275,10 @@ fi
   fi
 } >&2
 
-# Block the stop. Claude must address findings before the turn can end.
-exit 2
+# Blocking findings block the stop. Advisory-only findings surface as a
+# non-blocking warning (exit 1) so the turn can end — mirroring CI, where the
+# three WARNING rules never fail the job.
+if [ "$SEMGREP_ERROR_COUNT" -gt 0 ] || [ "$GITLEAKS_COUNT" != "0" ]; then
+  exit 2
+fi
+exit 1
