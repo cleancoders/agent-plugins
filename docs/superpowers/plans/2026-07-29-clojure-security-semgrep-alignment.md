@@ -2248,7 +2248,7 @@ test_reverse_index_routes_agree_with_the_forward_index() {
   # A row naming several classes may legitimately be mixed (rank 10 aggregates
   # three semgrep classes and one llm-review one), so the rule is presence-based
   # in both directions rather than string equality.
-  local bad rank cwe classes route c fwd want_llm want_semgrep
+  local bad rank cwe classes route c fwd want_llm want_semgrep want_watson
   bad=""
   while IFS='|' read -r rank cwe classes route; do
     [ -z "${rank}" ] && continue
@@ -2256,18 +2256,22 @@ test_reverse_index_routes_agree_with_the_forward_index() {
 
     want_llm=0
     want_semgrep=0
+    want_watson=0
     for c in $(printf '%s' "${classes}" | grep -oE '`[a-z0-9-]+`' | tr -d '`'); do
       fwd="$(awk -F'|' -v k="${c}" '
         /^\| `/ { gsub(/[ `]/,"",$2); if ($2 == k) { gsub(/ /,"",$5); print $5 } }' "${SKILL}")"
       case "${fwd}" in
         llm-review) want_llm=1 ;;
         semgrep:*)  want_semgrep=1 ;;
+        clj-watson) want_watson=1 ;;
       esac
     done
 
-    # Both axes, both directions. Checking only llm-review would still let a row
-    # whose classes are all llm-review claim `semgrep+llm-review` and pass — the
-    # same over-claim on the other axis.
+    # All three axes, both directions. Checking only llm-review would still let a
+    # row whose classes are all llm-review claim `semgrep+llm-review` and pass —
+    # the same over-claim on the other axis. The clj-watson axis matters even
+    # though no current CWE row uses it: without it, appending `+clj-watson` to a
+    # Top 25 row fabricated a dependency-scan claim that nothing noticed.
     case "${route}" in
       *llm-review*)
         if [ "${want_llm}" -eq 0 ]; then
@@ -2287,6 +2291,17 @@ test_reverse_index_routes_agree_with_the_forward_index() {
       *)
         if [ "${want_semgrep}" -eq 1 ]; then
           bad="${bad}rank ${rank}: omits semgrep but a named class routes there"$'\n'
+        fi ;;
+    esac
+
+    case "${route}" in
+      *clj-watson*)
+        if [ "${want_watson}" -eq 0 ]; then
+          bad="${bad}rank ${rank}: claims clj-watson but no named class routes there"$'\n'
+        fi ;;
+      *)
+        if [ "${want_watson}" -eq 1 ]; then
+          bad="${bad}rank ${rank}: omits clj-watson but a named class routes there"$'\n'
         fi ;;
     esac
   done < <(cwe_rows)
@@ -2350,6 +2365,95 @@ test_no_class_rows_claim_no_route() {
   local bad
   bad="$(cwe_rows | awk -F'|' '$3 ~ /no class|not applicable/ && $4 != "n/a" {print $1 " => " $4}')"
   assertEquals "rows with no class must route to n/a" "" "${bad}"
+}
+
+test_ranks_match_mitre() {
+  # The file's headline claim is "Ranks are MITRE's, not ours" — and nothing
+  # enforced it. Reversing all 25 rank labels left the whole suite green, so the
+  # ordering rested entirely on a one-time manual check. A transposed rank makes
+  # this file actively misleading rather than merely incomplete.
+  #
+  # Pinned from https://cwe.mitre.org/top25/archive/2025/2025_cwe_top25.html,
+  # fetched 2026-07-29. Do not edit to match the table; edit the table.
+  local expected actual
+  expected="1 CWE-79
+2 CWE-89
+3 CWE-352
+4 CWE-862
+5 CWE-787
+6 CWE-22
+7 CWE-416
+8 CWE-125
+9 CWE-78
+10 CWE-94
+11 CWE-120
+12 CWE-434
+13 CWE-476
+14 CWE-121
+15 CWE-502
+16 CWE-122
+17 CWE-863
+18 CWE-20
+19 CWE-284
+20 CWE-200
+21 CWE-306
+22 CWE-918
+23 CWE-77
+24 CWE-639
+25 CWE-770"
+  actual="$(cwe_rows | awk -F'|' '{print $1, $2}' | sort -n)"
+  assertEquals "rank -> CWE must match the MITRE 2025 Top 25" "${expected}" "${actual}"
+}
+
+test_owasp_titles_match_owasp_org() {
+  # Only the A0N code was checked, never the title after it. "A01 Some Bogus
+  # Title" passed. Pinned from https://owasp.org/Top10/2025/, fetched 2026-07-29,
+  # and cross-checked against metadata.owasp in the CI rules.
+  local expected actual
+  expected="A01 Broken Access Control
+A02 Security Misconfiguration
+A03 Software Supply Chain Failures
+A04 Cryptographic Failures
+A05 Injection
+A06 Insecure Design
+A07 Authentication Failures
+A08 Software or Data Integrity Failures
+A09 Security Logging and Alerting Failures
+A10 Mishandling of Exceptional Conditions"
+  actual="$(owasp_rows | awk -F'|' '{print $1}' | sort)"
+  assertEquals "OWASP titles must match owasp.org/Top10/2025" "${expected}" "${actual}"
+}
+
+test_each_class_carries_the_cwe_of_its_row() {
+  # A class could be swapped for a different REAL class with the same route and go
+  # unnoticed, because the completeness checks only require every class to appear
+  # somewhere in the file. Rank 15 (CWE-502) accepted `sql-injection` in place of
+  # `java-deserialization`, silently reassigning deserialization coverage to the
+  # SQL-injection detector.
+  #
+  # `partial` rows are exempt by design: CWE-200's row names child weaknesses
+  # (CWE-209/550, CWE-532/778) rather than CWE-200 itself, which is the point of
+  # labelling it partial.
+  local bad rank cwe classes route c id fwdcwe
+  bad=""
+  while IFS='|' read -r rank cwe classes route; do
+    [ -z "${rank}" ] && continue
+    case "${classes}" in
+      *"not applicable"*|*"no class"*|*partial*) continue ;;
+    esac
+    id="${cwe#CWE-}"
+    for c in $(printf '%s' "${classes}" | grep -oE '`[a-z0-9-]+`' | tr -d '`'); do
+      fwdcwe="$(awk -F'|' -v k="${c}" '
+        /^\| `/ { gsub(/[ `]/,"",$2); if ($2 == k) { gsub(/ /,"",$3); print $3 } }' "${SKILL}")"
+      case ",${fwdcwe}," in
+        *",${id},"*) ;;
+        *) bad="${bad}rank ${rank} (${cwe}): ${c} does not carry that CWE"$'\n' ;;
+      esac
+    done
+  done < <(cwe_rows)
+
+  assertEquals "each class must carry its row's CWE" \
+    "" "$(printf '%s' "${bad}" | awk 'NF')"
 }
 
 test_sources_are_cited() {
@@ -2476,7 +2580,7 @@ same way.
 bash test/taxonomy-coverage_test.sh
 ```
 
-Expected: `Ran 13 tests.` / `OK` — ten from the brief, plus the CWE route-agreement check, the OWASP route check, and the no-class-route invariant.
+Expected: `Ran 16 tests.` / `OK` — ten from the brief, plus the CWE and OWASP route checks, the no-class-route invariant, the pinned MITRE rank table, the pinned OWASP titles, and the class-carries-its-CWE check.
 
 - [ ] **Step 5: Confirm the index-consistency test still holds**
 
