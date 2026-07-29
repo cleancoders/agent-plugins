@@ -34,6 +34,26 @@ run_hook_context() {
     | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null
 }
 
+# Run the hook with a PATH that excludes the homebrew prefix, so every scanner
+# reports missing and the notice's CONTENT can actually be asserted. Without
+# this, a machine that has semgrep installed — which after this migration is the
+# normal case — can only ever skip the assertion, and a test that asserts
+# nothing passes no matter what the hook does.
+#
+# jq is symlinked in because the hook needs it to emit its JSON payload at all;
+# /usr/bin and /bin supply the coreutils it uses. The outer jq in the pipeline
+# runs under the test's own PATH, not the hook's.
+run_hook_context_without_tools() {
+  local shim out
+  shim="$(mktemp -d)"
+  ln -s "$(command -v jq)" "${shim}/jq" 2>/dev/null || true
+  out="$(printf '{"cwd":"%s"}' "${PROJECT}" \
+    | PATH="${shim}:/usr/bin:/bin" bash "${HOOK}" 2>/dev/null \
+    | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
+  rm -rf "${shim}"
+  printf '%s' "${out}"
+}
+
 test_suggests_setup_skill_when_clojure_project_has_no_clj_kondo_config() {
   printf '{:deps {}}' > "${PROJECT}/deps.edn"
 
@@ -135,12 +155,13 @@ test_missing_notice_documents_the_rules_dir_override() {
   printf '{:deps {}}' > "${PROJECT}/deps.edn"
 
   local ctx
-  ctx="$(run_hook_context)"
+  ctx="$(run_hook_context_without_tools)"
 
-  if ! command -v semgrep >/dev/null 2>&1; then
-    assertContains "the notice should mention the env override" \
-      "${ctx}" "CC_SEMGREP_RULES_DIR"
-  fi
+  # Unconditional: the shim guarantees semgrep looks absent, so the notice must
+  # be present and must carry both the install hint and the override.
+  assertContains "the notice should flag semgrep" "${ctx}" "semgrep"
+  assertContains "the notice should mention the env override" \
+    "${ctx}" "CC_SEMGREP_RULES_DIR"
 }
 
 . "${SCRIPT_DIR}/../lib/shunit2"
