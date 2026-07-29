@@ -2843,12 +2843,17 @@ test_no_plugin_file_credits_clj_holmes_for_ci() {
   #     rather than weakening the invariant for every other file.
   local hits f body
   hits=""
-  for f in $(find "${PLUGIN}" -type f ! -name CHANGES); do
+  # -print0 into `read -d ''`, not `for f in $(find ...)`: unquoted command
+  # substitution word-splits on whitespace, so a path containing a space is torn
+  # into fragments that name no file, `sed` fails silently with stderr already
+  # discarded, and the file is never scanned — a false PASS. Demonstrated, not
+  # theoretical. This is the one test meant to still matter years from now.
+  while IFS= read -r -d '' f; do
     body="$(sed 's|clj-holmes/clj-watson||g' "${f}" 2>/dev/null)"
     case "${body}" in
       *clj-holmes*) hits="${hits}${f}"$'\n' ;;
     esac
-  done
+  done < <(find "${PLUGIN}" -type f ! -name CHANGES -print0)
   assertEquals "these files still reference clj-holmes" "" "$(printf '%s' "${hits}" | awk 'NF')"
 }
 
@@ -2944,8 +2949,17 @@ reviews exactly those, once, and reports through the `clojure-security` skill.
 Scope is the turn's edits rather than the session diff, so nothing is reviewed
 twice.
 
-Set `CC_SKIP_DIFF_REVIEW=1` to turn it off. Files changed by `Bash` rather than
-by an edit tool do not enter the ledger; semgrep still scans those.
+**Expect one extra round-trip per turn that touches Clojure.** The review is not
+gated on findings — the hook blocks in order to *ask* for it, so a turn editing a
+`.clj`, `.cljs` or `.cljc` file ends with one more exchange even when semgrep and
+gitleaks are clean. That is the price of covering the classes no scanner reaches.
+
+Two limits worth knowing rather than discovering. Files changed by `Bash` — a
+script, `sed`, `git checkout` — never enter the ledger, so semgrep still scans them
+but the review does not see them. And the hook cannot verify the review actually
+happened: it blocks once and trusts Claude, as every `Stop` directive does.
+
+Set `CC_SKIP_DIFF_REVIEW=1` to turn the whole thing off.
 ```
 
 - [ ] **Step 5: Run the test to verify it passes**
