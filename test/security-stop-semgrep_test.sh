@@ -155,4 +155,60 @@ test_truncated_semgrep_output_does_not_kill_hook() {
   assertEquals "malformed JSON must not print anything" "" "${out#*|}"
 }
 
+# --- commit-backstop.sh -----------------------------------------------------
+# Same rule set, same severity split, different gate: a PreToolUse hook cannot
+# signal "advisory" with exit 1 (that does not block, and neither does 0), so
+# advisory findings print and the commit proceeds.
+
+COMMIT_HOOK="${SCRIPT_DIR}/../plugins/clojure-security/hooks/commit-backstop.sh"
+
+run_commit_hook() {
+  local err rc
+  err="$(printf '{"tool_name":"Bash","tool_input":{"command":"git commit -m x"},"cwd":"%s"}' "${PROJECT}" \
+    | PATH="${BIN}:${PATH}" CC_SEMGREP_RULES_DIR="${RULES}" \
+      bash "${COMMIT_HOOK}" 2>&1 >/dev/null)"
+  rc=$?
+  printf '%s|%s' "${rc}" "${err}"
+}
+
+stage_a_clojure_file() {
+  printf '(ns bar)\n(def y 2)\n' > "${PROJECT}/bar.clj"
+  git -C "${PROJECT}" add bar.clj
+}
+
+test_commit_backstop_blocks_on_error_severity() {
+  stage_a_clojure_file
+  set_finding "ERROR" "cc-sql-string-concat"
+  local out; out="$(run_commit_hook)"
+  assertEquals "an ERROR finding must block the commit" "2" "${out%%|*}"
+  assertContains "the finding must be reported" "${out#*|}" "cc-sql-string-concat"
+}
+
+test_commit_backstop_does_not_block_on_warning_severity() {
+  stage_a_clojure_file
+  set_finding "WARNING" "cc-generic-catch"
+  local out; out="$(run_commit_hook)"
+  assertEquals "a WARNING finding must not block the commit" "0" "${out%%|*}"
+  assertContains "the warning must still print" "${out#*|}" "cc-generic-catch"
+}
+
+test_commit_backstop_uses_semgrep_not_holmes() {
+  stage_a_clojure_file
+  run_commit_hook >/dev/null
+  assertTrue "semgrep should have been invoked" "[ -f '${ARGS_LOG}' ]"
+  assertContains "must pass the resolved rules dir" "$(cat "${ARGS_LOG}")" "${RULES}"
+}
+
+# A semgrep process killed mid-write leaves truncated JSON. jq exits 5 on
+# malformed input, which is not `set -e`-exempt as a bare assignment — this
+# must not block a commit with an uncontracted exit code (same hazard class
+# as the Stop hook's truncated-JSON test above).
+test_commit_backstop_truncated_semgrep_output_does_not_crash() {
+  stage_a_clojure_file
+  printf '{"results":[{"check_id":"x"' > "${RESULTS}"
+  local out; out="$(run_commit_hook)"
+  assertEquals "malformed JSON must not crash the hook" "0" "${out%%|*}"
+  assertEquals "malformed JSON must not print anything" "" "${out#*|}"
+}
+
 . "${SCRIPT_DIR}/../lib/shunit2"
