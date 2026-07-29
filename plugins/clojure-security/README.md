@@ -79,7 +79,7 @@ twice.
 **Expect one extra round-trip per turn that touches Clojure.** The review is not
 gated on findings — the hook blocks in order to *ask* for it, so a turn editing a
 `.clj`, `.cljs` or `.cljc` file ends with one more exchange even when semgrep and
-gitleaks are clean. That is the price of covering the classes no scanner reaches.
+gitleaks are clean. That tradeoff is what makes the 13 scanner-blind classes reachable at all.
 
 Two limits worth knowing rather than discovering. Files changed by `Bash` — a
 script, `sed`, `git checkout` — never enter the ledger, so semgrep still scans them
