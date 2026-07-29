@@ -1418,7 +1418,7 @@ exit 0
 bash test/turn-ledger_test.sh
 ```
 
-Expected: `Ran 9 tests.` / `OK`
+Expected: `Ran 8 tests.` / `OK` — the file defines eight `test_` functions.
 
 - [ ] **Step 5: Register the hook**
 
