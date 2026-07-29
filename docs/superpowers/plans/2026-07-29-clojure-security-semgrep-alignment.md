@@ -1663,13 +1663,46 @@ test_review_names_the_scanner_blind_classes() {
 . "${SCRIPT_DIR}/../lib/shunit2"
 ```
 
+Also add one case to `test/turn-ledger_test.sh`, closing a fidelity gap Task 5's
+review found: every existing case feeds a relative path, but Claude Code only ever
+sends absolute ones, so the suite has no coverage of the real payload shape.
+
+```bash
+test_records_an_absolute_path() {
+  # This is the only shape production sends: Claude Code puts an absolute path
+  # in .tool_input.file_path. The suffix glob and the append are agnostic to it,
+  # but nothing proved that until now.
+  printf '{"cwd":"%s","tool_name":"Edit","tool_input":{"file_path":"%s/src/app.clj"}}' \
+    "${PROJECT}" "${PROJECT}" | bash "${HOOK}" >/dev/null 2>&1
+  assertEquals "an absolute path must be recorded verbatim" \
+    "${PROJECT}/src/app.clj" "$(ledger)"
+}
+```
+
+And one to `test/security-stop-review_test.sh` proving the drain normalizes it:
+
+```bash
+test_absolute_ledger_paths_are_reported_repo_relative() {
+  # The semgrep block in the same report prints repo-relative paths. A directive
+  # that prints absolute ones reads like output from a different tool.
+  printf '%s/routes.clj\n' "${PROJECT}" > "${LEDGER}"
+  local out; out="$(run_hook)"
+  local err="${out#*|}"
+  assertContains "path must be reported repo-relative" "${err}" "routes.clj"
+  assertNotContains "the project prefix must be stripped" "${err}" "${PROJECT}/routes.clj"
+}
+```
+
 - [ ] **Step 2: Run it to verify it fails**
 
 ```bash
 bash test/security-stop-review_test.sh
+bash test/turn-ledger_test.sh
 ```
 
-Expected: the ledger tests fail — the hook ignores the file entirely.
+Expected: the ledger tests fail — the hook ignores the file entirely. The new
+`turn-ledger` absolute-path case should **pass** immediately; it documents
+existing correct behaviour rather than driving a change.
 
 - [ ] **Step 3: Add the review block**
 
@@ -1690,7 +1723,12 @@ LEDGER="${CWD}/.claude/.security-turn-files"
 REVIEW_FILES=""
 
 if [ -f "$LEDGER" ]; then
-  REVIEW_FILES="$(awk 'NF' "$LEDGER" 2>/dev/null | sort -u)"
+  # Claude Code puts an ABSOLUTE path in .tool_input.file_path, so the ledger
+  # holds absolute paths. Strip the project prefix: the semgrep block in this
+  # same report prints repo-relative paths, and one report mixing both formats
+  # reads like two unrelated tools. The hook has already cd'd to $CWD, so the
+  # relative form still satisfies the -f test below.
+  REVIEW_FILES="$(awk 'NF' "$LEDGER" 2>/dev/null | sed "s|^${CWD}/||" | sort -u)"
   # Drain BEFORE deciding whether to review. A suppressed or skipped review
   # must not leave its files to pile up into the next turn's list.
   rm -f "$LEDGER"
