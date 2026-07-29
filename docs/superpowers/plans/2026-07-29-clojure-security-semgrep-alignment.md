@@ -3101,14 +3101,26 @@ git status --short
 
 Expected: no `package.json`, `plugin.json`, `marketplace.json`, or `index.ts` in the list. CI syncs those from `VERSION`; hand-editing them causes a conflict on the sync commit.
 
-- [ ] **Step 6: Commit, push, and confirm the tag**
+- [ ] **Step 6: Commit only — do not push**
 
 ```bash
 git add plugins/clojure-security/VERSION plugins/clojure-security/CHANGES
 git add -f docs/superpowers/plans/2026-07-29-clojure-security-semgrep-alignment.md
 git commit -m "release(clojure-security): 0.12.0"
-git push origin master
 ```
+
+**Stop here.** The push is deliberately not part of this task. Two reasons:
+
+1. This work is on a feature branch, and the whole-branch review has not run yet.
+   Publishing before that review defeats it.
+2. Pushing to `master` *is* the release — CI syncs the version files, commits them,
+   and tags `clojure-security/v0.12.0`, which four consumer repos then resolve.
+   That is outward-facing and awkward to retract, so it needs the human's explicit
+   go-ahead rather than a step in a plan they approved a while ago.
+
+The merge and push happen in `superpowers:finishing-a-development-branch`, after the
+final review, using a squash or ORT merge per the repo's convention — never a
+fast-forward.
 
 Then wait for CI and confirm:
 
