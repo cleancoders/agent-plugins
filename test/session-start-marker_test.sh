@@ -111,14 +111,20 @@ test_marker_written_in_clojure_git_repo() {
 test_missing_notice_names_semgrep_not_clj_holmes() {
   printf '{:deps {}}' > "${PROJECT}/deps.edn"
 
-  local ctx
+  local ctx scrubbed
   ctx="$(run_hook_context)"
+
+  # clj-watson's real home is github.com/clj-holmes/clj-watson, and that URL
+  # legitimately appears in clj-watson's own missing-tool notice. Strip that
+  # substring before asserting — otherwise this test fails on every machine
+  # where clj-watson is not installed, which is most of them.
+  scrubbed="$(printf '%s' "${ctx}" | sed 's|clj-holmes/clj-watson||g')"
 
   # CI dropped clj-holmes for 16 cc-* semgrep rules. Telling a developer to
   # install a tool the pipeline no longer runs is worse than saying nothing:
   # they would install abandoned software and believe they were covered.
   assertNotContains "clj-holmes must be gone from the toolchain notice" \
-    "${ctx}" "clj-holmes"
+    "${scrubbed}" "clj-holmes"
 
   if ! command -v semgrep >/dev/null 2>&1; then
     assertContains "missing-tool notice should flag semgrep" "${ctx}" "semgrep"
