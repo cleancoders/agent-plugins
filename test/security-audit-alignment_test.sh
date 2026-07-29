@@ -39,4 +39,14 @@ test_audit_distinguishes_clean_from_unexamined() {
   assertContains "must have an unexamined state" "${body}" "not reachable"
 }
 
+test_audit_includes_extra_rules_dir() {
+  assertContains "CI's fourth --config (.security-rules) must not silently disappear" \
+    "$(cat "${AUDIT}")" ".security-rules"
+}
+
+test_audit_gate_is_not_cc_only() {
+  grep -E 'blocks a PR|gate' "${AUDIT}" | grep -qE 'p/default|p/owasp-top-ten'
+  assertTrue "the blocking note must name a non-cc-* pack (p/default or p/owasp-top-ten)" $?
+}
+
 . "${SCRIPT_DIR}/../lib/shunit2"

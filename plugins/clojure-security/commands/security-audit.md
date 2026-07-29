@@ -55,7 +55,7 @@ Run each tool only if it is installed (`command -v <tool>` returns 0). For each,
 | Tool | How to run (audit mode) |
 |------|------------------------|
 | `clj-kondo` | `clj-kondo --lint <scope>` — capture warnings + errors |
-| `semgrep` | **The primary Clojure engine — run it whenever it is installed.** Resolve the cleancoders rules the way the hooks do: `$CC_SEMGREP_RULES_DIR` if set, else `/tmp/cc-semgrep-rules-v1` if non-empty, else fetch it (see `hooks/lib/semgrep-rules.sh`). Then mirror CI: `semgrep scan --json --config <cc-rules> --config p/owasp-top-ten --config p/default <scope>` |
+| `semgrep` | **The primary Clojure engine — run it whenever it is installed.** Resolve the cleancoders rules the way the hooks do: `$CC_SEMGREP_RULES_DIR` if set, else `/tmp/cc-semgrep-rules-v1` if non-empty, else fetch it (see `hooks/lib/semgrep-rules.sh`). Then mirror CI: `semgrep scan --json --config <cc-rules> --config p/owasp-top-ten --config p/default <scope>`. Add `--config .security-rules` when that directory exists — CI passes it as a fourth config (`extra-rules-dir`, default `.security-rules`), so skipping it audits blind to rules the PR enforces |
 | `gitleaks` | `gitleaks detect --no-banner --redact --source <scope>` (use `--no-git` for non-git paths) |
 | `clj-watson` | Only on `all` scope: `clj-watson scan -p deps.edn -o stdout` (or the project's `:clj-watson` deps alias) — SCA against `deps.edn` |
 
@@ -65,6 +65,11 @@ If a tool is missing, list it under **Tools not run** in the report — don't pr
 `cc-path-traversal`, `cc-generic-catch`, `cc-clojure-xml-xxe` — are `WARNING` and
 deliberately do **not** gate: without dataflow they cannot be precise enough.
 Report them, but never as blocking.
+
+CI's gate is not limited to the `cc-*` set. `bin/report-sarif.sh` counts every
+unsuppressed `error`-level result across *all* configs, so an ERROR from
+`p/owasp-top-ten` or `p/default` blocks a PR too. What decides blocking is a
+rule's severity, not which pack it came from.
 
 **Suppressions.** A finding suppressed in source with a `nosemgrep` annotation is
 absent from `--json` output and excluded from CI's table and exit code. Do not
@@ -170,6 +175,10 @@ reader can learn that 10 of the applicable Top 25 entries need human eyes.
 **Class names** must come verbatim from the class index table in `SKILL.md`, so findings can be grouped over time. Do not invent a class name; if a finding fits none of the listed classes, report it under **Out of scope (flagged for follow-up)** instead.
 
 **Severity tone:** terse, factual, action-oriented. One line per finding. No paragraphs. No praise. If the audit is clean, the body of each section is the literal text `clean`.
+
+**One sink, one line.** Step 3's pattern sweep and Step 5's semgrep run overlap on
+several sinks, so the same `file:line` can surface from both. Report it once. A
+duplicated finding inflates the count and makes the report read as padded.
 
 ## Step 7b — Optional file output
 
