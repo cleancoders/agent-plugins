@@ -1,3 +1,63 @@
+## 0.12.0
+  * The hooks now scan with semgrep and the 16 cleancoders `cc-*` rules instead
+    of clj-holmes, matching what CI actually runs. Local enforcement had become a
+    strictly weaker subset: clj-holmes reads only `*.clj`, silently skipping
+    `.cljs` and `.cljc` — and its edamame call omits `:read-cond`, so `.cljc`
+    fails to parse even when renamed, with the failure swallowed. That is where
+    CWE-79 (#1 on the CWE Top 25) and c3kit's shared domain logic live, so a
+    `.cljc`-heavy repo scanned clean. All 10 upstream clj-holmes security rules
+    are subsumed by the replacements; the only rule left behind is a Prismatic
+    schema require typo, which is not security.
+  * Severity mirrors CI exactly. The 13 ERROR rules block; `cc-path-traversal`,
+    `cc-generic-catch` and `cc-clojure-xml-xxe` are advisory. Those three are
+    non-blocking in CI on purpose — without dataflow they cannot be precise
+    enough to gate a build, and `cc-generic-catch` fires on ordinary
+    `(catch Exception e ...)`. A local gate stricter than the pipeline gets
+    muted, which costs more than it buys.
+  * Rules are resolved at run time rather than vendored: `CC_SEMGREP_RULES_DIR`,
+    then a `/tmp` cache, then a fetch of tag `v1` — the same ref the four
+    consumer repos pin, so local and CI cannot drift to different rule versions.
+    Vendoring a copy would have meant two sources of truth for the rule set,
+    with no way to detect divergence offline. Every failure degrades to skipping
+    the Clojure scan; an unreachable GitHub never fails a turn.
+  * **New: the Stop hook now reviews the 13 classes no scanner can reach.**
+    Access control, SSRF, mass assignment, logging failures, TOCTOU and the rest
+    need dataflow, namespace-alias resolution or whole-route reasoning that
+    semgrep cannot do. Nine of them are CWE Top 25 entries — CWE-352, 862, 434,
+    863, 284, 306, 918, 639, 770 — and they were reachable only by running
+    `/security-audit` by hand, which nothing triggers. Being an agent plugin
+    rather than a CI config is precisely what makes this possible, and it was
+    the capability the plugin was not using.
+  * Review scope is the turn's edits, not the session diff. A new `PostToolUse`
+    ledger records which Clojure files each turn changed, because the Stop hook's
+    diff is cumulative and reviewing it would re-review turn 3's files again on
+    turn 40, forever. The ledger is drained unconditionally before the decision
+    to review, so a suppressed turn cannot bank work into the next one, and the
+    directive is one-shot per turn since it has no findings to clear.
+    `CC_SKIP_DIFF_REVIEW=1` opts out. Files changed by `Bash` rather than an edit
+    tool do not enter the ledger; semgrep still scans those.
+  * The class index records how each class is detected — `semgrep:<rule>`,
+    `llm-review`, or `clj-watson`. A reader could not previously tell which
+    classes CI gates from which need human eyes. Tests assert the column against
+    the 16 `cc-*` rule names in both directions, so a class naming a rule that
+    does not exist, or a CI rule no class can triage, fails the build.
+  * Adds `references/taxonomy-coverage.md`, the reverse index. The forward index
+    answered "what is this finding?"; nothing answered "what did we fail to look
+    at?", so an audit could print `OWASP touched: A01, A05` and leave a reader
+    unable to distinguish a clean category from an unexamined one.
+    `/security-audit`'s Coverage section is now a three-state rollup —
+    `findings (n)`, `checked, clean`, `not reachable`. CWE-20 and CWE-476 are
+    recorded as real gaps and CWE-200 as partial: making an absence visible is
+    the entire point. Ranks come from cwe.mitre.org and category titles from
+    owasp.org with the URL and date in the file, because six CWE-to-OWASP
+    mappings in this plugin were already wrong on inference once.
+  * `/security-audit` no longer tells the auditor to skip semgrep unless the repo
+    has a `.semgrep.yml`. Semgrep is the only Clojure engine in CI now, so that
+    instruction produced audits blind to everything a PR would catch. It runs
+    CI's full config set, and it must not resurrect `nosemgrep`-suppressed
+    findings — CI excludes those from its table and its exit code, and reporting
+    them as live re-litigates a decision a developer already made.
+
 ## 0.11.0
   * SKILL.md is now an index plus `references/`, loaded on demand. It was 341
     lines of flat vulnerability classes read on every invoke; adding the
