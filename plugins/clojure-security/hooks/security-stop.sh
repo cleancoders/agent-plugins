@@ -28,6 +28,18 @@
 #   If stop_hook_active is true and findings persist, we still block. The
 #   meta-decision to override belongs to the human, not to Claude. Anyone
 #   needing an escape hatch can disable this hook.
+#
+# Scanner-blind classes:
+#   13 of the skill's 27 classes have no scanner. The files this turn edited
+#   come from turn-ledger.sh via .claude/.security-turn-files — NOT from the
+#   diff, which is cumulative and would re-review the same files every turn.
+#   The directive is one-shot per turn (it has no findings to clear) and the
+#   ledger is drained unconditionally. CC_SKIP_DIFF_REVIEW=1 opts out.
+#
+#   Known limit: files changed by Bash (sed, a script, git checkout) never
+#   enter the ledger. Semgrep still scans those through the cumulative diff;
+#   only this review is ledger-scoped. And the hook cannot verify the review
+#   happened — it blocks once and trusts Claude, as every Stop directive does.
 
 set -e
 
@@ -203,10 +215,53 @@ if [ "$HAVE_GITLEAKS" -eq 1 ] && [ -n "$CHANGED" ]; then
   fi
 fi
 
+# --- LLM review of the scanner-blind classes --------------------------------
+
+# 13 of the skill's 27 classes have no scanner: they need dataflow, namespace-
+# alias resolution, or whole-route reasoning that semgrep cannot do. Nine are
+# CWE Top 25 entries. Before this they were reachable only by a manual
+# /security-audit that nothing triggers.
+#
+# Scope comes from turn-ledger.sh, not from the diff: the diff is cumulative,
+# so reviewing it would re-review turn 3's files again on turn 40.
+
+LEDGER="${CWD}/.claude/.security-turn-files"
+REVIEW_FILES=""
+
+if [ -f "$LEDGER" ]; then
+  # Claude Code puts an ABSOLUTE path in .tool_input.file_path, so the ledger
+  # holds absolute paths. Strip the project prefix: the semgrep block in this
+  # same report prints repo-relative paths, and one report mixing both formats
+  # reads like two unrelated tools. The hook has already cd'd to $CWD, so the
+  # relative form still satisfies the -f test below.
+  REVIEW_FILES="$(awk 'NF' "$LEDGER" 2>/dev/null | sed "s|^${CWD}/||" | sort -u)"
+  # Drain BEFORE deciding whether to review. A suppressed or skipped review
+  # must not leave its files to pile up into the next turn's list.
+  rm -f "$LEDGER"
+fi
+
+# One-shot per turn. The directive has no findings to clear, so re-issuing it
+# on reentry would block forever.
+if [ "$STOP_HOOK_ACTIVE" = "true" ] || [ -n "${CC_SKIP_DIFF_REVIEW:-}" ]; then
+  REVIEW_FILES=""
+fi
+
+# Drop paths deleted later in the same turn.
+if [ -n "$REVIEW_FILES" ]; then
+  KEPT=""
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    if [ -f "$f" ]; then
+      KEPT="${KEPT}${f}"$'\n'
+    fi
+  done <<<"$REVIEW_FILES"
+  REVIEW_FILES="$(printf '%s' "$KEPT" | awk 'NF')"
+fi
+
 # --- emit report and exit ---------------------------------------------------
 
 if [ "$SEMGREP_ERROR_COUNT" -eq 0 ] && [ "$SEMGREP_WARN_COUNT" -eq 0 ] \
-   && [ "$GITLEAKS_COUNT" = "0" ]; then
+   && [ "$GITLEAKS_COUNT" = "0" ] && [ -z "$REVIEW_FILES" ]; then
   exit 0
 fi
 
@@ -231,6 +286,31 @@ fi
     printf '%s\n' "$SEMGREP_WARNINGS"
     echo
   fi
+  if [ -n "$REVIEW_FILES" ]; then
+    echo "## Scanner-blind classes — review this turn's edits"
+    echo
+    echo "Semgrep cannot reach these classes: they need dataflow, namespace-alias"
+    echo "resolution, or whole-route reasoning. Review ONLY these files, and"
+    echo "do not sweep the repo:"
+    printf '%s\n' "$REVIEW_FILES" | sed 's/^/  /'
+    echo
+    echo "Load the clojure-security skill, then only the references you need:"
+    echo "  references/access-control.md  — atom-toctou, missing-authn,"
+    echo "                       missing-authz, incorrect-authz, idor, csrf,"
+    echo "                       ssrf, mass-assignment"
+    echo "  references/config-and-ops.md  — security-misconfig,"
+    echo "                       logging-failures, unrestricted-upload,"
+    echo "                       resource-exhaustion"
+    echo "  references/injection.md       — macro-runtime-input"
+    echo "  references/route-inventory.md — the route sweep, if any of these"
+    echo "                       files define, wrap, or dispatch routes"
+    echo
+    echo "Apply the skill's investigation order and severity heuristic. Report"
+    echo "each finding with its class name, CWE and OWASP tag. Provenance you"
+    echo "cannot trace is provisional, not a finding. Do not auto-fix — report"
+    echo "and let the human choose."
+    echo
+  fi
   echo "Triage each finding through the clojure-security skill before"
   echo "ending this turn. Use the skill's investigation order:"
   echo "  1. source of the tainted value"
@@ -248,7 +328,8 @@ fi
 # Blocking findings block the stop. Advisory-only findings surface as a
 # non-blocking warning (exit 1) so the turn can end — mirroring CI, where the
 # three WARNING rules never fail the job.
-if [ "$SEMGREP_ERROR_COUNT" -gt 0 ] || [ "$GITLEAKS_COUNT" != "0" ]; then
+if [ "$SEMGREP_ERROR_COUNT" -gt 0 ] || [ "$GITLEAKS_COUNT" != "0" ] \
+   || [ -n "$REVIEW_FILES" ]; then
   exit 2
 fi
 exit 1

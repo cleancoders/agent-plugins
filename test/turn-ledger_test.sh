@@ -100,6 +100,16 @@ test_always_exits_zero() {
   assertEquals "missing file_path exits 0" "0" "$?"
 }
 
+test_records_an_absolute_path() {
+  # This is the only shape production sends: Claude Code puts an absolute path
+  # in .tool_input.file_path. The suffix glob and the append are agnostic to it,
+  # but nothing proved that until now.
+  printf '{"cwd":"%s","tool_name":"Edit","tool_input":{"file_path":"%s/src/app.clj"}}' \
+    "${PROJECT}" "${PROJECT}" | bash "${HOOK}" >/dev/null 2>&1
+  assertEquals "an absolute path must be recorded verbatim" \
+    "${PROJECT}/src/app.clj" "$(ledger)"
+}
+
 test_produces_no_output() {
   local out
   out="$(printf '{"cwd":"%s","tool_name":"Edit","tool_input":{"file_path":"a.clj"}}' "${PROJECT}" \
