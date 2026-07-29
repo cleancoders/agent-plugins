@@ -583,12 +583,25 @@ if [ "$HAVE_SEMGREP" -eq 1 ] && [ -n "$CLJ_FILES" ]; then
   if [ -n "$RULES_DIR" ]; then
     SEMGREP_OUT="$(mktemp 2>/dev/null || true)"
     if [ -n "$SEMGREP_OUT" ]; then
-      # No tmp-tree mirror, unlike the clj-holmes block this replaces: semgrep
-      # reads .clj/.cljs/.cljc directly and reports the paths it was given.
+      # No tmp-tree mirror, unlike the scanner this replaces: semgrep reads
+      # .clj/.cljs/.cljc directly and reports the paths it was given.
       # --quiet keeps the progress spinner out of stderr; findings come from JSON.
-      printf '%s' "$CLJ_FILES" | awk 'NF' \
-        | xargs semgrep scan --json --quiet --config "$RULES_DIR" \
-            > "$SEMGREP_OUT" 2>/dev/null || true
+      #
+      # A bash array rather than `xargs`: xargs splits its input on whitespace,
+      # so a path containing a space would arrive as two bogus arguments and the
+      # file would be silently left unscanned. The previous scanner iterated with
+      # while-read for that reason; keep the property.
+      #
+      # (Comments here name no tool: test/no-clj-holmes_test.sh keeps the retired
+      # scanner's name out of every plugin file but CHANGES, which is where the
+      # history of why it was dropped actually belongs.)
+      SG_ARGS=()
+      while IFS= read -r f; do
+        [ -n "$f" ] && SG_ARGS+=("$f")
+      done <<<"$CLJ_FILES"
+
+      semgrep scan --json --quiet --config "$RULES_DIR" "${SG_ARGS[@]}" \
+        > "$SEMGREP_OUT" 2>/dev/null || true
 
       # Findings suppressed in source with `nosemgrep` are absent from --json
       # output entirely, so they need no handling here — and the local gate
@@ -596,18 +609,28 @@ if [ "$HAVE_SEMGREP" -eq 1 ] && [ -n "$CLJ_FILES" ]; then
       #
       # check_id is prefixed with the config path when --config is absolute, so
       # strip to the last dot-segment for display.
-      SEMGREP_ERRORS="$(jq -r '
-        .results[]? | select(.extra.severity == "ERROR")
-        | "\(.path):\(.start.line):\(.start.col)  ERROR  [\(.check_id | split(".") | last)]  \(.extra.message | gsub("\\s+"; " "))"
-      ' "$SEMGREP_OUT" 2>/dev/null)"
+      #
+      # Both substitutions end in `|| true`. `jq` exits 5 on malformed input —
+      # exactly what a semgrep killed mid-write leaves behind — and a bare
+      # `X="$(cmd)"` assignment is NOT exempt from `set -e` the way a command in
+      # an AND-OR list is. Unguarded, that kills the hook with an uncontracted
+      # exit 5 and stderr already routed to /dev/null: a silent dead gate, the
+      # same failure that condemned clj-holmes. The gitleaks block below has
+      # always guarded its jq the same way.
+      if [ -s "$SEMGREP_OUT" ]; then
+        SEMGREP_ERRORS="$(jq -r '
+          .results[]? | select(.extra.severity == "ERROR")
+          | "\(.path):\(.start.line):\(.start.col)  ERROR  [\(.check_id | split(".") | last)]  \(.extra.message | gsub("\\s+"; " "))"
+        ' "$SEMGREP_OUT" 2>/dev/null || true)"
 
-      SEMGREP_WARNINGS="$(jq -r '
-        .results[]? | select(.extra.severity == "WARNING")
-        | "\(.path):\(.start.line):\(.start.col)  WARNING  [\(.check_id | split(".") | last)]  \(.extra.message | gsub("\\s+"; " "))"
-      ' "$SEMGREP_OUT" 2>/dev/null)"
+        SEMGREP_WARNINGS="$(jq -r '
+          .results[]? | select(.extra.severity == "WARNING")
+          | "\(.path):\(.start.line):\(.start.col)  WARNING  [\(.check_id | split(".") | last)]  \(.extra.message | gsub("\\s+"; " "))"
+        ' "$SEMGREP_OUT" 2>/dev/null || true)"
+      fi
 
-      # `[ -n "$x" ] && y=...` would exit the script under `set -e` when the
-      # test is false. Use if-blocks.
+      # `[ -n "$x" ] && y=...` is safe as a standalone statement, but an
+      # if-block is clearer where the body computes a value used later.
       if [ -n "$SEMGREP_ERRORS" ]; then
         SEMGREP_ERROR_COUNT="$(printf '%s\n' "$SEMGREP_ERRORS" | wc -l | tr -d ' ')"
       fi
@@ -622,6 +645,28 @@ fi
 ```
 
 Also update line 133's comment `# Clojure-shaped subset (for clj-holmes).` to `# Clojure-shaped subset (for semgrep).`
+
+And line ~56, above `is_clojure_project()` — outside every region named above, but
+`test/no-clj-holmes_test.sh` in Task 10 asserts that no plugin file outside
+`CHANGES` mentions clj-holmes, so leaving it makes that task fail:
+
+```bash
+# run gitleaks / clj-holmes on every git repo the session touches.
+```
+
+becomes
+
+```bash
+# run gitleaks / semgrep on every git repo the session touches.
+```
+
+Then confirm nothing stale survives:
+`git grep -n 'clj-holmes' plugins/clojure-security/hooks/security-stop.sh` must be
+empty — including in the new comments. Where a comment needs to explain why the
+code differs from what came before, say "the scanner this replaces" rather than
+naming it. Task 10's invariant keeps the retired tool's name out of every plugin
+file but `CHANGES`, which is where the history belongs; a grep that simple cannot
+rot, and the "why" survives either way.
 
 - [ ] **Step 5: Replace the report and exit decision**
 
@@ -860,21 +905,35 @@ if [ "$HAVE_SEMGREP" -eq 1 ] && [ -n "$CLJ_STAGED" ]; then
       done <<<"$CLJ_STAGED"
 
       SG_OUT="${TMP_SG}/__semgrep.json"
-      printf '%s' "$SG_FILES" | awk 'NF' \
-        | xargs semgrep scan --json --quiet --config "$RULES_DIR" \
-            > "$SG_OUT" 2>/dev/null || true
+
+      # A bash array, not `xargs` — see the Stop hook for why: xargs splits on
+      # whitespace and would silently drop a path containing a space.
+      SG_ARGS=()
+      while IFS= read -r f; do
+        [ -n "$f" ] && SG_ARGS+=("$f")
+      done <<<"$SG_FILES"
+
+      semgrep scan --json --quiet --config "$RULES_DIR" "${SG_ARGS[@]}" \
+        > "$SG_OUT" 2>/dev/null || true
 
       # Strip the tmp-tree prefix so reported paths are repo-relative, and the
       # config-path prefix off check_id so the rule name is the bare id.
-      SEMGREP_ERRORS="$(jq -r --arg prefix "${TMP_SG}/" '
-        .results[]? | select(.extra.severity == "ERROR")
-        | "\(.path | sub($prefix; "")):\(.start.line):\(.start.col)  ERROR  [\(.check_id | split(".") | last)]  \(.extra.message | gsub("\\s+"; " "))"
-      ' "$SG_OUT" 2>/dev/null)"
+      #
+      # `|| true` on both, and the `-s` guard: jq exits 5 on the truncated JSON a
+      # semgrep killed mid-write leaves behind, and a bare `X="$(cmd)"` is not
+      # exempt from `set -e`. Unguarded, this blocks a commit with an
+      # uncontracted exit 5 and no message.
+      if [ -s "$SG_OUT" ]; then
+        SEMGREP_ERRORS="$(jq -r --arg prefix "${TMP_SG}/" '
+          .results[]? | select(.extra.severity == "ERROR")
+          | "\(.path | sub($prefix; "")):\(.start.line):\(.start.col)  ERROR  [\(.check_id | split(".") | last)]  \(.extra.message | gsub("\\s+"; " "))"
+        ' "$SG_OUT" 2>/dev/null || true)"
 
-      SEMGREP_WARNINGS="$(jq -r --arg prefix "${TMP_SG}/" '
-        .results[]? | select(.extra.severity == "WARNING")
-        | "\(.path | sub($prefix; "")):\(.start.line):\(.start.col)  WARNING  [\(.check_id | split(".") | last)]  \(.extra.message | gsub("\\s+"; " "))"
-      ' "$SG_OUT" 2>/dev/null)"
+        SEMGREP_WARNINGS="$(jq -r --arg prefix "${TMP_SG}/" '
+          .results[]? | select(.extra.severity == "WARNING")
+          | "\(.path | sub($prefix; "")):\(.start.line):\(.start.col)  WARNING  [\(.check_id | split(".") | last)]  \(.extra.message | gsub("\\s+"; " "))"
+        ' "$SG_OUT" 2>/dev/null || true)"
+      fi
 
       if [ -n "$SEMGREP_ERRORS" ]; then
         SEMGREP_ERROR_COUNT="$(printf '%s\n' "$SEMGREP_ERRORS" | wc -l | tr -d ' ')"
