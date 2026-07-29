@@ -1727,12 +1727,7 @@ LEDGER="${CWD}/.claude/.security-turn-files"
 REVIEW_FILES=""
 
 if [ -f "$LEDGER" ]; then
-  # Claude Code puts an ABSOLUTE path in .tool_input.file_path, so the ledger
-  # holds absolute paths. Strip the project prefix: the semgrep block in this
-  # same report prints repo-relative paths, and one report mixing both formats
-  # reads like two unrelated tools. The hook has already cd'd to $CWD, so the
-  # relative form still satisfies the -f test below.
-  REVIEW_FILES="$(awk 'NF' "$LEDGER" 2>/dev/null | sed "s|^${CWD}/||" | sort -u)"
+  REVIEW_FILES="$(awk 'NF' "$LEDGER" 2>/dev/null | sort -u)"
   # Drain BEFORE deciding whether to review. A suppressed or skipped review
   # must not leave its files to pile up into the next turn's list.
   rm -f "$LEDGER"
@@ -1744,13 +1739,26 @@ if [ "$STOP_HOOK_ACTIVE" = "true" ] || [ -n "${CC_SKIP_DIFF_REVIEW:-}" ]; then
   REVIEW_FILES=""
 fi
 
-# Drop paths deleted later in the same turn.
+# Drop paths deleted later in the same turn, then shorten for display.
+#
+# Test existence on the ABSOLUTE path — it is unambiguous regardless of cwd —
+# and only then strip the project prefix, so the directive's paths match the
+# repo-relative ones the semgrep block prints in the same report.
+#
+# The strip is bash parameter expansion, deliberately NOT `sed "s|^${CWD}/||"`.
+# That interpolates $CWD into a regex, where a `.` in the project path — common
+# enough — matches any character: with cwd `/tmp/a.b`, the entry
+# `/tmp/aXb/file.clj` strips to `file.clj`, which then fails the existence test
+# and is dropped from the review **silently**. This plugin supports cross-repo
+# edits (see test/postedit-hooks-cross-repo_test.sh), so the ledger really can
+# hold paths outside $CWD. Quoting inside `${f#"$CWD"/}` forces a literal match,
+# and a path outside the project simply keeps its absolute form.
 if [ -n "$REVIEW_FILES" ]; then
   KEPT=""
   while IFS= read -r f; do
     [ -z "$f" ] && continue
     if [ -f "$f" ]; then
-      KEPT="${KEPT}${f}"$'\n'
+      KEPT="${KEPT}${f#"$CWD"/}"$'\n'
     fi
   done <<<"$REVIEW_FILES"
   REVIEW_FILES="$(printf '%s' "$KEPT" | awk 'NF')"
