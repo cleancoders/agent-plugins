@@ -75,7 +75,7 @@ have at least one class.
 | A07 Authentication Failures | `missing-authn`, `insecure-tls-verification` | llm-review + semgrep |
 | A08 Software or Data Integrity Failures | `java-deserialization`, `mass-assignment` | semgrep + llm-review |
 | A09 Security Logging and Alerting Failures | `logging-failures` | llm-review |
-| A10 Mishandling of Exceptional Conditions | `spec-malli-leak`, `fail-open` | semgrep |
+| A10 Mishandling of Exceptional Conditions | `spec-malli-leak`, `fail-open` | semgrep (one ERROR, one WARNING) |
 
 `atom-toctou` (CWE-367) and `resource-exhaustion` (CWE-770, 400) map to no 2025
 category. That is a fact about the taxonomy, not a coverage gap.
