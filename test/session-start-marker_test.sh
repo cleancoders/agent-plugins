@@ -108,4 +108,33 @@ test_marker_written_in_clojure_git_repo() {
     "$(cat "${PROJECT}/.gitignore" 2>/dev/null)" ".security-session-start-sha"
 }
 
+test_missing_notice_names_semgrep_not_clj_holmes() {
+  printf '{:deps {}}' > "${PROJECT}/deps.edn"
+
+  local ctx
+  ctx="$(run_hook_context)"
+
+  # CI dropped clj-holmes for 16 cc-* semgrep rules. Telling a developer to
+  # install a tool the pipeline no longer runs is worse than saying nothing:
+  # they would install abandoned software and believe they were covered.
+  assertNotContains "clj-holmes must be gone from the toolchain notice" \
+    "${ctx}" "clj-holmes"
+
+  if ! command -v semgrep >/dev/null 2>&1; then
+    assertContains "missing-tool notice should flag semgrep" "${ctx}" "semgrep"
+  fi
+}
+
+test_missing_notice_documents_the_rules_dir_override() {
+  printf '{:deps {}}' > "${PROJECT}/deps.edn"
+
+  local ctx
+  ctx="$(run_hook_context)"
+
+  if ! command -v semgrep >/dev/null 2>&1; then
+    assertContains "the notice should mention the env override" \
+      "${ctx}" "CC_SEMGREP_RULES_DIR"
+  fi
+}
+
 . "${SCRIPT_DIR}/../lib/shunit2"

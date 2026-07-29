@@ -21,7 +21,7 @@
 # out of a v1 cache.
 #
 # Network on a Stop hook is not a new cost: before this, the hooks ran
-# `clj-holmes fetch-rules` on a cold cache in exactly the same place.
+# the retired scanner's own rule fetch on a cold cache, in the same place.
 
 CC_SEMGREP_RULES_REF="${CC_SEMGREP_RULES_REF:-v1}"
 CC_SEMGREP_RULES_URL_BASE="${CC_SEMGREP_RULES_URL_BASE:-https://codeload.github.com/cleancoders/github-actions/tar.gz}"

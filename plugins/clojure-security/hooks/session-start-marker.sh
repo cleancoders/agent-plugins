@@ -6,7 +6,7 @@
 #    arbitrary merge-base.
 #
 # 2. In a Clojure project, audit the security toolchain (clj-kondo,
-#    clj-holmes + rules, gitleaks, clj-watson, jq) and inject a status
+#    semgrep, gitleaks, clj-watson, jq) and inject a status
 #    notice into the conversation. Missing tools degrade scanning to
 #    silent no-ops, so the user has to be told once per session that
 #    scanning is incomplete — otherwise the absence is invisible.
@@ -97,15 +97,9 @@ command -v gitleaks   >/dev/null 2>&1 || note_missing "gitleaks" \
   "secret scanning in the Stop and PreToolUse hooks" \
   "\`brew install gitleaks\` — without it leaked credentials will not be flagged"
 
-if ! command -v clj-holmes >/dev/null 2>&1; then
-  note_missing "clj-holmes" \
-    "Clojure security-pattern SAST in the Stop and PreToolUse hooks" \
-    "download from https://github.com/clj-holmes/clj-holmes/releases/latest — the hooks auto-fetch the rule set on first scan, so no separate \`fetch-rules\` step is needed"
-fi
-# Note: when clj-holmes is installed but the rules dir is missing/empty, the
-# Stop and commit-backstop hooks now run `clj-holmes fetch-rules` themselves
-# before scanning — so a missing rules dir is no longer a silent no-op and
-# needs no setup note here.
+command -v semgrep >/dev/null 2>&1 || note_missing "semgrep" \
+  "Clojure security-pattern SAST in the Stop and PreToolUse hooks" \
+  "\`brew install semgrep\` — the hooks fetch the 16 cleancoders \`cc-*\` rules on first scan and cache them; set \`CC_SEMGREP_RULES_DIR\` to a \`cleancoders/github-actions\` checkout to skip the fetch entirely"
 
 command -v clj-watson >/dev/null 2>&1 || note_missing "clj-watson" \
   "dependency CVE scanning in \`/security-audit\`" \
