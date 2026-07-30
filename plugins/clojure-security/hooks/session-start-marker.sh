@@ -106,6 +106,30 @@ command -v clj-watson >/dev/null 2>&1 || note_missing "clj-watson" \
   "dependency CVE scanning in \`/security-audit\`" \
   "see https://github.com/clj-holmes/clj-watson — without it the audit will not check transitive deps for known CVEs"
 
+# --- CC_SEMGREP_RULES_DIR override sanity check ------------------------------
+# A wrong override is a configuration error the user can fix, and it must not
+# collapse into the same silence as "GitHub unreachable" (a transient nobody
+# can act on). resolve_semgrep_rules already refuses to hand semgrep a
+# directory with no cc-*.yaml and falls back to the cache/fetch chain instead
+# — the dangerous half (semgrep scanning garbage and looking clean) is fixed.
+# But that fallthrough is itself silent: a user who points CC_SEMGREP_RULES_DIR
+# at the wrong path has no way to learn the override was ignored, and may
+# believe their checkout is what got scanned when a stale cache actually
+# served the rules. Report it here once per session, the same place every
+# other toolchain problem is reported.
+# shellcheck source=lib/semgrep-rules.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/semgrep-rules.sh" 2>/dev/null || true
+
+CC_SEMGREP_RULES_DIR_NOTICE=""
+if [ -n "${CC_SEMGREP_RULES_DIR:-}" ]; then
+  if [ ! -d "${CC_SEMGREP_RULES_DIR}" ]; then
+    CC_SEMGREP_RULES_DIR_NOTICE="\`CC_SEMGREP_RULES_DIR\` is set to \`${CC_SEMGREP_RULES_DIR}\`, which does not exist. The override is ignored; the hooks fall back to the cache/fetch chain instead. Point it at a \`security-rules/semgrep\` directory (e.g. inside a \`cleancoders/github-actions\` checkout) — the directory that actually contains the \`cc-*.yaml\` rule files."
+  elif command -v _semgrep_rules_dir_has_rules >/dev/null 2>&1 \
+       && ! _semgrep_rules_dir_has_rules "${CC_SEMGREP_RULES_DIR}"; then
+    CC_SEMGREP_RULES_DIR_NOTICE="\`CC_SEMGREP_RULES_DIR\` is set to \`${CC_SEMGREP_RULES_DIR}\`, but it contains no \`cc-*.yaml\` rule files — this looks like a repo checkout root rather than the rules directory. The override is ignored; the hooks fall back to the cache/fetch chain instead. Point it at a \`security-rules/semgrep\` directory (e.g. inside a \`cleancoders/github-actions\` checkout)."
+  fi
+fi
+
 # Suggest pulling in the plugin's clj-kondo config if the project has none.
 # clj-kondo auto-discovers `.clj-kondo/config.edn` from the project root;
 # without one the per-edit lint runs with defaults that omit this plugin's
@@ -115,12 +139,17 @@ if [ ! -f "$CWD/.clj-kondo/config.edn" ]; then
   CLJ_KONDO_SUGGESTION="No clj-kondo config found in this Clojure project (\`.clj-kondo/config.edn\`). The clj-kondo-postedit hook will lint with defaults, which omit this plugin's security-tuned linter levels (escalated :type-mismatch / :refer-all, surfaced :unused-binding / :shadowed-var / :unused-private-var) and the Speclj resolution excludes. Suggest the user run \`/clojure-security:setup-clj-kondo\` to pull in the plugin's baseline config. Informational only — do not block on it."
 fi
 
-# Build the additionalContext payload if tools are missing OR no clj-kondo config.
-if [ -n "$MISSING" ] || [ -n "$CLJ_KONDO_SUGGESTION" ]; then
+# Build the additionalContext payload if tools are missing, the rules-dir
+# override is unusable, OR no clj-kondo config.
+if [ -n "$MISSING" ] || [ -n "$CLJ_KONDO_SUGGESTION" ] || [ -n "$CC_SEMGREP_RULES_DIR_NOTICE" ]; then
   CONTEXT="clojure-security plugin — toolchain status"$'\n'
 
   if [ -n "$MISSING" ]; then
     CONTEXT="${CONTEXT}"$'\n'"This is a Clojure project but some security-scanning tools are missing. Scanning that depends on them will degrade to a silent no-op until installed. Tell the user once if they ask why scanning is quiet, and otherwise carry on."$'\n\n'"Missing:"$'\n\n'"${MISSING}"$'\n'"All hooks still load and run; they just skip the missing tool. To verify the full toolchain after installing, restart the session so this check re-runs."$'\n'
+  fi
+
+  if [ -n "$CC_SEMGREP_RULES_DIR_NOTICE" ]; then
+    CONTEXT="${CONTEXT}"$'\n'"${CC_SEMGREP_RULES_DIR_NOTICE}"$'\n'
   fi
 
   if [ -n "$CLJ_KONDO_SUGGESTION" ]; then

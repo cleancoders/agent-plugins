@@ -34,6 +34,15 @@ run_hook_context() {
     | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null
 }
 
+# Same, but with CC_SEMGREP_RULES_DIR set — unconditional on the environment's
+# own toolchain (no command -v guard), since the check under test is about the
+# override path itself, not about whether semgrep happens to be installed.
+run_hook_context_with_rules_dir() {
+  printf '{"cwd":"%s"}' "${PROJECT}" \
+    | CC_SEMGREP_RULES_DIR="$1" bash "${HOOK}" 2>/dev/null \
+    | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null
+}
+
 # Run the hook with a PATH that excludes the homebrew prefix, so every scanner
 # reports missing and the notice's CONTENT can actually be asserted. Without
 # this, a machine that has semgrep installed — which after this migration is the
@@ -162,6 +171,57 @@ test_missing_notice_documents_the_rules_dir_override() {
   assertContains "the notice should flag semgrep" "${ctx}" "semgrep"
   assertContains "the notice should mention the env override" \
     "${ctx}" "CC_SEMGREP_RULES_DIR"
+}
+
+# --- CC_SEMGREP_RULES_DIR override sanity check ------------------------------
+# resolve_semgrep_rules() already refuses to hand semgrep a directory with no
+# cc-*.yaml and falls back to the cache/fetch chain — the dangerous half
+# (semgrep scanning garbage and looking clean) is fixed elsewhere. But that
+# fallthrough is itself silent to the user: a wrong override is a config error
+# they can fix, and it must not read the same as a transient network failure.
+# These assert unconditionally — no `command -v semgrep` guard — because the
+# check is about the override path, not about whether semgrep happens to be
+# installed on the machine running the test.
+
+test_nonexistent_rules_dir_override_produces_a_notice() {
+  printf '{:deps {}}' > "${PROJECT}/deps.edn"
+
+  local ctx
+  ctx="$(run_hook_context_with_rules_dir "${PROJECT}/does-not-exist")"
+
+  assertContains "must name the misconfigured variable" "${ctx}" "CC_SEMGREP_RULES_DIR"
+  assertContains "must say the override was ignored" "${ctx}" "The override is ignored"
+}
+
+test_rules_dir_override_with_no_cc_rules_produces_a_notice() {
+  # Shaped like the documented mistake: a real, existing, non-empty directory
+  # (a repo checkout root) that holds no cc-*.yaml rule file.
+  printf '{:deps {}}' > "${PROJECT}/deps.edn"
+  local bogus
+  bogus="$(mktemp -d)"
+  printf 'name: ci\n' > "${bogus}/workflow.yaml"
+
+  local ctx
+  ctx="$(run_hook_context_with_rules_dir "${bogus}")"
+
+  assertContains "must name the misconfigured variable" "${ctx}" "CC_SEMGREP_RULES_DIR"
+  assertContains "must name the bogus path" "${ctx}" "${bogus}"
+  assertContains "must say the override was ignored" "${ctx}" "The override is ignored"
+  rm -rf "${bogus}"
+}
+
+test_rules_dir_override_with_cc_rules_produces_no_notice() {
+  printf '{:deps {}}' > "${PROJECT}/deps.edn"
+  local good
+  good="$(mktemp -d)"
+  printf 'rules:\n' > "${good}/cc-read-string.yaml"
+
+  local ctx
+  ctx="$(run_hook_context_with_rules_dir "${good}")"
+
+  assertNotContains "a valid override must not be flagged as ignored" \
+    "${ctx}" "The override is ignored"
+  rm -rf "${good}"
 }
 
 . "${SCRIPT_DIR}/../lib/shunit2"
