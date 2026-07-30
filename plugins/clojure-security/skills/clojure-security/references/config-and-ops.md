@@ -176,10 +176,10 @@ specifically — credential stuffing is the common case.
 
 Broken or reversible primitives used for something security-bearing.
 
-Detected in CI by upstream clj-holmes rules: `weak-hash-function-md5`,
-`weak-hash-function-sha1`, `deprecated-blowfish`, `deprecated-desede`, and
-`ecb-mode-of-operation`. This class exists so those findings can be triaged rather
-than merely reported.
+**Detected in CI by:** `cc-weak-crypto` (semgrep). One `pattern-regex` rule
+covers MD2/MD4/MD5/SHA-1 digests and DES, DESede, Blowfish, RC2, RC4 and ECB-mode
+ciphers. Being a regex, it can match inside a comment — and it cannot see a
+weak algorithm assembled from a variable.
 
 ```clojure
 ;; Vulnerable
@@ -222,8 +222,10 @@ Note this is **A07 Authentication Failures**, not A04 Cryptographic Failures.
 A04's 32-CWE list excludes CWE-295; the failure is of authentication, not of the
 cipher.
 
-Detected in CI by upstream clj-holmes rules `clojure-weak-ssl-context` and
-`insecure-hostname-verifier`.
+**Detected in CI by:** `cc-insecure-tls` (semgrep). Covers obsolete
+`SSLContext/getInstance` protocol strings, a `HostnameVerifier` that returns
+`true`, `setDefaultHostnameVerifier`, and `{:insecure? true}` in a client opts
+map.
 
 ```clojure
 ;; Vulnerable

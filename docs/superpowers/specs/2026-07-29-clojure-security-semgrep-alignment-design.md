@@ -126,7 +126,7 @@ rules-dir note, and adds:
 ```
 semgrep — Clojure security-pattern SAST in the Stop and PreToolUse hooks
   `brew install semgrep` — the hooks fetch the cleancoders rule set on first
-  scan; set CC_SEMGREP_RULES_DIR to a github-actions checkout to skip the fetch
+  scan; set CC_SEMGREP_RULES_DIR to a security-rules/semgrep directory to skip the fetch
 ```
 
 `clj-watson`'s note keeps its URL but stops describing clj-holmes as a sibling
@@ -239,7 +239,7 @@ manages:
 | 3 | 352 | csrf | llm-review |
 | 4 | 862 | missing-authz | llm-review |
 | 5 | 787 | — not applicable (memory safety) | — |
-| 6 | 22 | path-traversal | semgrep (WARNING) + llm-review |
+| 6 | 22 | path-traversal | semgrep (WARNING) |
 | 7 | 416 | — not applicable (memory safety) | — |
 | 8 | 125 | — not applicable (memory safety) | — |
 | 9 | 78 | command-injection | semgrep |

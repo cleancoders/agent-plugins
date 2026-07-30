@@ -6,7 +6,7 @@
 #    arbitrary merge-base.
 #
 # 2. In a Clojure project, audit the security toolchain (clj-kondo,
-#    clj-holmes + rules, gitleaks, clj-watson, jq) and inject a status
+#    semgrep, gitleaks, clj-watson, jq) and inject a status
 #    notice into the conversation. Missing tools degrade scanning to
 #    silent no-ops, so the user has to be told once per session that
 #    scanning is incomplete — otherwise the absence is invisible.
@@ -51,16 +51,17 @@ is_clojure_project || exit 0
 # basename (no leading slash) so the pattern works regardless of where the
 # .gitignore lives relative to .claude/. Idempotent: skip if already ignored.
 ensure_gitignored() {
-  IGNORE_ENTRY=".security-session-start-sha"
   GITIGNORE="${CWD}/.gitignore"
-  if [ -f "$GITIGNORE" ] && grep -qxF "$IGNORE_ENTRY" "$GITIGNORE" 2>/dev/null; then
-    return 0
-  fi
-  # Append a trailing newline first if the file exists and lacks one.
-  if [ -s "$GITIGNORE" ] && [ -n "$(tail -c1 "$GITIGNORE" 2>/dev/null)" ]; then
-    printf '\n' >> "$GITIGNORE"
-  fi
-  printf '%s\n' "$IGNORE_ENTRY" >> "$GITIGNORE" 2>/dev/null || true
+  for IGNORE_ENTRY in ".security-session-start-sha" ".security-turn-files"; do
+    if [ -f "$GITIGNORE" ] && grep -qxF "$IGNORE_ENTRY" "$GITIGNORE" 2>/dev/null; then
+      continue
+    fi
+    # Append a trailing newline first if the file exists and lacks one.
+    if [ -s "$GITIGNORE" ] && [ -n "$(tail -c1 "$GITIGNORE" 2>/dev/null)" ]; then
+      printf '\n' >> "$GITIGNORE"
+    fi
+    printf '%s\n' "$IGNORE_ENTRY" >> "$GITIGNORE" 2>/dev/null || true
+  done
 }
 
 if git rev-parse --git-dir >/dev/null 2>&1; then
@@ -97,19 +98,37 @@ command -v gitleaks   >/dev/null 2>&1 || note_missing "gitleaks" \
   "secret scanning in the Stop and PreToolUse hooks" \
   "\`brew install gitleaks\` — without it leaked credentials will not be flagged"
 
-if ! command -v clj-holmes >/dev/null 2>&1; then
-  note_missing "clj-holmes" \
-    "Clojure security-pattern SAST in the Stop and PreToolUse hooks" \
-    "download from https://github.com/clj-holmes/clj-holmes/releases/latest — the hooks auto-fetch the rule set on first scan, so no separate \`fetch-rules\` step is needed"
-fi
-# Note: when clj-holmes is installed but the rules dir is missing/empty, the
-# Stop and commit-backstop hooks now run `clj-holmes fetch-rules` themselves
-# before scanning — so a missing rules dir is no longer a silent no-op and
-# needs no setup note here.
+command -v semgrep >/dev/null 2>&1 || note_missing "semgrep" \
+  "Clojure security-pattern SAST in the Stop and PreToolUse hooks" \
+  "\`brew install semgrep\` — the hooks fetch the 16 cleancoders \`cc-*\` rules on first scan and cache them; set \`CC_SEMGREP_RULES_DIR\` to a \`security-rules/semgrep\` directory (e.g. inside a \`cleancoders/github-actions\` checkout) to skip the fetch entirely"
 
 command -v clj-watson >/dev/null 2>&1 || note_missing "clj-watson" \
   "dependency CVE scanning in \`/security-audit\`" \
   "see https://github.com/clj-holmes/clj-watson — without it the audit will not check transitive deps for known CVEs"
+
+# --- CC_SEMGREP_RULES_DIR override sanity check ------------------------------
+# A wrong override is a configuration error the user can fix, and it must not
+# collapse into the same silence as "GitHub unreachable" (a transient nobody
+# can act on). resolve_semgrep_rules already refuses to hand semgrep a
+# directory with no cc-*.yaml and falls back to the cache/fetch chain instead
+# — the dangerous half (semgrep scanning garbage and looking clean) is fixed.
+# But that fallthrough is itself silent: a user who points CC_SEMGREP_RULES_DIR
+# at the wrong path has no way to learn the override was ignored, and may
+# believe their checkout is what got scanned when a stale cache actually
+# served the rules. Report it here once per session, the same place every
+# other toolchain problem is reported.
+# shellcheck source=lib/semgrep-rules.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/semgrep-rules.sh" 2>/dev/null || true
+
+CC_SEMGREP_RULES_DIR_NOTICE=""
+if [ -n "${CC_SEMGREP_RULES_DIR:-}" ]; then
+  if [ ! -d "${CC_SEMGREP_RULES_DIR}" ]; then
+    CC_SEMGREP_RULES_DIR_NOTICE="\`CC_SEMGREP_RULES_DIR\` is set to \`${CC_SEMGREP_RULES_DIR}\`, which does not exist. The override is ignored; the hooks fall back to the cache/fetch chain instead. Point it at a \`security-rules/semgrep\` directory (e.g. inside a \`cleancoders/github-actions\` checkout) — the directory that actually contains the \`cc-*.yaml\` rule files."
+  elif command -v _semgrep_rules_dir_has_rules >/dev/null 2>&1 \
+       && ! _semgrep_rules_dir_has_rules "${CC_SEMGREP_RULES_DIR}"; then
+    CC_SEMGREP_RULES_DIR_NOTICE="\`CC_SEMGREP_RULES_DIR\` is set to \`${CC_SEMGREP_RULES_DIR}\`, but it contains no \`cc-*.yaml\` rule files — this looks like a repo checkout root rather than the rules directory. The override is ignored; the hooks fall back to the cache/fetch chain instead. Point it at a \`security-rules/semgrep\` directory (e.g. inside a \`cleancoders/github-actions\` checkout)."
+  fi
+fi
 
 # Suggest pulling in the plugin's clj-kondo config if the project has none.
 # clj-kondo auto-discovers `.clj-kondo/config.edn` from the project root;
@@ -120,12 +139,17 @@ if [ ! -f "$CWD/.clj-kondo/config.edn" ]; then
   CLJ_KONDO_SUGGESTION="No clj-kondo config found in this Clojure project (\`.clj-kondo/config.edn\`). The clj-kondo-postedit hook will lint with defaults, which omit this plugin's security-tuned linter levels (escalated :type-mismatch / :refer-all, surfaced :unused-binding / :shadowed-var / :unused-private-var) and the Speclj resolution excludes. Suggest the user run \`/clojure-security:setup-clj-kondo\` to pull in the plugin's baseline config. Informational only — do not block on it."
 fi
 
-# Build the additionalContext payload if tools are missing OR no clj-kondo config.
-if [ -n "$MISSING" ] || [ -n "$CLJ_KONDO_SUGGESTION" ]; then
+# Build the additionalContext payload if tools are missing, the rules-dir
+# override is unusable, OR no clj-kondo config.
+if [ -n "$MISSING" ] || [ -n "$CLJ_KONDO_SUGGESTION" ] || [ -n "$CC_SEMGREP_RULES_DIR_NOTICE" ]; then
   CONTEXT="clojure-security plugin — toolchain status"$'\n'
 
   if [ -n "$MISSING" ]; then
     CONTEXT="${CONTEXT}"$'\n'"This is a Clojure project but some security-scanning tools are missing. Scanning that depends on them will degrade to a silent no-op until installed. Tell the user once if they ask why scanning is quiet, and otherwise carry on."$'\n\n'"Missing:"$'\n\n'"${MISSING}"$'\n'"All hooks still load and run; they just skip the missing tool. To verify the full toolchain after installing, restart the session so this check re-runs."$'\n'
+  fi
+
+  if [ -n "$CC_SEMGREP_RULES_DIR_NOTICE" ]; then
+    CONTEXT="${CONTEXT}"$'\n'"${CC_SEMGREP_RULES_DIR_NOTICE}"$'\n'
   fi
 
   if [ -n "$CLJ_KONDO_SUGGESTION" ]; then

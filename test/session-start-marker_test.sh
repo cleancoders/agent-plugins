@@ -34,6 +34,35 @@ run_hook_context() {
     | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null
 }
 
+# Same, but with CC_SEMGREP_RULES_DIR set — unconditional on the environment's
+# own toolchain (no command -v guard), since the check under test is about the
+# override path itself, not about whether semgrep happens to be installed.
+run_hook_context_with_rules_dir() {
+  printf '{"cwd":"%s"}' "${PROJECT}" \
+    | CC_SEMGREP_RULES_DIR="$1" bash "${HOOK}" 2>/dev/null \
+    | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null
+}
+
+# Run the hook with a PATH that excludes the homebrew prefix, so every scanner
+# reports missing and the notice's CONTENT can actually be asserted. Without
+# this, a machine that has semgrep installed — which after this migration is the
+# normal case — can only ever skip the assertion, and a test that asserts
+# nothing passes no matter what the hook does.
+#
+# jq is symlinked in because the hook needs it to emit its JSON payload at all;
+# /usr/bin and /bin supply the coreutils it uses. The outer jq in the pipeline
+# runs under the test's own PATH, not the hook's.
+run_hook_context_without_tools() {
+  local shim out
+  shim="$(mktemp -d)"
+  ln -s "$(command -v jq)" "${shim}/jq" 2>/dev/null || true
+  out="$(printf '{"cwd":"%s"}' "${PROJECT}" \
+    | PATH="${shim}:/usr/bin:/bin" bash "${HOOK}" 2>/dev/null \
+    | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
+  rm -rf "${shim}"
+  printf '%s' "${out}"
+}
+
 test_suggests_setup_skill_when_clojure_project_has_no_clj_kondo_config() {
   printf '{:deps {}}' > "${PROJECT}/deps.edn"
 
@@ -106,6 +135,93 @@ test_marker_written_in_clojure_git_repo() {
     "[ -f '${PROJECT}/.claude/.security-session-start-sha' ]"
   assertContains "marker gitignored" \
     "$(cat "${PROJECT}/.gitignore" 2>/dev/null)" ".security-session-start-sha"
+}
+
+test_missing_notice_names_semgrep_not_clj_holmes() {
+  printf '{:deps {}}' > "${PROJECT}/deps.edn"
+
+  local ctx scrubbed
+  ctx="$(run_hook_context)"
+
+  # clj-watson's real home is github.com/clj-holmes/clj-watson, and that URL
+  # legitimately appears in clj-watson's own missing-tool notice. Strip that
+  # substring before asserting — otherwise this test fails on every machine
+  # where clj-watson is not installed, which is most of them.
+  scrubbed="$(printf '%s' "${ctx}" | sed 's|clj-holmes/clj-watson||g')"
+
+  # CI dropped clj-holmes for 16 cc-* semgrep rules. Telling a developer to
+  # install a tool the pipeline no longer runs is worse than saying nothing:
+  # they would install abandoned software and believe they were covered.
+  assertNotContains "clj-holmes must be gone from the toolchain notice" \
+    "${scrubbed}" "clj-holmes"
+
+  if ! command -v semgrep >/dev/null 2>&1; then
+    assertContains "missing-tool notice should flag semgrep" "${ctx}" "semgrep"
+  fi
+}
+
+test_missing_notice_documents_the_rules_dir_override() {
+  printf '{:deps {}}' > "${PROJECT}/deps.edn"
+
+  local ctx
+  ctx="$(run_hook_context_without_tools)"
+
+  # Unconditional: the shim guarantees semgrep looks absent, so the notice must
+  # be present and must carry both the install hint and the override.
+  assertContains "the notice should flag semgrep" "${ctx}" "semgrep"
+  assertContains "the notice should mention the env override" \
+    "${ctx}" "CC_SEMGREP_RULES_DIR"
+}
+
+# --- CC_SEMGREP_RULES_DIR override sanity check ------------------------------
+# resolve_semgrep_rules() already refuses to hand semgrep a directory with no
+# cc-*.yaml and falls back to the cache/fetch chain — the dangerous half
+# (semgrep scanning garbage and looking clean) is fixed elsewhere. But that
+# fallthrough is itself silent to the user: a wrong override is a config error
+# they can fix, and it must not read the same as a transient network failure.
+# These assert unconditionally — no `command -v semgrep` guard — because the
+# check is about the override path, not about whether semgrep happens to be
+# installed on the machine running the test.
+
+test_nonexistent_rules_dir_override_produces_a_notice() {
+  printf '{:deps {}}' > "${PROJECT}/deps.edn"
+
+  local ctx
+  ctx="$(run_hook_context_with_rules_dir "${PROJECT}/does-not-exist")"
+
+  assertContains "must name the misconfigured variable" "${ctx}" "CC_SEMGREP_RULES_DIR"
+  assertContains "must say the override was ignored" "${ctx}" "The override is ignored"
+}
+
+test_rules_dir_override_with_no_cc_rules_produces_a_notice() {
+  # Shaped like the documented mistake: a real, existing, non-empty directory
+  # (a repo checkout root) that holds no cc-*.yaml rule file.
+  printf '{:deps {}}' > "${PROJECT}/deps.edn"
+  local bogus
+  bogus="$(mktemp -d)"
+  printf 'name: ci\n' > "${bogus}/workflow.yaml"
+
+  local ctx
+  ctx="$(run_hook_context_with_rules_dir "${bogus}")"
+
+  assertContains "must name the misconfigured variable" "${ctx}" "CC_SEMGREP_RULES_DIR"
+  assertContains "must name the bogus path" "${ctx}" "${bogus}"
+  assertContains "must say the override was ignored" "${ctx}" "The override is ignored"
+  rm -rf "${bogus}"
+}
+
+test_rules_dir_override_with_cc_rules_produces_no_notice() {
+  printf '{:deps {}}' > "${PROJECT}/deps.edn"
+  local good
+  good="$(mktemp -d)"
+  printf 'rules:\n' > "${good}/cc-read-string.yaml"
+
+  local ctx
+  ctx="$(run_hook_context_with_rules_dir "${good}")"
+
+  assertNotContains "a valid override must not be flagged as ignored" \
+    "${ctx}" "The override is ignored"
+  rm -rf "${good}"
 }
 
 . "${SCRIPT_DIR}/../lib/shunit2"

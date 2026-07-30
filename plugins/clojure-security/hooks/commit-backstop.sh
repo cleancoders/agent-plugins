@@ -13,9 +13,9 @@
 #   exit 2 — block the tool call (stderr surfaced to Claude as the reason)
 #
 # Scope:
-#   The staged diff. Working-tree copies of staged Clojure files are
-#   scanned by clj-holmes (a small fidelity gap when only part of a file
-#   is staged; acceptable for a backstop). gitleaks runs in its native
+#   The staged diff. Staged Clojure files are scanned with semgrep against
+#   their staged content (via `git show :path`, not the working tree) so a
+#   partially-staged file is scanned faithfully. gitleaks runs in its native
 #   `protect --staged` mode against the index.
 
 set -e
@@ -83,13 +83,18 @@ done <<<"$STAGED"
 
 # --- tool availability ----------------------------------------------------
 
-HAVE_HOLMES=0
+HAVE_SEMGREP=0
 HAVE_GITLEAKS=0
-command -v clj-holmes >/dev/null 2>&1 && HAVE_HOLMES=1
-command -v gitleaks   >/dev/null 2>&1 && HAVE_GITLEAKS=1
-if [ "$HAVE_HOLMES" -eq 0 ] && [ "$HAVE_GITLEAKS" -eq 0 ]; then
+command -v semgrep  >/dev/null 2>&1 && HAVE_SEMGREP=1
+command -v gitleaks >/dev/null 2>&1 && HAVE_GITLEAKS=1
+if [ "$HAVE_SEMGREP" -eq 0 ] && [ "$HAVE_GITLEAKS" -eq 0 ]; then
   exit 0
 fi
+
+# shellcheck source=lib/semgrep-rules.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/semgrep-rules.sh"
+# shellcheck source=lib/semgrep-scan.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/semgrep-scan.sh"
 
 # --- gitleaks against the staged index ------------------------------------
 
@@ -119,81 +124,87 @@ if [ "$HAVE_GITLEAKS" -eq 1 ]; then
   fi
 fi
 
-# --- clj-holmes against working-tree copies of staged Clojure files -------
+# --- semgrep against staged content of staged Clojure files ----------------
 
-HOLMES_REPORT=""
-HOLMES_COUNT=0
-HOLMES_RULES_DIR="${CLJ_HOLMES_RULES_DIR:-/tmp/clj-holmes-rules}"
+SEMGREP_ERRORS=""
+SEMGREP_WARNINGS=""
+SEMGREP_ERROR_COUNT=0
+SEMGREP_WARN_COUNT=0
+SEMGREP_TOOL_ERRORS=""
 
-# clj-holmes ships with no rules; without them the scan is a silent no-op.
-# Fetch the canonical rule set into the dir (one-time; reused on later runs)
-# so the staged diff is actually scanned instead of skipped.
-if [ "$HAVE_HOLMES" -eq 1 ] && [ -n "$CLJ_STAGED" ]; then
-  if [ ! -d "$HOLMES_RULES_DIR" ] || [ -z "$(ls -A "$HOLMES_RULES_DIR" 2>/dev/null)" ]; then
-    clj-holmes fetch-rules -o "$HOLMES_RULES_DIR" >/dev/null 2>&1 || true
-  fi
-fi
+if [ "$HAVE_SEMGREP" -eq 1 ] && [ -n "$CLJ_STAGED" ]; then
+  RULES_DIR="$(resolve_semgrep_rules)"
+  if [ -n "$RULES_DIR" ]; then
+    TMP_SG="$(mktemp -d 2>/dev/null || true)"
+    if [ -n "$TMP_SG" ]; then
+      # The tmp-tree mirror stays, unlike in the Stop hook: this must scan
+      # STAGED content (`git show :path`), which by definition is not what is
+      # on disk when a file is partially staged.
+      SG_FILES=""
+      while IFS= read -r f; do
+        [ -z "$f" ] && continue
+        mkdir -p "${TMP_SG}/$(dirname "$f")"
+        if ! git show ":$f" > "${TMP_SG}/$f" 2>/dev/null; then
+          cp "$f" "${TMP_SG}/$f" 2>/dev/null || true
+        fi
+        SG_FILES="${SG_FILES}${TMP_SG}/${f}"$'\n'
+      done <<<"$CLJ_STAGED"
 
-if [ "$HAVE_HOLMES" -eq 1 ] && [ -n "$CLJ_STAGED" ] && [ -d "$HOLMES_RULES_DIR" ]; then
-  TMP_HOLMES="$(mktemp -d 2>/dev/null || true)"
-  if [ -n "$TMP_HOLMES" ]; then
-    while IFS= read -r f; do
-      [ -z "$f" ] && continue
-      mkdir -p "${TMP_HOLMES}/$(dirname "$f")"
-      # Use staged content via `git show :path` so partial-stage findings
-      # are caught even if the working tree was cleaned up. Fall back to
-      # the working-tree copy on error.
-      if ! git show ":$f" > "${TMP_HOLMES}/$f" 2>/dev/null; then
-        cp "$f" "${TMP_HOLMES}/$f" 2>/dev/null || true
-      fi
-    done <<<"$CLJ_STAGED"
+      run_semgrep_scan "$RULES_DIR" "$SG_FILES" "${TMP_SG}/"
 
-    HOLMES_OUT="${TMP_HOLMES}/__holmes.json"
-    # --no-verbose disables the progrock progress bar, whose ETA interval
-    # overflows a 32-bit int on long scans ("Value out of range for int")
-    # and crashes clj-holmes before findings are written — a silent dead gate.
-    clj-holmes scan -p "$TMP_HOLMES" -d "$HOLMES_RULES_DIR" \
-      --no-verbose -t json -o "$HOLMES_OUT" >/dev/null 2>&1 || true
-
-    if [ -f "$HOLMES_OUT" ]; then
-      HOLMES_REPORT="$(
-        jq -r --arg prefix "${TMP_HOLMES}/" '
-          .[] as $rule
-          | $rule.findings[]
-          | "\($rule.filename | sub($prefix; "")):\(.row):\(.col)  RISK  [\($rule.name)]  \($rule.message) — \(.code)"
-        ' "$HOLMES_OUT" 2>/dev/null
-      )"
-      if [ -n "$HOLMES_REPORT" ]; then
-        HOLMES_COUNT="$(printf '%s\n' "$HOLMES_REPORT" | wc -l | tr -d ' ')"
-      fi
+      rm -rf "$TMP_SG"
     fi
-    rm -rf "$TMP_HOLMES"
   fi
 fi
 
-# --- decide -------------------------------------------------------------
+# --- decide -----------------------------------------------------------------
 
-if [ "$HOLMES_COUNT" -eq 0 ] && [ "$GITLEAKS_COUNT" = "0" ]; then
+if [ "$SEMGREP_ERROR_COUNT" -eq 0 ] && [ "$SEMGREP_WARN_COUNT" -eq 0 ] \
+   && [ "$GITLEAKS_COUNT" = "0" ] && [ -z "$SEMGREP_TOOL_ERRORS" ]; then
   exit 0
 fi
 
 {
-  echo "Commit blocked by clojure-security backstop. Staged diff has findings:"
+  if [ "$SEMGREP_ERROR_COUNT" -gt 0 ] || [ "$GITLEAKS_COUNT" != "0" ]; then
+    echo "Commit blocked by clojure-security backstop. Staged diff has findings:"
+  elif [ "$SEMGREP_WARN_COUNT" -gt 0 ]; then
+    echo "clojure-security backstop — advisory findings in the staged diff."
+    echo "Not blocking: these rules do not gate CI either."
+  else
+    echo "clojure-security backstop — semgrep reported a tool error (not blocking)."
+  fi
   echo
+  if [ -n "$SEMGREP_TOOL_ERRORS" ]; then
+    echo "## semgrep tool error — rules dir may be wrong, incomplete, or incompatible"
+    printf '%s\n' "$SEMGREP_TOOL_ERRORS"
+    echo
+  fi
   if [ -n "$GITLEAKS_REPORT" ]; then
     echo "## Secrets (gitleaks --staged) — ${GITLEAKS_COUNT}"
     printf '%s\n' "$GITLEAKS_REPORT"
     echo
   fi
-  if [ -n "$HOLMES_REPORT" ]; then
-    echo "## Clojure security patterns (clj-holmes) — ${HOLMES_COUNT}"
-    printf '%s\n' "$HOLMES_REPORT"
+  if [ -n "$SEMGREP_ERRORS" ]; then
+    echo "## Clojure security patterns (semgrep, blocking) — ${SEMGREP_ERROR_COUNT}"
+    printf '%s\n' "$SEMGREP_ERRORS"
     echo
   fi
-  echo "Fix the findings (or unstage the offending files) and re-attempt"
-  echo "the commit. To override, the human can run the commit themselves"
-  echo "after acknowledging the finding — this backstop is for Claude,"
-  echo "not for humans with full context."
+  if [ -n "$SEMGREP_WARNINGS" ]; then
+    echo "## Clojure security patterns (semgrep, advisory) — ${SEMGREP_WARN_COUNT}"
+    printf '%s\n' "$SEMGREP_WARNINGS"
+    echo
+  fi
+  if [ "$SEMGREP_ERROR_COUNT" -gt 0 ] || [ "$GITLEAKS_COUNT" != "0" ]; then
+    echo "Fix the findings (or unstage the offending files) and re-attempt"
+    echo "the commit. To override, the human can run the commit themselves"
+    echo "after acknowledging the finding — this backstop is for Claude,"
+    echo "not for humans with full context."
+  fi
 } >&2
 
-exit 2
+# A PreToolUse hook has no advisory exit code — 1 does not block any more than
+# 0 does — so advisory findings print and the commit proceeds.
+if [ "$SEMGREP_ERROR_COUNT" -gt 0 ] || [ "$GITLEAKS_COUNT" != "0" ]; then
+  exit 2
+fi
+exit 0

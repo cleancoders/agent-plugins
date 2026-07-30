@@ -15,7 +15,12 @@
 - **TDD, no exceptions.** Run the existing suite before touching anything. Write the failing test, watch it fail, then implement.
 - **Run the whole suite** with `for t in test/*_test.sh; do bash "$t" || echo "FAIL $t"; done` from the repo root.
 - **bash 3.2 compatible.** No `mapfile`, no associative arrays, no `${var,,}`. Use `while IFS= read -r` to build lists.
-- **Never `[ -n "$x" ] && cmd` in a `set -e` script.** The test returns 1 when false and `set -e` exits. Use `if` blocks. This bug already bit `cleancoders/github-actions` — see the comment at `.github/workflows/security.yml:365`.
+- **`cond && assignment` under `set -e` — know the exact rule.** Verified empirically, not assumed. A failing `[ -n "$x" ] && y=1` as a **standalone statement** is safe: `set -e` exempts a command that is not the last in an AND-OR list. It is **fatal as the last statement of a function body or sourced file**, because the function then returns 1 and the *call site* is a plain failing command. So:
+  - `command -v semgrep >/dev/null 2>&1 && HAVE_SEMGREP=1` mid-script — **fine**, and the existing hook already does this.
+  - Any function that could end on a failing test — **must** end with an explicit `return 0`.
+  - Where the assignment's result is needed later, prefer an `if` block for legibility regardless.
+
+  This is what bit `cleancoders/github-actions` (`.github/workflows/security.yml:365`): the statement was last in a `run:` block, so its status became the step's.
 - **No test may touch the network.** Stub `curl` earlier on `PATH`, or set `CC_SEMGREP_RULES_DIR` to a fixture directory.
 - **Do not delete test coverage.** Where a behaviour goes away, its test asserts the replacement.
 - **Do not rename or renumber vulnerability classes.** The CI rules key on `metadata.class`; a rename silently breaks the join.
@@ -35,7 +40,9 @@
 - `test/security-stop-semgrep_test.sh` — replaces `security-stop-holmes_test.sh`
 - `test/turn-ledger_test.sh`
 - `test/security-stop-review_test.sh`
-- `test/taxonomy-coverage_test.sh`
+- `test/taxonomy-coverage_test.sh` — the reverse index only
+- `test/security-audit-alignment_test.sh` — the audit command's prose
+- `test/no-clj-holmes_test.sh` — the plugin-wide invariant
 
 **Modify:**
 - `plugins/clojure-security/hooks/security-stop.sh` — semgrep block, review block, exit decision
@@ -228,7 +235,7 @@ Create `plugins/clojure-security/hooks/lib/semgrep-rules.sh`:
 # hooks resolve the rules at run time and cache the result.
 #
 # Resolution order, first hit wins:
-#   1. $CC_SEMGREP_RULES_DIR — a github-actions checkout; never touches network
+#   1. $CC_SEMGREP_RULES_DIR — a security-rules/semgrep dir; never touches network
 #   2. a warm cache at <root>/cc-semgrep-rules-<ref>
 #   3. a cold fetch of the pinned tag's tarball into that cache
 #
@@ -576,12 +583,25 @@ if [ "$HAVE_SEMGREP" -eq 1 ] && [ -n "$CLJ_FILES" ]; then
   if [ -n "$RULES_DIR" ]; then
     SEMGREP_OUT="$(mktemp 2>/dev/null || true)"
     if [ -n "$SEMGREP_OUT" ]; then
-      # No tmp-tree mirror, unlike the clj-holmes block this replaces: semgrep
-      # reads .clj/.cljs/.cljc directly and reports the paths it was given.
+      # No tmp-tree mirror, unlike the scanner this replaces: semgrep reads
+      # .clj/.cljs/.cljc directly and reports the paths it was given.
       # --quiet keeps the progress spinner out of stderr; findings come from JSON.
-      printf '%s' "$CLJ_FILES" | awk 'NF' \
-        | xargs semgrep scan --json --quiet --config "$RULES_DIR" \
-            > "$SEMGREP_OUT" 2>/dev/null || true
+      #
+      # A bash array rather than `xargs`: xargs splits its input on whitespace,
+      # so a path containing a space would arrive as two bogus arguments and the
+      # file would be silently left unscanned. The previous scanner iterated with
+      # while-read for that reason; keep the property.
+      #
+      # (Comments here name no tool: test/no-clj-holmes_test.sh keeps the retired
+      # scanner's name out of every plugin file but CHANGES, which is where the
+      # history of why it was dropped actually belongs.)
+      SG_ARGS=()
+      while IFS= read -r f; do
+        [ -n "$f" ] && SG_ARGS+=("$f")
+      done <<<"$CLJ_FILES"
+
+      semgrep scan --json --quiet --config "$RULES_DIR" "${SG_ARGS[@]}" \
+        > "$SEMGREP_OUT" 2>/dev/null || true
 
       # Findings suppressed in source with `nosemgrep` are absent from --json
       # output entirely, so they need no handling here — and the local gate
@@ -589,18 +609,28 @@ if [ "$HAVE_SEMGREP" -eq 1 ] && [ -n "$CLJ_FILES" ]; then
       #
       # check_id is prefixed with the config path when --config is absolute, so
       # strip to the last dot-segment for display.
-      SEMGREP_ERRORS="$(jq -r '
-        .results[]? | select(.extra.severity == "ERROR")
-        | "\(.path):\(.start.line):\(.start.col)  ERROR  [\(.check_id | split(".") | last)]  \(.extra.message | gsub("\\s+"; " "))"
-      ' "$SEMGREP_OUT" 2>/dev/null)"
+      #
+      # Both substitutions end in `|| true`. `jq` exits 5 on malformed input —
+      # exactly what a semgrep killed mid-write leaves behind — and a bare
+      # `X="$(cmd)"` assignment is NOT exempt from `set -e` the way a command in
+      # an AND-OR list is. Unguarded, that kills the hook with an uncontracted
+      # exit 5 and stderr already routed to /dev/null: a silent dead gate, the
+      # same failure that condemned clj-holmes. The gitleaks block below has
+      # always guarded its jq the same way.
+      if [ -s "$SEMGREP_OUT" ]; then
+        SEMGREP_ERRORS="$(jq -r '
+          .results[]? | select(.extra.severity == "ERROR")
+          | "\(.path):\(.start.line):\(.start.col)  ERROR  [\(.check_id | split(".") | last)]  \(.extra.message | gsub("\\s+"; " "))"
+        ' "$SEMGREP_OUT" 2>/dev/null || true)"
 
-      SEMGREP_WARNINGS="$(jq -r '
-        .results[]? | select(.extra.severity == "WARNING")
-        | "\(.path):\(.start.line):\(.start.col)  WARNING  [\(.check_id | split(".") | last)]  \(.extra.message | gsub("\\s+"; " "))"
-      ' "$SEMGREP_OUT" 2>/dev/null)"
+        SEMGREP_WARNINGS="$(jq -r '
+          .results[]? | select(.extra.severity == "WARNING")
+          | "\(.path):\(.start.line):\(.start.col)  WARNING  [\(.check_id | split(".") | last)]  \(.extra.message | gsub("\\s+"; " "))"
+        ' "$SEMGREP_OUT" 2>/dev/null || true)"
+      fi
 
-      # `[ -n "$x" ] && y=...` would exit the script under `set -e` when the
-      # test is false. Use if-blocks.
+      # `[ -n "$x" ] && y=...` is safe as a standalone statement, but an
+      # if-block is clearer where the body computes a value used later.
       if [ -n "$SEMGREP_ERRORS" ]; then
         SEMGREP_ERROR_COUNT="$(printf '%s\n' "$SEMGREP_ERRORS" | wc -l | tr -d ' ')"
       fi
@@ -616,6 +646,28 @@ fi
 
 Also update line 133's comment `# Clojure-shaped subset (for clj-holmes).` to `# Clojure-shaped subset (for semgrep).`
 
+And line ~56, above `is_clojure_project()` — outside every region named above, but
+`test/no-clj-holmes_test.sh` in Task 10 asserts that no plugin file outside
+`CHANGES` mentions clj-holmes, so leaving it makes that task fail:
+
+```bash
+# run gitleaks / clj-holmes on every git repo the session touches.
+```
+
+becomes
+
+```bash
+# run gitleaks / semgrep on every git repo the session touches.
+```
+
+Then confirm nothing stale survives:
+`git grep -n 'clj-holmes' plugins/clojure-security/hooks/security-stop.sh` must be
+empty — including in the new comments. Where a comment needs to explain why the
+code differs from what came before, say "the scanner this replaces" rather than
+naming it. Task 10's invariant keeps the retired tool's name out of every plugin
+file but `CHANGES`, which is where the history belongs; a grep that simple cannot
+rot, and the "why" survives either way.
+
 - [ ] **Step 5: Replace the report and exit decision**
 
 Replace lines 226-259 (`# --- emit report and exit ---` to end of file) with:
@@ -629,7 +681,21 @@ if [ "$SEMGREP_ERROR_COUNT" -eq 0 ] && [ "$SEMGREP_WARN_COUNT" -eq 0 ] \
 fi
 
 {
-  echo "Security scan on the session diff (scope: ${SCOPE_KIND})."
+  # The header and the closing triage block are both about TOOL findings. When
+  # the only content is a ledger-scoped review, neither applies: nothing came
+  # from the diff, and the taint-shaped investigation order does not fit
+  # access-control work.
+  HAVE_TOOL_FINDINGS=0
+  if [ "$SEMGREP_ERROR_COUNT" -gt 0 ] || [ "$SEMGREP_WARN_COUNT" -gt 0 ] \
+     || [ "$GITLEAKS_COUNT" != "0" ]; then
+    HAVE_TOOL_FINDINGS=1
+  fi
+
+  if [ "$HAVE_TOOL_FINDINGS" -eq 1 ]; then
+    echo "Security scan on the session diff (scope: ${SCOPE_KIND})."
+  else
+    echo "Security review of this turn's edits."
+  fi
   echo
   if [ -n "$GITLEAKS_REPORT" ]; then
     echo "## Secrets (gitleaks) — ${GITLEAKS_COUNT}"
@@ -649,14 +715,16 @@ fi
     printf '%s\n' "$SEMGREP_WARNINGS"
     echo
   fi
-  echo "Triage each finding through the clojure-security skill before"
-  echo "ending this turn. Use the skill's investigation order:"
-  echo "  1. source of the tainted value"
-  echo "  2. trust boundary crossed"
-  echo "  3. existing sanitization on the path"
-  echo "  4. whether removing the sink would break legitimate use"
-  echo "  5. other call sites with the same sink shape"
-  echo
+  if [ "$HAVE_TOOL_FINDINGS" -eq 1 ]; then
+    echo "Triage each finding through the clojure-security skill before"
+    echo "ending this turn. Use the skill's investigation order:"
+    echo "  1. source of the tainted value"
+    echo "  2. trust boundary crossed"
+    echo "  3. existing sanitization on the path"
+    echo "  4. whether removing the sink would break legitimate use"
+    echo "  5. other call sites with the same sink shape"
+    echo
+  fi
   if [ "$STOP_HOOK_ACTIVE" = "true" ]; then
     echo "(Stop hook is reentering — findings still present after a prior"
     echo "continuation. Address them or escalate to the human.)"
@@ -696,7 +764,13 @@ Expected: `Ran 8 tests.` / `OK`
 for t in test/*_test.sh; do bash "$t" >/dev/null 2>&1 || echo "FAIL $t"; done; echo done
 ```
 
-Expected: `FAIL test/non-clojure-gating_test.sh` (it stubs clj-holmes; Task 4 fixes it) and nothing else. `security-stop-holmes_test.sh` is deleted in the next step.
+Expected: `FAIL test/security-stop-holmes_test.sh` and nothing else — Step 8 deletes it.
+
+`non-clojure-gating_test.sh` will **pass**, even though it still stubs `clj-holmes`.
+`security-stop.sh` runs `is_clojure_project || exit 0` *before* tool detection, so
+in a non-Clojure repo the hook exits before it ever looks for a tool, and the
+stubs are never reached whichever tool is named. Task 4 renames them for hygiene,
+not to fix a failure.
 
 - [ ] **Step 8: Delete the superseded test and commit**
 
@@ -847,21 +921,35 @@ if [ "$HAVE_SEMGREP" -eq 1 ] && [ -n "$CLJ_STAGED" ]; then
       done <<<"$CLJ_STAGED"
 
       SG_OUT="${TMP_SG}/__semgrep.json"
-      printf '%s' "$SG_FILES" | awk 'NF' \
-        | xargs semgrep scan --json --quiet --config "$RULES_DIR" \
-            > "$SG_OUT" 2>/dev/null || true
+
+      # A bash array, not `xargs` — see the Stop hook for why: xargs splits on
+      # whitespace and would silently drop a path containing a space.
+      SG_ARGS=()
+      while IFS= read -r f; do
+        [ -n "$f" ] && SG_ARGS+=("$f")
+      done <<<"$SG_FILES"
+
+      semgrep scan --json --quiet --config "$RULES_DIR" "${SG_ARGS[@]}" \
+        > "$SG_OUT" 2>/dev/null || true
 
       # Strip the tmp-tree prefix so reported paths are repo-relative, and the
       # config-path prefix off check_id so the rule name is the bare id.
-      SEMGREP_ERRORS="$(jq -r --arg prefix "${TMP_SG}/" '
-        .results[]? | select(.extra.severity == "ERROR")
-        | "\(.path | sub($prefix; "")):\(.start.line):\(.start.col)  ERROR  [\(.check_id | split(".") | last)]  \(.extra.message | gsub("\\s+"; " "))"
-      ' "$SG_OUT" 2>/dev/null)"
+      #
+      # `|| true` on both, and the `-s` guard: jq exits 5 on the truncated JSON a
+      # semgrep killed mid-write leaves behind, and a bare `X="$(cmd)"` is not
+      # exempt from `set -e`. Unguarded, this blocks a commit with an
+      # uncontracted exit 5 and no message.
+      if [ -s "$SG_OUT" ]; then
+        SEMGREP_ERRORS="$(jq -r --arg prefix "${TMP_SG}/" '
+          .results[]? | select(.extra.severity == "ERROR")
+          | "\(.path | sub($prefix; "")):\(.start.line):\(.start.col)  ERROR  [\(.check_id | split(".") | last)]  \(.extra.message | gsub("\\s+"; " "))"
+        ' "$SG_OUT" 2>/dev/null || true)"
 
-      SEMGREP_WARNINGS="$(jq -r --arg prefix "${TMP_SG}/" '
-        .results[]? | select(.extra.severity == "WARNING")
-        | "\(.path | sub($prefix; "")):\(.start.line):\(.start.col)  WARNING  [\(.check_id | split(".") | last)]  \(.extra.message | gsub("\\s+"; " "))"
-      ' "$SG_OUT" 2>/dev/null)"
+        SEMGREP_WARNINGS="$(jq -r --arg prefix "${TMP_SG}/" '
+          .results[]? | select(.extra.severity == "WARNING")
+          | "\(.path | sub($prefix; "")):\(.start.line):\(.start.col)  WARNING  [\(.check_id | split(".") | last)]  \(.extra.message | gsub("\\s+"; " "))"
+        ' "$SG_OUT" 2>/dev/null || true)"
+      fi
 
       if [ -n "$SEMGREP_ERRORS" ]; then
         SEMGREP_ERROR_COUNT="$(printf '%s\n' "$SEMGREP_ERRORS" | wc -l | tr -d ' ')"
@@ -935,7 +1023,7 @@ Update the header comment at lines 17-18 to name semgrep instead of clj-holmes, 
 bash test/security-stop-semgrep_test.sh
 ```
 
-Expected: `Ran 11 tests.` / `OK`
+Expected: `OK`, with the three new tests added to everything already in the file (Task 2 and its fix round left nine there).
 
 - [ ] **Step 7: Commit**
 
@@ -970,30 +1058,57 @@ In `test/session-start-marker_test.sh`, add before the final `. "${SCRIPT_DIR}/.
 test_missing_notice_names_semgrep_not_clj_holmes() {
   printf '{:deps {}}' > "${PROJECT}/deps.edn"
 
-  local ctx
+  local ctx scrubbed
   ctx="$(run_hook_context)"
+
+  # clj-watson's real home is github.com/clj-holmes/clj-watson, and that URL
+  # legitimately appears in clj-watson's own missing-tool notice. Strip that
+  # substring before asserting — otherwise this test fails on every machine
+  # where clj-watson is not installed, which is most of them.
+  scrubbed="$(printf '%s' "${ctx}" | sed 's|clj-holmes/clj-watson||g')"
 
   # CI dropped clj-holmes for 16 cc-* semgrep rules. Telling a developer to
   # install a tool the pipeline no longer runs is worse than saying nothing:
   # they would install abandoned software and believe they were covered.
   assertNotContains "clj-holmes must be gone from the toolchain notice" \
-    "${ctx}" "clj-holmes"
+    "${scrubbed}" "clj-holmes"
 
   if ! command -v semgrep >/dev/null 2>&1; then
     assertContains "missing-tool notice should flag semgrep" "${ctx}" "semgrep"
   fi
 }
 
+# Run the hook with a PATH that excludes the homebrew prefix, so every scanner
+# reports missing and the notice's CONTENT can actually be asserted. Without
+# this, a machine that has semgrep installed — which after this migration is the
+# normal case — can only ever skip the assertion, and a test that asserts
+# nothing passes no matter what the hook does.
+#
+# jq is symlinked in because the hook needs it to emit its JSON payload at all;
+# /usr/bin and /bin supply the coreutils it uses. The outer jq in the pipeline
+# runs under the test's own PATH, not the hook's.
+run_hook_context_without_tools() {
+  local shim out
+  shim="$(mktemp -d)"
+  ln -s "$(command -v jq)" "${shim}/jq" 2>/dev/null || true
+  out="$(printf '{"cwd":"%s"}' "${PROJECT}" \
+    | PATH="${shim}:/usr/bin:/bin" bash "${HOOK}" 2>/dev/null \
+    | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
+  rm -rf "${shim}"
+  printf '%s' "${out}"
+}
+
 test_missing_notice_documents_the_rules_dir_override() {
   printf '{:deps {}}' > "${PROJECT}/deps.edn"
 
   local ctx
-  ctx="$(run_hook_context)"
+  ctx="$(run_hook_context_without_tools)"
 
-  if ! command -v semgrep >/dev/null 2>&1; then
-    assertContains "the notice should mention the env override" \
-      "${ctx}" "CC_SEMGREP_RULES_DIR"
-  fi
+  # Unconditional: the shim guarantees semgrep looks absent, so the notice must
+  # be present and must carry both the install hint and the override.
+  assertContains "the notice should flag semgrep" "${ctx}" "semgrep"
+  assertContains "the notice should mention the env override" \
+    "${ctx}" "CC_SEMGREP_RULES_DIR"
 }
 ```
 
@@ -1018,7 +1133,13 @@ bash test/session-start-marker_test.sh
 bash test/non-clojure-gating_test.sh
 ```
 
-Expected: the two new marker tests fail (the hook still says `clj-holmes`). `non-clojure-gating` should now **pass** — it was failing after Task 2 because it stubbed the wrong tool.
+Expected: the two new marker tests fail (the hook still says `clj-holmes`).
+
+`non-clojure-gating_test.sh` passes both before and after your edit to it — it was
+never failing. The hook exits at `is_clojure_project || exit 0` before tool
+detection, so its stubs are never reached whichever tool they name. Renaming them
+to `semgrep` is hygiene: it keeps the test honest about what the hook would call
+if the gate ever let it through. Do not expect a red-to-green transition here.
 
 - [ ] **Step 3: Update the tool check**
 
@@ -1041,10 +1162,31 @@ with:
 ```bash
 command -v semgrep >/dev/null 2>&1 || note_missing "semgrep" \
   "Clojure security-pattern SAST in the Stop and PreToolUse hooks" \
-  "\`brew install semgrep\` — the hooks fetch the 16 cleancoders \`cc-*\` rules on first scan and cache them; set \`CC_SEMGREP_RULES_DIR\` to a \`cleancoders/github-actions\` checkout to skip the fetch entirely"
+  "\`brew install semgrep\` — the hooks fetch the 16 cleancoders \`cc-*\` rules on first scan and cache them; set \`CC_SEMGREP_RULES_DIR\` to a \`security-rules/semgrep\` directory to skip the fetch entirely"
 ```
 
-Update line 9's header comment from `clj-holmes + rules, gitleaks, clj-watson, jq` to `semgrep, gitleaks, clj-watson, jq`, and line 112's clj-watson note to drop any implication that clj-holmes is a sibling in the pipeline (keep the `https://github.com/clj-holmes/clj-watson` URL — that is clj-watson's real home, unrelated to clj-holmes being retired).
+Update line 9's header comment from `clj-holmes + rules, gitleaks, clj-watson, jq` to `semgrep, gitleaks, clj-watson, jq`, and line 112's clj-watson note to drop any implication that clj-holmes is a sibling in the pipeline. **Keep the `https://github.com/clj-holmes/clj-watson` URL** — clj-watson genuinely lives under that GitHub org, and the URL is correct. Task 10's invariant strips that exact substring before matching, so it does not collide.
+
+Also reword `hooks/lib/semgrep-rules.sh:24`, which no other task covers:
+
+```bash
+# `clj-holmes fetch-rules` on a cold cache in exactly the same place.
+```
+
+becomes
+
+```bash
+# the retired scanner's own rule fetch on a cold cache, in the same place.
+```
+
+Task 10's invariant would otherwise fail on it, and the sentence loses nothing —
+which tool it was is recorded in `CHANGES`.
+
+When done, this must print nothing:
+
+```bash
+git grep -n 'clj-holmes' plugins/clojure-security/hooks/
+```
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
@@ -1072,7 +1214,7 @@ git commit -m "fix(clojure-security): SessionStart checks for semgrep
 Telling a developer to install clj-holmes is now worse than silence: they
 would install software abandoned since October 2022 and believe they were
 covered by it. The notice names semgrep and documents CC_SEMGREP_RULES_DIR
-for anyone with a github-actions checkout."
+for anyone who has the rules on disk already."
 ```
 
 ---
@@ -1292,7 +1434,7 @@ exit 0
 bash test/turn-ledger_test.sh
 ```
 
-Expected: `Ran 9 tests.` / `OK`
+Expected: `Ran 8 tests.` / `OK` — the file defines eight `test_` functions.
 
 - [ ] **Step 5: Register the hook**
 
@@ -1450,9 +1592,13 @@ tearDown() {
 # value; extra env can be prepended via ENV_EXTRA.
 run_hook() {
   local active="${1:-false}" err rc
+  # `env` is required, not decoration: a variable that expands to `NAME=VAL` is
+  # NOT re-parsed as a prefix assignment, so `${ENV_EXTRA:-} bash …` tries to
+  # execute a command literally named `CC_SKIP_DIFF_REVIEW=1` and dies with
+  # exit 127. Verified: `E="FOO=bar"; $E env` → "FOO=bar: command not found".
   err="$(printf '{"cwd":"%s","stop_hook_active":%s}' "${PROJECT}" "${active}" \
     | PATH="${BIN}:${PATH}" CC_SEMGREP_RULES_DIR="${RULES}" \
-      ${ENV_EXTRA:-} bash "${HOOK}" 2>&1 >/dev/null)"
+      env ${ENV_EXTRA:-} bash "${HOOK}" 2>&1 >/dev/null)"
   rc=$?
   printf '%s|%s' "${rc}" "${err}"
 }
@@ -1537,13 +1683,46 @@ test_review_names_the_scanner_blind_classes() {
 . "${SCRIPT_DIR}/../lib/shunit2"
 ```
 
+Also add one case to `test/turn-ledger_test.sh`, closing a fidelity gap Task 5's
+review found: every existing case feeds a relative path, but Claude Code only ever
+sends absolute ones, so the suite has no coverage of the real payload shape.
+
+```bash
+test_records_an_absolute_path() {
+  # This is the only shape production sends: Claude Code puts an absolute path
+  # in .tool_input.file_path. The suffix glob and the append are agnostic to it,
+  # but nothing proved that until now.
+  printf '{"cwd":"%s","tool_name":"Edit","tool_input":{"file_path":"%s/src/app.clj"}}' \
+    "${PROJECT}" "${PROJECT}" | bash "${HOOK}" >/dev/null 2>&1
+  assertEquals "an absolute path must be recorded verbatim" \
+    "${PROJECT}/src/app.clj" "$(ledger)"
+}
+```
+
+And one to `test/security-stop-review_test.sh` proving the drain normalizes it:
+
+```bash
+test_absolute_ledger_paths_are_reported_repo_relative() {
+  # The semgrep block in the same report prints repo-relative paths. A directive
+  # that prints absolute ones reads like output from a different tool.
+  printf '%s/routes.clj\n' "${PROJECT}" > "${LEDGER}"
+  local out; out="$(run_hook)"
+  local err="${out#*|}"
+  assertContains "path must be reported repo-relative" "${err}" "routes.clj"
+  assertNotContains "the project prefix must be stripped" "${err}" "${PROJECT}/routes.clj"
+}
+```
+
 - [ ] **Step 2: Run it to verify it fails**
 
 ```bash
 bash test/security-stop-review_test.sh
+bash test/turn-ledger_test.sh
 ```
 
-Expected: the ledger tests fail — the hook ignores the file entirely.
+Expected: the ledger tests fail — the hook ignores the file entirely. The new
+`turn-ledger` absolute-path case should **pass** immediately; it documents
+existing correct behaviour rather than driving a change.
 
 - [ ] **Step 3: Add the review block**
 
@@ -1576,18 +1755,65 @@ if [ "$STOP_HOOK_ACTIVE" = "true" ] || [ -n "${CC_SKIP_DIFF_REVIEW:-}" ]; then
   REVIEW_FILES=""
 fi
 
-# Drop paths deleted later in the same turn.
+# Drop paths deleted later in the same turn, then shorten for display.
+#
+# Test existence on the ABSOLUTE path — it is unambiguous regardless of cwd —
+# and only then strip the project prefix, so the directive's paths match the
+# repo-relative ones the semgrep block prints in the same report.
+#
+# The strip is bash parameter expansion, deliberately NOT `sed "s|^${CWD}/||"`.
+# That interpolates $CWD into a regex, where a `.` in the project path — common
+# enough — matches any character: with cwd `/tmp/a.b`, the entry
+# `/tmp/aXb/file.clj` strips to `file.clj`, which then fails the existence test
+# and is dropped from the review **silently**. This plugin supports cross-repo
+# edits (see test/postedit-hooks-cross-repo_test.sh), so the ledger really can
+# hold paths outside $CWD. Quoting inside `${f#"$CWD"/}` forces a literal match,
+# and a path outside the project simply keeps its absolute form.
 if [ -n "$REVIEW_FILES" ]; then
   KEPT=""
   while IFS= read -r f; do
     [ -z "$f" ] && continue
     if [ -f "$f" ]; then
-      KEPT="${KEPT}${f}"$'\n'
+      KEPT="${KEPT}${f#"$CWD"/}"$'\n'
     fi
   done <<<"$REVIEW_FILES"
   REVIEW_FILES="$(printf '%s' "$KEPT" | awk 'NF')"
 fi
 ```
+
+- [ ] **Step 3b: Make the empty-diff guard ledger-aware**
+
+`security-stop.sh:146-148` currently reads:
+
+```bash
+if [ -z "$CHANGED" ]; then
+  exit 0
+fi
+```
+
+That sits *before* the review block and skips the drain, so a turn with no
+git-visible change banks its ledger into the next turn's list — the cumulative
+repetition this design exists to prevent. It needs the same clause the toolchain
+gate already got:
+
+```bash
+# An empty diff is not sufficient reason to exit: the review below is
+# ledger-scoped, not diff-scoped. Bailing here would leave the ledger to bank
+# into the next turn — exactly the cumulative repetition the ledger prevents.
+# Same reasoning as the toolchain gate above: absent work AND an absent ledger.
+if [ -z "$CHANGED" ] && [ ! -f "${CWD}/.claude/.security-turn-files" ]; then
+  exit 0
+fi
+```
+
+Reachable whenever `.claude/` is gitignored (otherwise the untracked ledger keeps
+`CHANGED` non-empty, which is why the shipped tests cannot catch it) and the turn
+leaves no git trace — an edit-then-revert, or an edit under a gitignored path.
+Both are ordinary agent behaviour.
+
+The downstream blocks are already guarded: semgrep runs only when `CLJ_FILES` is
+non-empty and gitleaks only when `CHANGED` is, so both correctly skip while the
+review still fires.
 
 - [ ] **Step 4: Update the exit decision to account for the review**
 
@@ -1616,23 +1842,31 @@ Inside the `{ ... } >&2` report block, insert after the semgrep advisory section
     echo "## Scanner-blind classes — review this turn's edits"
     echo
     echo "Semgrep cannot reach these classes: they need dataflow, namespace-alias"
-    echo "resolution, or whole-route reasoning. Review ONLY these files, and"
-    echo "do not sweep the repo:"
+    echo "resolution, or whole-route reasoning. Review these files:"
     printf '%s\n' "$REVIEW_FILES" | sed 's/^/  /'
     echo
+    echo "Scope: every finding you report must be ABOUT one of those files. Read"
+    echo "whatever else you need in order to judge them — a missing authorization"
+    echo "check is rarely visible in the handler alone, so follow the middleware"
+    echo "stack and the route table wherever they live. What you must not do is go"
+    echo "hunting for unrelated findings elsewhere in the repo."
+    echo
     echo "Load the clojure-security skill, then only the references you need:"
-    echo "  access-control.md  — atom-toctou, missing-authn, missing-authz,"
-    echo "                       incorrect-authz, idor, csrf, ssrf, mass-assignment"
-    echo "  config-and-ops.md  — security-misconfig, logging-failures,"
-    echo "                       unrestricted-upload, resource-exhaustion"
-    echo "  injection.md       — macro-runtime-input"
-    echo "  route-inventory.md — the route sweep, if any of these files define,"
-    echo "                       wrap, or dispatch routes"
+    echo "  references/access-control.md — atom-toctou, missing-authn,"
+    echo "        missing-authz, incorrect-authz, idor, csrf, ssrf, mass-assignment"
+    echo "  references/config-and-ops.md — security-misconfig, logging-failures,"
+    echo "        unrestricted-upload, resource-exhaustion"
+    echo "  references/injection.md — macro-runtime-input"
+    echo "  references/route-inventory.md — the route sweep, if any of these files"
+    echo "        define, wrap, or dispatch routes"
     echo
     echo "Apply the skill's investigation order and severity heuristic. Report"
     echo "each finding with its class name, CWE and OWASP tag. Provenance you"
     echo "cannot trace is provisional, not a finding. Do not auto-fix — report"
     echo "and let the human choose."
+    echo
+    echo "This directive is issued once per turn. Report your findings and stop;"
+    echo "the hook will not re-issue it."
     echo
   fi
 ```
@@ -1655,7 +1889,9 @@ Add to the header comment block, after the Reentrancy note:
 #   come from turn-ledger.sh via .claude/.security-turn-files — NOT from the
 #   diff, which is cumulative and would re-review the same files every turn.
 #   The directive is one-shot per turn (it has no findings to clear) and the
-#   ledger is drained unconditionally. CC_SKIP_DIFF_REVIEW=1 opts out.
+#   ledger is drained unconditionally — including by the empty-diff guard above,
+#   which must stay ledger-aware or a trace-free turn banks its files into the
+#   next one. CC_SKIP_DIFF_REVIEW opts out on ANY non-empty value, "0" included.
 #
 #   Known limit: files changed by Bash (sed, a script, git checkout) never
 #   enter the ledger. Semgrep still scans those through the cumulative diff;
@@ -2003,6 +2239,223 @@ test_every_class_in_the_coverage_file_is_a_real_class() {
   assertEquals "coverage file names classes the index does not define" "" "${invented}"
 }
 
+test_reverse_index_routes_agree_with_the_forward_index() {
+  # A coverage matrix claiming a route the class index does not have is worse than
+  # no matrix: it asserts coverage that does not exist. This is the check that
+  # catches it — CWE-22 shipped claiming llm-review when `path-traversal` is
+  # semgrep-only, because the row names one class and nothing cross-checked it.
+  #
+  # A row naming several classes may legitimately be mixed (rank 10 aggregates
+  # three semgrep classes and one llm-review one), so the rule is presence-based
+  # in both directions rather than string equality.
+  local bad rank cwe classes route c fwd want_llm want_semgrep want_watson
+  bad=""
+  while IFS='|' read -r rank cwe classes route; do
+    [ -z "${rank}" ] && continue
+    case "${classes}" in *"not applicable"*|*"no class"*) continue ;; esac
+
+    want_llm=0
+    want_semgrep=0
+    want_watson=0
+    for c in $(printf '%s' "${classes}" | grep -oE '`[a-z0-9-]+`' | tr -d '`'); do
+      fwd="$(awk -F'|' -v k="${c}" '
+        /^\| `/ { gsub(/[ `]/,"",$2); if ($2 == k) { gsub(/ /,"",$5); print $5 } }' "${SKILL}")"
+      case "${fwd}" in
+        llm-review) want_llm=1 ;;
+        semgrep:*)  want_semgrep=1 ;;
+        clj-watson) want_watson=1 ;;
+      esac
+    done
+
+    # All three axes, both directions. Checking only llm-review would still let a
+    # row whose classes are all llm-review claim `semgrep+llm-review` and pass —
+    # the same over-claim on the other axis. The clj-watson axis matters even
+    # though no current CWE row uses it: without it, appending `+clj-watson` to a
+    # Top 25 row fabricated a dependency-scan claim that nothing noticed.
+    case "${route}" in
+      *llm-review*)
+        if [ "${want_llm}" -eq 0 ]; then
+          bad="${bad}rank ${rank}: claims llm-review but no named class routes there"$'\n'
+        fi ;;
+      *)
+        if [ "${want_llm}" -eq 1 ]; then
+          bad="${bad}rank ${rank}: omits llm-review but a named class routes there"$'\n'
+        fi ;;
+    esac
+
+    case "${route}" in
+      *semgrep*)
+        if [ "${want_semgrep}" -eq 0 ]; then
+          bad="${bad}rank ${rank}: claims semgrep but no named class routes there"$'\n'
+        fi ;;
+      *)
+        if [ "${want_semgrep}" -eq 1 ]; then
+          bad="${bad}rank ${rank}: omits semgrep but a named class routes there"$'\n'
+        fi ;;
+    esac
+
+    case "${route}" in
+      *clj-watson*)
+        if [ "${want_watson}" -eq 0 ]; then
+          bad="${bad}rank ${rank}: claims clj-watson but no named class routes there"$'\n'
+        fi ;;
+      *)
+        if [ "${want_watson}" -eq 1 ]; then
+          bad="${bad}rank ${rank}: omits clj-watson but a named class routes there"$'\n'
+        fi ;;
+    esac
+  done < <(cwe_rows)
+
+  assertEquals "reverse-index routes must agree with the class index" \
+    "" "$(printf '%s' "${bad}" | awk 'NF')"
+}
+
+# "<category>|<classes>|<route>" per OWASP row.
+owasp_rows() {
+  grep -E '^\| A(0[1-9]|10) ' "${COVERAGE}" \
+    | awk -F'|' '{gsub(/^ +| +$/,"",$2); gsub(/^ +| +$/,"",$3); gsub(/^ +| +$/,"",$4);
+                  print $2 "|" $3 "|" $4}'
+}
+
+test_owasp_routes_agree_with_the_forward_index() {
+  # The CWE table is route-enforced; without this the OWASP half of the same file
+  # was hand-verified only. Both halves feed /security-audit's Coverage rollup, so
+  # an unguarded OWASP route drifts into a report that claims coverage it lacks —
+  # and a future editor would reasonably assume both tables are guarded alike.
+  local bad cat classes route c fwd want_llm want_semgrep want_watson
+  bad=""
+  while IFS='|' read -r cat classes route; do
+    [ -z "${cat}" ] && continue
+
+    want_llm=0
+    want_semgrep=0
+    want_watson=0
+    for c in $(printf '%s' "${classes}" | grep -oE '`[a-z0-9-]+`' | tr -d '`'); do
+      fwd="$(awk -F'|' -v k="${c}" '
+        /^\| `/ { gsub(/[ `]/,"",$2); if ($2 == k) { gsub(/ /,"",$5); print $5 } }' "${SKILL}")"
+      case "${fwd}" in
+        llm-review) want_llm=1 ;;
+        semgrep:*)  want_semgrep=1 ;;
+        clj-watson) want_watson=1 ;;
+      esac
+    done
+
+    case "${route}" in
+      *llm-review*) [ "${want_llm}" -eq 1 ] || bad="${bad}${cat}: claims llm-review, unbacked"$'\n' ;;
+      *)            [ "${want_llm}" -eq 0 ] || bad="${bad}${cat}: omits llm-review"$'\n' ;;
+    esac
+    case "${route}" in
+      *semgrep*) [ "${want_semgrep}" -eq 1 ] || bad="${bad}${cat}: claims semgrep, unbacked"$'\n' ;;
+      *)         [ "${want_semgrep}" -eq 0 ] || bad="${bad}${cat}: omits semgrep"$'\n' ;;
+    esac
+    case "${route}" in
+      *clj-watson*) [ "${want_watson}" -eq 1 ] || bad="${bad}${cat}: claims clj-watson, unbacked"$'\n' ;;
+      *)            [ "${want_watson}" -eq 0 ] || bad="${bad}${cat}: omits clj-watson"$'\n' ;;
+    esac
+  done < <(owasp_rows)
+
+  assertEquals "OWASP routes must agree with the class index" \
+    "" "$(printf '%s' "${bad}" | awk 'NF')"
+}
+
+test_no_class_rows_claim_no_route() {
+  # CWE-20 and CWE-476 hit the `continue` guard in the route check, so nothing
+  # otherwise asserts their route stays n/a — a row could be labelled "(no class)"
+  # and still claim coverage.
+  local bad
+  bad="$(cwe_rows | awk -F'|' '$3 ~ /no class|not applicable/ && $4 != "n/a" {print $1 " => " $4}')"
+  assertEquals "rows with no class must route to n/a" "" "${bad}"
+}
+
+test_ranks_match_mitre() {
+  # The file's headline claim is "Ranks are MITRE's, not ours" — and nothing
+  # enforced it. Reversing all 25 rank labels left the whole suite green, so the
+  # ordering rested entirely on a one-time manual check. A transposed rank makes
+  # this file actively misleading rather than merely incomplete.
+  #
+  # Pinned from https://cwe.mitre.org/top25/archive/2025/2025_cwe_top25.html,
+  # fetched 2026-07-29. Do not edit to match the table; edit the table.
+  local expected actual
+  expected="1 CWE-79
+2 CWE-89
+3 CWE-352
+4 CWE-862
+5 CWE-787
+6 CWE-22
+7 CWE-416
+8 CWE-125
+9 CWE-78
+10 CWE-94
+11 CWE-120
+12 CWE-434
+13 CWE-476
+14 CWE-121
+15 CWE-502
+16 CWE-122
+17 CWE-863
+18 CWE-20
+19 CWE-284
+20 CWE-200
+21 CWE-306
+22 CWE-918
+23 CWE-77
+24 CWE-639
+25 CWE-770"
+  actual="$(cwe_rows | awk -F'|' '{print $1, $2}' | sort -n)"
+  assertEquals "rank -> CWE must match the MITRE 2025 Top 25" "${expected}" "${actual}"
+}
+
+test_owasp_titles_match_owasp_org() {
+  # Only the A0N code was checked, never the title after it. "A01 Some Bogus
+  # Title" passed. Pinned from https://owasp.org/Top10/2025/, fetched 2026-07-29,
+  # and cross-checked against metadata.owasp in the CI rules.
+  local expected actual
+  expected="A01 Broken Access Control
+A02 Security Misconfiguration
+A03 Software Supply Chain Failures
+A04 Cryptographic Failures
+A05 Injection
+A06 Insecure Design
+A07 Authentication Failures
+A08 Software or Data Integrity Failures
+A09 Security Logging and Alerting Failures
+A10 Mishandling of Exceptional Conditions"
+  actual="$(owasp_rows | awk -F'|' '{print $1}' | sort)"
+  assertEquals "OWASP titles must match owasp.org/Top10/2025" "${expected}" "${actual}"
+}
+
+test_each_class_carries_the_cwe_of_its_row() {
+  # A class could be swapped for a different REAL class with the same route and go
+  # unnoticed, because the completeness checks only require every class to appear
+  # somewhere in the file. Rank 15 (CWE-502) accepted `sql-injection` in place of
+  # `java-deserialization`, silently reassigning deserialization coverage to the
+  # SQL-injection detector.
+  #
+  # `partial` rows are exempt by design: CWE-200's row names child weaknesses
+  # (CWE-209/550, CWE-532/778) rather than CWE-200 itself, which is the point of
+  # labelling it partial.
+  local bad rank cwe classes route c id fwdcwe
+  bad=""
+  while IFS='|' read -r rank cwe classes route; do
+    [ -z "${rank}" ] && continue
+    case "${classes}" in
+      *"not applicable"*|*"no class"*|*partial*) continue ;;
+    esac
+    id="${cwe#CWE-}"
+    for c in $(printf '%s' "${classes}" | grep -oE '`[a-z0-9-]+`' | tr -d '`'); do
+      fwdcwe="$(awk -F'|' -v k="${c}" '
+        /^\| `/ { gsub(/[ `]/,"",$2); if ($2 == k) { gsub(/ /,"",$3); print $3 } }' "${SKILL}")"
+      case ",${fwdcwe}," in
+        *",${id},"*) ;;
+        *) bad="${bad}rank ${rank} (${cwe}): ${c} does not carry that CWE"$'\n' ;;
+      esac
+    done
+  done < <(cwe_rows)
+
+  assertEquals "each class must carry its row's CWE" \
+    "" "$(printf '%s' "${bad}" | awk 'NF')"
+}
+
 test_sources_are_cited() {
   # Six CWE-to-OWASP mappings in this plugin were wrong on inference before
   # being checked. Taxonomy data gets a source line or it does not go in.
@@ -2054,7 +2507,7 @@ is a recorded judgment instead of an oversight.
 | 3 | CWE-352 | `csrf` | llm-review |
 | 4 | CWE-862 | `missing-authz` | llm-review |
 | 5 | CWE-787 | (memory safety) | n/a |
-| 6 | CWE-22 | `path-traversal` | semgrep+llm-review |
+| 6 | CWE-22 | `path-traversal` | semgrep (WARNING) |
 | 7 | CWE-416 | (memory safety) | n/a |
 | 8 | CWE-125 | (memory safety) | n/a |
 | 9 | CWE-78 | `command-injection` | semgrep |
@@ -2103,7 +2556,7 @@ have at least one class.
 | A07 Authentication Failures | `missing-authn`, `insecure-tls-verification` | llm-review + semgrep |
 | A08 Software or Data Integrity Failures | `java-deserialization`, `mass-assignment` | semgrep + llm-review |
 | A09 Security Logging and Alerting Failures | `logging-failures` | llm-review |
-| A10 Mishandling of Exceptional Conditions | `spec-malli-leak`, `fail-open` | semgrep |
+| A10 Mishandling of Exceptional Conditions | `spec-malli-leak`, `fail-open` | semgrep (one ERROR, one WARNING) |
 
 `atom-toctou` (CWE-367) and `resource-exhaustion` (CWE-770, 400) map to no 2025
 category. That is a fact about the taxonomy, not a coverage gap.
@@ -2127,7 +2580,7 @@ same way.
 bash test/taxonomy-coverage_test.sh
 ```
 
-Expected: `Ran 11 tests.` / `OK`
+Expected: `Ran 16 tests.` / `OK` — ten from the brief, plus the CWE and OWASP route checks, the no-class-route invariant, the pinned MITRE rank table, the pinned OWASP titles, and the class-carries-its-CWE check.
 
 - [ ] **Step 5: Confirm the index-consistency test still holds**
 
@@ -2172,14 +2625,19 @@ were already wrong on inference once."
 
 - [ ] **Step 1: Write the failing test**
 
-Add to `test/taxonomy-coverage_test.sh`, before the final `. "${SCRIPT_DIR}/../lib/shunit2"`:
+Create `test/security-audit-alignment_test.sh` — its own file, not appended to
+`taxonomy-coverage_test.sh`: these assert the audit *command*, not the taxonomy
+data, and a file that tests both drifts into a grab bag.
 
 ```bash
-# --- /security-audit --------------------------------------------------------
+#!/usr/bin/env bash
+# Tests for plugins/clojure-security/commands/security-audit.md
+#
 # The command is prose, so these are text assertions. They exist because an
 # audit that contradicts CI is worse than no audit: it re-litigates decisions a
 # developer already made and teaches them to distrust the report.
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUDIT="${SCRIPT_DIR}/../plugins/clojure-security/commands/security-audit.md"
 
 test_audit_does_not_run_clj_holmes() {
@@ -2212,15 +2670,17 @@ test_audit_distinguishes_clean_from_unexamined() {
   assertContains "must have a clean state" "${body}" "checked, clean"
   assertContains "must have an unexamined state" "${body}" "not reachable"
 }
+
+. "${SCRIPT_DIR}/../lib/shunit2"
 ```
 
 - [ ] **Step 2: Run it to verify it fails**
 
 ```bash
-bash test/taxonomy-coverage_test.sh
+bash test/security-audit-alignment_test.sh
 ```
 
-Expected: the five new tests fail.
+Expected: all five tests fail.
 
 - [ ] **Step 3: Replace the Step 5 tool table**
 
@@ -2228,7 +2688,7 @@ In `plugins/clojure-security/commands/security-audit.md`, replace the table body
 
 ```markdown
 | `clj-kondo` | `clj-kondo --lint <scope>` — capture warnings + errors |
-| `semgrep` | **The primary Clojure engine — run it whenever it is installed.** Resolve the cleancoders rules the way the hooks do: `$CC_SEMGREP_RULES_DIR` if set, else `/tmp/cc-semgrep-rules-v1` if non-empty, else fetch it (see `hooks/lib/semgrep-rules.sh`). Then mirror CI: `semgrep scan --json --config <cc-rules> --config p/owasp-top-ten --config p/default <scope>` |
+| `semgrep` | **The primary Clojure engine — run it whenever it is installed.** Resolve the cleancoders rules the way the hooks do: `$CC_SEMGREP_RULES_DIR` if set, else `/tmp/cc-semgrep-rules-v1` if non-empty, else fetch it (see `hooks/lib/semgrep-rules.sh`). Then mirror CI: `semgrep scan --json --config <cc-rules> --config p/owasp-top-ten --config p/default <scope>`. Add `--config .security-rules` when that directory exists — CI passes it as a fourth config (`extra-rules-dir`, default `.security-rules`), so skipping it audits blind to rules the PR enforces |
 | `gitleaks` | `gitleaks detect --no-banner --redact --source <scope>` (use `--no-git` for non-git paths) |
 | `clj-watson` | Only on `all` scope: `clj-watson scan -p deps.edn -o stdout` (or the project's `:clj-watson` deps alias) — SCA against `deps.edn` |
 ```
@@ -2240,6 +2700,11 @@ Immediately after the table, before the `If a tool is missing` line, insert:
 `cc-path-traversal`, `cc-generic-catch`, `cc-clojure-xml-xxe` — are `WARNING` and
 deliberately do **not** gate: without dataflow they cannot be precise enough.
 Report them, but never as blocking.
+
+**What actually blocks a PR.** CI's gate is not limited to the `cc-*` set.
+`bin/report-sarif.sh` counts every unsuppressed `error`-level result across *all*
+configs, so an ERROR from `p/owasp-top-ten` or `p/default` blocks a PR too. What
+decides blocking is a rule's severity, not which pack it came from.
 
 **Suppressions.** A finding suppressed in source with a `nosemgrep` annotation is
 absent from `--json` output and excluded from CI's table and exit code. Do not
@@ -2288,6 +2753,19 @@ And line 90-91:
   Tools missing: clj-watson
 ```
 
+- [ ] **Step 4b: Add a de-duplication rule**
+
+Step 3's pattern sweep and Step 5's semgrep run overlap on several sinks, so the
+same `file:line` can surface from both. The command already says what to do when
+the sweep finds a sink semgrep missed; it says nothing about the reverse overlap.
+Immediately after the existing `**Severity tone:**` paragraph, add:
+
+```markdown
+**One sink, one line.** Step 3's pattern sweep and Step 5's semgrep run overlap on
+several sinks, so the same `file:line` can surface from both. Report it once. A
+duplicated finding inflates the count and makes the report read as padded.
+```
+
 - [ ] **Step 5: Update the tag-sourcing note**
 
 Replace lines 129-131 with:
@@ -2307,16 +2785,16 @@ reader can learn that 10 of the applicable Top 25 entries need human eyes.
 - [ ] **Step 6: Run the test to verify it passes**
 
 ```bash
-bash test/taxonomy-coverage_test.sh
+bash test/security-audit-alignment_test.sh
 ```
 
-Expected: `Ran 16 tests.` / `OK`
+Expected: `Ran 5 tests.` / `OK`
 
 - [ ] **Step 7: Full suite and commit**
 
 ```bash
 for t in test/*_test.sh; do bash "$t" >/dev/null 2>&1 || echo "FAIL $t"; done; echo done
-git add plugins/clojure-security/commands/security-audit.md test/taxonomy-coverage_test.sh
+git add plugins/clojure-security/commands/security-audit.md test/security-audit-alignment_test.sh
 git commit -m "feat(clojure-security): /security-audit mirrors CI and rolls up taxonomy
 
 Step 5 told the auditor to skip semgrep unless the repo had a .semgrep.yml.
@@ -2343,21 +2821,40 @@ report imply coverage it did not have."
 
 - [ ] **Step 1: Write the failing test**
 
-Add to `test/taxonomy-coverage_test.sh`, before the final `. "${SCRIPT_DIR}/../lib/shunit2"`:
+Create `test/no-clj-holmes_test.sh` — its own file. This is a plugin-wide
+invariant, not a fact about the taxonomy data or the audit command, and it is the
+one test that will still be meaningful years from now.
 
 ```bash
-# --- no file may still credit clj-holmes ------------------------------------
+#!/usr/bin/env bash
 # Definition of done #1 from the handoff brief: no file in the plugin claims
-# clj-holmes is part of CI. A stale attribution is worse than silence — it
-# tells the reader a finding will be caught by something that no longer runs.
+# clj-holmes is part of CI. A stale attribution is worse than silence — it tells
+# the reader a finding will be caught by something that no longer runs, and it
+# points them at software abandoned since October 2022.
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN="${SCRIPT_DIR}/../plugins/clojure-security"
 
 test_no_plugin_file_credits_clj_holmes_for_ci() {
-  # CHANGES is history and must keep its record of why the tool was dropped.
-  local hits
-  hits="$(grep -rln 'clj-holmes' "${PLUGIN}" 2>/dev/null | grep -v '/CHANGES$' || true)"
-  assertEquals "these files still reference clj-holmes" "" "${hits}"
+  # Two deliberate exemptions:
+  #   - CHANGES is history and must keep its record of why the tool was dropped.
+  #   - clj-watson genuinely lives at github.com/clj-holmes/clj-watson. That URL
+  #     is correct and must not be "fixed"; strip the substring before matching
+  #     rather than weakening the invariant for every other file.
+  local hits f body
+  hits=""
+  # -print0 into `read -d ''`, not `for f in $(find ...)`: unquoted command
+  # substitution word-splits on whitespace, so a path containing a space is torn
+  # into fragments that name no file, `sed` fails silently with stderr already
+  # discarded, and the file is never scanned — a false PASS. Demonstrated, not
+  # theoretical. This is the one test meant to still matter years from now.
+  while IFS= read -r -d '' f; do
+    body="$(sed 's|clj-holmes/clj-watson||g' "${f}" 2>/dev/null)"
+    case "${body}" in
+      *clj-holmes*) hits="${hits}${f}"$'\n' ;;
+    esac
+  done < <(find "${PLUGIN}" -type f ! -name CHANGES -print0)
+  assertEquals "these files still reference clj-holmes" "" "$(printf '%s' "${hits}" | awk 'NF')"
 }
 
 test_detected_in_ci_lines_name_real_cc_rules() {
@@ -2368,15 +2865,17 @@ test_detected_in_ci_lines_name_real_cc_rules() {
     | grep -v 'cc-' || true)"
   assertEquals "CI attributions must name a cc-* rule" "" "${bad}"
 }
+
+. "${SCRIPT_DIR}/../lib/shunit2"
 ```
 
 - [ ] **Step 2: Run it to verify it fails**
 
 ```bash
-bash test/taxonomy-coverage_test.sh
+bash test/no-clj-holmes_test.sh
 ```
 
-Expected: both new tests fail, listing `config-and-ops.md` and `README.md`.
+Expected: both tests fail, listing `config-and-ops.md` and `README.md`.
 
 - [ ] **Step 3: Fix config-and-ops.md**
 
@@ -2428,7 +2927,7 @@ map.
   [`cleancoders/github-actions`](https://github.com/cleancoders/github-actions)
   at tag `v1` — the same rules and the same ref your PR check uses, so a local
   scan and a PR cannot disagree. They are fetched and cached on first scan; set
-  `CC_SEMGREP_RULES_DIR` to a `cleancoders/github-actions` checkout to skip the
+  `CC_SEMGREP_RULES_DIR` to a `security-rules/semgrep` directory to skip the
   fetch. `ERROR` findings block; `cc-path-traversal`, `cc-generic-catch` and
   `cc-clojure-xml-xxe` are `WARNING` and advisory, exactly as in CI.
 ```
@@ -2450,24 +2949,33 @@ reviews exactly those, once, and reports through the `clojure-security` skill.
 Scope is the turn's edits rather than the session diff, so nothing is reviewed
 twice.
 
-Set `CC_SKIP_DIFF_REVIEW=1` to turn it off. Files changed by `Bash` rather than
-by an edit tool do not enter the ledger; semgrep still scans those.
+**Expect one extra round-trip per turn that touches Clojure.** The review is not
+gated on findings — the hook blocks in order to *ask* for it, so a turn editing a
+`.clj`, `.cljs` or `.cljc` file ends with one more exchange even when semgrep and
+gitleaks are clean. That is the price of covering the classes no scanner reaches.
+
+Two limits worth knowing rather than discovering. Files changed by `Bash` — a
+script, `sed`, `git checkout` — never enter the ledger, so semgrep still scans them
+but the review does not see them. And the hook cannot verify the review actually
+happened: it blocks once and trusts Claude, as every `Stop` directive does.
+
+Set `CC_SKIP_DIFF_REVIEW=1` to turn the whole thing off.
 ```
 
 - [ ] **Step 5: Run the test to verify it passes**
 
 ```bash
-bash test/taxonomy-coverage_test.sh
+bash test/no-clj-holmes_test.sh
 ```
 
-Expected: `Ran 18 tests.` / `OK`
+Expected: `Ran 2 tests.` / `OK`
 
 - [ ] **Step 6: Full suite and commit**
 
 ```bash
 for t in test/*_test.sh; do bash "$t" >/dev/null 2>&1 || echo "FAIL $t"; done; echo done
 git add plugins/clojure-security/skills/clojure-security/references/config-and-ops.md \
-        plugins/clojure-security/README.md test/taxonomy-coverage_test.sh
+        plugins/clojure-security/README.md test/no-clj-holmes_test.sh
 git commit -m "docs(clojure-security): CI attributions name the rules that run
 
 weak-crypto and insecure-tls-verification credited five clj-holmes rules
@@ -2593,14 +3101,26 @@ git status --short
 
 Expected: no `package.json`, `plugin.json`, `marketplace.json`, or `index.ts` in the list. CI syncs those from `VERSION`; hand-editing them causes a conflict on the sync commit.
 
-- [ ] **Step 6: Commit, push, and confirm the tag**
+- [ ] **Step 6: Commit only — do not push**
 
 ```bash
 git add plugins/clojure-security/VERSION plugins/clojure-security/CHANGES
 git add -f docs/superpowers/plans/2026-07-29-clojure-security-semgrep-alignment.md
 git commit -m "release(clojure-security): 0.12.0"
-git push origin master
 ```
+
+**Stop here.** The push is deliberately not part of this task. Two reasons:
+
+1. This work is on a feature branch, and the whole-branch review has not run yet.
+   Publishing before that review defeats it.
+2. Pushing to `master` *is* the release — CI syncs the version files, commits them,
+   and tags `clojure-security/v0.12.0`, which four consumer repos then resolve.
+   That is outward-facing and awkward to retract, so it needs the human's explicit
+   go-ahead rather than a step in a plan they approved a while ago.
+
+The merge and push happen in `superpowers:finishing-a-development-branch`, after the
+final review, using a squash or ORT merge per the repo's convention — never a
+fast-forward.
 
 Then wait for CI and confirm:
 
