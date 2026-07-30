@@ -239,7 +239,7 @@ manages:
 | 3 | 352 | csrf | llm-review |
 | 4 | 862 | missing-authz | llm-review |
 | 5 | 787 | — not applicable (memory safety) | — |
-| 6 | 22 | path-traversal | semgrep (WARNING) + llm-review |
+| 6 | 22 | path-traversal | semgrep (WARNING) |
 | 7 | 416 | — not applicable (memory safety) | — |
 | 8 | 125 | — not applicable (memory safety) | — |
 | 9 | 78 | command-injection | semgrep |
