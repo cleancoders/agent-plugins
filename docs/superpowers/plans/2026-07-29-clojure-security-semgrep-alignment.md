@@ -235,7 +235,7 @@ Create `plugins/clojure-security/hooks/lib/semgrep-rules.sh`:
 # hooks resolve the rules at run time and cache the result.
 #
 # Resolution order, first hit wins:
-#   1. $CC_SEMGREP_RULES_DIR — a github-actions checkout; never touches network
+#   1. $CC_SEMGREP_RULES_DIR — a security-rules/semgrep dir; never touches network
 #   2. a warm cache at <root>/cc-semgrep-rules-<ref>
 #   3. a cold fetch of the pinned tag's tarball into that cache
 #
@@ -1162,7 +1162,7 @@ with:
 ```bash
 command -v semgrep >/dev/null 2>&1 || note_missing "semgrep" \
   "Clojure security-pattern SAST in the Stop and PreToolUse hooks" \
-  "\`brew install semgrep\` — the hooks fetch the 16 cleancoders \`cc-*\` rules on first scan and cache them; set \`CC_SEMGREP_RULES_DIR\` to a \`cleancoders/github-actions\` checkout to skip the fetch entirely"
+  "\`brew install semgrep\` — the hooks fetch the 16 cleancoders \`cc-*\` rules on first scan and cache them; set \`CC_SEMGREP_RULES_DIR\` to a \`security-rules/semgrep\` directory to skip the fetch entirely"
 ```
 
 Update line 9's header comment from `clj-holmes + rules, gitleaks, clj-watson, jq` to `semgrep, gitleaks, clj-watson, jq`, and line 112's clj-watson note to drop any implication that clj-holmes is a sibling in the pipeline. **Keep the `https://github.com/clj-holmes/clj-watson` URL** — clj-watson genuinely lives under that GitHub org, and the URL is correct. Task 10's invariant strips that exact substring before matching, so it does not collide.
@@ -1214,7 +1214,7 @@ git commit -m "fix(clojure-security): SessionStart checks for semgrep
 Telling a developer to install clj-holmes is now worse than silence: they
 would install software abandoned since October 2022 and believe they were
 covered by it. The notice names semgrep and documents CC_SEMGREP_RULES_DIR
-for anyone with a github-actions checkout."
+for anyone who has the rules on disk already."
 ```
 
 ---
@@ -2927,7 +2927,7 @@ map.
   [`cleancoders/github-actions`](https://github.com/cleancoders/github-actions)
   at tag `v1` — the same rules and the same ref your PR check uses, so a local
   scan and a PR cannot disagree. They are fetched and cached on first scan; set
-  `CC_SEMGREP_RULES_DIR` to a `cleancoders/github-actions` checkout to skip the
+  `CC_SEMGREP_RULES_DIR` to a `security-rules/semgrep` directory to skip the
   fetch. `ERROR` findings block; `cc-path-traversal`, `cc-generic-catch` and
   `cc-clojure-xml-xxe` are `WARNING` and advisory, exactly as in CI.
 ```
