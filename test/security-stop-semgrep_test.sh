@@ -169,6 +169,20 @@ test_tool_errors_are_surfaced_not_rendered_as_clean() {
     "${out#*|}" "Invalid Semgrep rule schema"
 }
 
+# Regression: semgrep reports an ordinary Clojure syntax error (unbalanced
+# paren, etc.) as a `PartialParsing` entry with `"level": "warn"`, and still
+# exits 0 — that is its normal signal for a file it could not fully parse, not
+# a broken rules directory. Surfacing this as a tool-error notice misdiagnoses
+# a Clojure bug (which clj-kondo-postedit.sh already flagged on the edit) as a
+# rules-dir fault, drags in the taint-shaped triage block that does not fit,
+# and re-fires every turn while the file stays broken (the diff is cumulative).
+test_partial_parsing_warning_is_not_reported_as_a_tool_error() {
+  printf '{"results":[],"errors":[{"level":"warn","type":["PartialParsing",[]]}]}' > "${RESULTS}"
+  local out; out="$(run_hook)"
+  assertEquals "a parse warning alone must not block or warn" "0" "${out%%|*}"
+  assertEquals "a parse warning must produce no output" "" "${out#*|}"
+}
+
 # --- commit-backstop.sh -----------------------------------------------------
 # Same rule set, same severity split, different gate: a PreToolUse hook cannot
 # signal "advisory" with exit 1 (that does not block, and neither does 0), so

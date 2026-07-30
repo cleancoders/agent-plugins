@@ -24,6 +24,15 @@
 # such error so callers can print a notice; it is informational, never
 # blocking, since a scan that could not run is not a finding to gate on.
 #
+# `.errors` entries are filtered to `level != "warn"` first. Semgrep reports an
+# ordinary Clojure syntax error (unbalanced paren, etc.) as a `PartialParsing`
+# entry with `"level": "warn"` and still exits 0 — that is its normal signal
+# for a file it could not fully parse, not a rules-dir problem, and clj-kondo
+# already flags the same syntax error on the edit itself. Surfacing it here
+# would misdiagnose a Clojure bug as a broken rules directory. The `// "error"`
+# default treats an absent `level` as non-warn, since that is what a genuine
+# `InvalidRuleSchemaError` / bad-config error looks like.
+#
 # Sets SEMGREP_ERRORS, SEMGREP_WARNINGS, SEMGREP_ERROR_COUNT, SEMGREP_WARN_COUNT,
 # SEMGREP_TOOL_ERRORS. Always returns 0.
 
@@ -72,7 +81,7 @@ run_semgrep_scan() {
     ' "$out" 2>/dev/null || true)"
 
     SEMGREP_TOOL_ERRORS="$(jq -r '
-      .errors[0]? // empty
+      first(.errors[]? | select((.level // "error") != "warn"))
       | (.message // .long_msg // .short_msg // .type // "semgrep reported an error")
     ' "$out" 2>/dev/null || true)"
   fi
