@@ -133,16 +133,31 @@ test_deleted_files_are_not_reviewed() {
     "${err}" "gone.clj"
 }
 
-test_review_names_the_scanner_blind_classes() {
+test_review_names_every_llm_review_class() {
+  # Was a 4-of-13 spot-check (missing-authz, idor, ssrf, macro-runtime-input),
+  # which meant 9 of the 13 scanner-blind class names could be deleted from the
+  # directive with the suite still green — csrf (CWE-352, #3 on the CWE Top 25)
+  # among them. The expected set is now DERIVED from SKILL.md's class index
+  # rather than hand-picked, so a class dropped from the directive fails here
+  # regardless of which one it is.
   printf 'routes.clj\n' > "${LEDGER}"
   local out; out="$(run_hook)"
   local err="${out#*|}"
-  # Spot-check the highest-value ones. missing-authz is CWE-862, #4 on the
-  # CWE Top 25; idor is CWE-639; ssrf is CWE-918.
-  assertContains "must name missing-authz" "${err}" "missing-authz"
-  assertContains "must name idor" "${err}" "idor"
-  assertContains "must name ssrf" "${err}" "ssrf"
-  assertContains "must name macro-runtime-input" "${err}" "macro-runtime-input"
+
+  local skill missing class
+  skill="${SCRIPT_DIR}/../plugins/clojure-security/skills/clojure-security/SKILL.md"
+
+  missing=""
+  while IFS= read -r class; do
+    [ -z "${class}" ] && continue
+    if ! printf '%s' "${err}" | grep -qF -- "${class}"; then
+      missing="${missing}${class}"$'\n'
+    fi
+  done < <(grep -E '^\| `[a-z0-9-]+` \|' "${skill}" \
+    | awk -F'|' '{gsub(/[ `]/,"",$2); gsub(/ /,"",$5); if ($5 == "llm-review") print $2}')
+
+  assertEquals "the directive must name every SKILL.md class routed llm-review" \
+    "" "$(printf '%s' "${missing}" | awk 'NF')"
 }
 
 test_absolute_ledger_paths_are_reported_repo_relative() {

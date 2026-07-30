@@ -16,7 +16,9 @@
     muted, which costs more than it buys.
   * Rules are resolved at run time rather than vendored: `CC_SEMGREP_RULES_DIR`,
     then a `/tmp` cache, then a fetch of tag `v1` — the same ref the four
-    consumer repos pin, so local and CI cannot drift to different rule versions.
+    consumer repos pin, so local and CI should not drift to different rule
+    versions. `v1` is a mutable tag and a warm cache is never revalidated, so a
+    re-pointed tag can still leave a stale cache behind until it is cleared.
     Vendoring a copy would have meant two sources of truth for the rule set,
     with no way to detect divergence offline. Every failure degrades to skipping
     the Clojure scan; an unreachable GitHub never fails a turn.

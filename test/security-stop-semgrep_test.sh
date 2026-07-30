@@ -155,6 +155,20 @@ test_truncated_semgrep_output_does_not_kill_hook() {
   assertEquals "malformed JSON must not print anything" "" "${out#*|}"
 }
 
+# A wrong rules dir, a partial cache, corrupt rule YAML, or an incompatible
+# semgrep all produce zero `.results` and a non-empty `.errors` — and,
+# discarded, all four rendered identically to "clean, exit 0". This is the
+# exact failure a `CC_SEMGREP_RULES_DIR` pointed at a repo checkout root
+# produced: semgrep parsed unrelated YAML, found nothing, exited non-zero, and
+# the hook reported clean. The tool error must be surfaced, not blocking.
+test_tool_errors_are_surfaced_not_rendered_as_clean() {
+  printf '{"results":[],"errors":[{"message":"Invalid Semgrep rule schema"}]}' > "${RESULTS}"
+  local out; out="$(run_hook)"
+  assertEquals "a tool error alone must not block (it is not a finding)" "1" "${out%%|*}"
+  assertContains "the tool error must be surfaced, not swallowed" \
+    "${out#*|}" "Invalid Semgrep rule schema"
+}
+
 # --- commit-backstop.sh -----------------------------------------------------
 # Same rule set, same severity split, different gate: a PreToolUse hook cannot
 # signal "advisory" with exit 1 (that does not block, and neither does 0), so
@@ -209,6 +223,17 @@ test_commit_backstop_truncated_semgrep_output_does_not_crash() {
   local out; out="$(run_commit_hook)"
   assertEquals "malformed JSON must not crash the hook" "0" "${out%%|*}"
   assertEquals "malformed JSON must not print anything" "" "${out#*|}"
+}
+
+# Same class of bug as the Stop hook: a tool error must not render as a silent
+# clean pass, and must not block a commit either — it is not a finding.
+test_commit_backstop_surfaces_tool_errors_without_blocking() {
+  stage_a_clojure_file
+  printf '{"results":[],"errors":[{"message":"Invalid Semgrep rule schema"}]}' > "${RESULTS}"
+  local out; out="$(run_commit_hook)"
+  assertEquals "a tool error alone must not block the commit" "0" "${out%%|*}"
+  assertContains "the tool error must be surfaced, not swallowed" \
+    "${out#*|}" "Invalid Semgrep rule schema"
 }
 
 # Every other fixture hardcodes "path":"foo.clj", so the prefix-strip `sub()`

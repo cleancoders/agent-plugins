@@ -122,7 +122,7 @@ Most Clojure codebases yield at least one real finding from this set.
 | **clj-kondo** | unresolved syms, arity, shadowed locals, reflection warnings | semantics, taint, deserialization, SQLi |
 | **clj-watson** | transitive deps vs. GitHub Advisory DB / NVD | source-level bugs, runtime config |
 | **gitleaks** | secrets matching regex / entropy heuristics | custom-encoded secrets; keys referenced by path |
-| **Semgrep** | the only Clojure engine in CI: 16 first-party `cc-*` rules over `.clj`, `.cljs` and `.cljc` | no dataflow; **no namespace-alias resolution** — each rule enumerates aliases, so an unusual one is a silent miss. `cc-weak-crypto` and `cc-insecure-tls` are `pattern-regex` and can match inside a comment |
+| **Semgrep** | the only Clojure engine in CI: 16 first-party `cc-*` rules over `.clj`, `.cljs` and `.cljc` | no dataflow; **no namespace-alias resolution** — each rule enumerates aliases, so an unusual one is a silent miss. `cc-weak-crypto` is entirely `pattern-regex` and can match inside a comment. `cc-insecure-tls` is mostly AST `pattern:` clauses (`reify HostnameVerifier`, its fully-qualified form, `setDefaultHostnameVerifier`, `{:insecure? true}`), which cannot fire in a comment |
 | **CodeQL / Snyk Code** | Java bytecode after AOT — JVM-shaped issues | Clojure idioms |
 
 If every tool reports clean, that means none of them looked at the code the way an attacker would. Read it.

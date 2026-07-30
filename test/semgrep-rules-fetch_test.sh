@@ -106,4 +106,65 @@ test_returns_zero_even_on_failure() {
   assertEquals "must always return 0" "0" "$?"
 }
 
+# --- refusing a directory that cannot be the rule set (whole-branch review #1b) ---
+#
+# The documented `CC_SEMGREP_RULES_DIR` value used to be a `github-actions`
+# *checkout root* — a real, existing, non-empty directory full of YAML (CI
+# workflows, etc.) that contains not one `cc-*.yaml` rule. Handed to semgrep as
+# `--config`, that produced zero results and a non-zero exit that
+# `run_semgrep_scan`'s `|| true` swallowed: a wrong directory rendered
+# identically to "clean". A directory without `cc-*.yaml` must resolve to
+# nothing so callers fall back to skipping the scan, on both branches that can
+# short-circuit the fetch.
+
+test_env_override_without_cc_rules_falls_through_to_fetch() {
+  local bogus got
+  bogus="$(mktemp -d)"
+  printf 'name: ci\n' > "${bogus}/workflow.yaml"
+  got="$(CC_SEMGREP_RULES_DIR="${bogus}" PATH="${BIN}:${PATH}" resolve)"
+  assertTrue "a dir with no cc-*.yaml must not be returned verbatim" \
+    "[ '${got}' != '${bogus}' ]"
+  assertTrue "must have fetched instead of trusting the bogus override" \
+    "[ -f '${CURL_LOG}' ]"
+  rm -rf "${bogus}"
+}
+
+test_warm_cache_without_cc_rules_is_treated_as_absent() {
+  # Simulates a cache directory that exists and is non-empty but was never
+  # populated by this function (e.g. left over from something else) — the old
+  # `ls -A` check would have trusted it.
+  mkdir -p "${FAKE_TMP}/cc-semgrep-rules-v1"
+  printf 'not a rule\n' > "${FAKE_TMP}/cc-semgrep-rules-v1/README.md"
+  local got
+  got="$(PATH="${BIN}:${PATH}" resolve)"
+  assertTrue "must have fetched rather than trusting the bad cache" \
+    "[ -f '${CURL_LOG}' ]"
+  assertTrue "the fetch must replace the bad cache with real rules" \
+    "[ -f '${got}/cc-read-string.yaml' ]"
+}
+
+# --- atomic cache population (whole-branch review #7, escalated from MINOR) ---
+#
+# Cache population used to `mkdir -p` the real cache path and `cp` into it
+# directly, so an interrupted or concurrent cold fetch left a permanently
+# partial rule set — a warm cache with one rule cached forever after,
+# indistinguishable from a healthy one. Populate a temp sibling and `mv` it
+# into place, so a reader only ever sees the cache absent or complete.
+
+test_cache_population_leaves_no_temporary_staging_dir_behind() {
+  PATH="${BIN}:${PATH}" resolve >/dev/null
+  local leftover
+  leftover="$(find "${FAKE_TMP}" -maxdepth 1 -name '.cc-semgrep-rules-tmp-*' 2>/dev/null)"
+  assertEquals "the temp staging dir must be renamed away, not left behind" \
+    "" "${leftover}"
+}
+
+test_cache_population_yields_the_complete_rule_set_not_a_partial_one() {
+  PATH="${BIN}:${PATH}" resolve >/dev/null
+  assertTrue "cc-read-string.yaml must be present" \
+    "[ -f '${FAKE_TMP}/cc-semgrep-rules-v1/cc-read-string.yaml' ]"
+  assertTrue "cc-weak-crypto.yaml must also be present — a partial cache is the bug" \
+    "[ -f '${FAKE_TMP}/cc-semgrep-rules-v1/cc-weak-crypto.yaml' ]"
+}
+
 . "${SCRIPT_DIR}/../lib/shunit2"

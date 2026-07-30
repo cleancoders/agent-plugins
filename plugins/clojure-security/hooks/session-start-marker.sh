@@ -51,16 +51,17 @@ is_clojure_project || exit 0
 # basename (no leading slash) so the pattern works regardless of where the
 # .gitignore lives relative to .claude/. Idempotent: skip if already ignored.
 ensure_gitignored() {
-  IGNORE_ENTRY=".security-session-start-sha"
   GITIGNORE="${CWD}/.gitignore"
-  if [ -f "$GITIGNORE" ] && grep -qxF "$IGNORE_ENTRY" "$GITIGNORE" 2>/dev/null; then
-    return 0
-  fi
-  # Append a trailing newline first if the file exists and lacks one.
-  if [ -s "$GITIGNORE" ] && [ -n "$(tail -c1 "$GITIGNORE" 2>/dev/null)" ]; then
-    printf '\n' >> "$GITIGNORE"
-  fi
-  printf '%s\n' "$IGNORE_ENTRY" >> "$GITIGNORE" 2>/dev/null || true
+  for IGNORE_ENTRY in ".security-session-start-sha" ".security-turn-files"; do
+    if [ -f "$GITIGNORE" ] && grep -qxF "$IGNORE_ENTRY" "$GITIGNORE" 2>/dev/null; then
+      continue
+    fi
+    # Append a trailing newline first if the file exists and lacks one.
+    if [ -s "$GITIGNORE" ] && [ -n "$(tail -c1 "$GITIGNORE" 2>/dev/null)" ]; then
+      printf '\n' >> "$GITIGNORE"
+    fi
+    printf '%s\n' "$IGNORE_ENTRY" >> "$GITIGNORE" 2>/dev/null || true
+  done
 }
 
 if git rev-parse --git-dir >/dev/null 2>&1; then
@@ -99,7 +100,7 @@ command -v gitleaks   >/dev/null 2>&1 || note_missing "gitleaks" \
 
 command -v semgrep >/dev/null 2>&1 || note_missing "semgrep" \
   "Clojure security-pattern SAST in the Stop and PreToolUse hooks" \
-  "\`brew install semgrep\` — the hooks fetch the 16 cleancoders \`cc-*\` rules on first scan and cache them; set \`CC_SEMGREP_RULES_DIR\` to a \`cleancoders/github-actions\` checkout to skip the fetch entirely"
+  "\`brew install semgrep\` — the hooks fetch the 16 cleancoders \`cc-*\` rules on first scan and cache them; set \`CC_SEMGREP_RULES_DIR\` to a \`security-rules/semgrep\` directory (e.g. inside a \`cleancoders/github-actions\` checkout) to skip the fetch entirely"
 
 command -v clj-watson >/dev/null 2>&1 || note_missing "clj-watson" \
   "dependency CVE scanning in \`/security-audit\`" \

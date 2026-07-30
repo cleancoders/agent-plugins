@@ -43,8 +43,9 @@ findings surface while code is being written rather than after the fact.
 - **`PreToolUse` backstop on `git commit`** — final defense if the
   PostToolUse and Stop hooks were bypassed. Runs gitleaks (native
   `protect --staged`) and semgrep against the staged index. Blocks
-  the commit (exit 2) on any finding. Humans can override by running
-  the commit themselves.
+  the commit (exit 2) on an `ERROR` finding or a secret; `WARNING`-only
+  findings print and let the commit proceed, mirroring CI. Humans can
+  override by running the commit themselves.
 
 ## Dependencies
 
@@ -57,8 +58,9 @@ optional, missing tools are skipped without failure:
   [`cleancoders/github-actions`](https://github.com/cleancoders/github-actions)
   at tag `v1` — the same rules and the same ref your PR check uses, so a local
   scan and a PR cannot disagree. They are fetched and cached on first scan; set
-  `CC_SEMGREP_RULES_DIR` to a `cleancoders/github-actions` checkout to skip the
-  fetch. `ERROR` findings block; `cc-path-traversal`, `cc-generic-catch` and
+  `CC_SEMGREP_RULES_DIR` to a `security-rules/semgrep` directory (e.g. inside a
+  `cleancoders/github-actions` checkout) to skip the fetch. `ERROR` findings
+  block; `cc-path-traversal`, `cc-generic-catch` and
   `cc-clojure-xml-xxe` are `WARNING` and advisory, exactly as in CI.
 - [`gitleaks`](https://github.com/gitleaks/gitleaks) — secret scanning
 - [`clj-watson`](https://github.com/clj-holmes/clj-watson) — dependency CVEs

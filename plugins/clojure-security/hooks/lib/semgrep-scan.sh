@@ -18,8 +18,14 @@
 # Findings suppressed in source with `nosemgrep` are absent from `--json` output
 # entirely, so they need no handling — which is also what CI does.
 #
-# Sets SEMGREP_ERRORS, SEMGREP_WARNINGS, SEMGREP_ERROR_COUNT, SEMGREP_WARN_COUNT.
-# Always returns 0.
+# A wrong rules dir, a partial cache, corrupt YAML, or an incompatible semgrep
+# all produce zero `.results` and a non-empty `.errors` — and, discarded, all
+# four render identically as "clean". SEMGREP_TOOL_ERRORS surfaces the first
+# such error so callers can print a notice; it is informational, never
+# blocking, since a scan that could not run is not a finding to gate on.
+#
+# Sets SEMGREP_ERRORS, SEMGREP_WARNINGS, SEMGREP_ERROR_COUNT, SEMGREP_WARN_COUNT,
+# SEMGREP_TOOL_ERRORS. Always returns 0.
 
 run_semgrep_scan() {
   local rules_dir="$1"
@@ -32,6 +38,7 @@ run_semgrep_scan() {
   SEMGREP_WARNINGS=""
   SEMGREP_ERROR_COUNT=0
   SEMGREP_WARN_COUNT=0
+  SEMGREP_TOOL_ERRORS=""
 
   if [ -z "$rules_dir" ] || [ -z "$file_list" ]; then
     return 0
@@ -62,6 +69,11 @@ run_semgrep_scan() {
       .results[]? | select(.extra.severity == "WARNING")
       | (if $prefix == "" then .path else (.path | sub($prefix; "")) end) as $p
       | "\($p):\(.start.line):\(.start.col)  WARNING  [\(.check_id | split(".") | last)]  \(.extra.message | gsub("\\s+"; " "))"
+    ' "$out" 2>/dev/null || true)"
+
+    SEMGREP_TOOL_ERRORS="$(jq -r '
+      .errors[0]? // empty
+      | (.message // .long_msg // .short_msg // .type // "semgrep reported an error")
     ' "$out" 2>/dev/null || true)"
   fi
 

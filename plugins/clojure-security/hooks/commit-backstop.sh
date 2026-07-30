@@ -130,6 +130,7 @@ SEMGREP_ERRORS=""
 SEMGREP_WARNINGS=""
 SEMGREP_ERROR_COUNT=0
 SEMGREP_WARN_COUNT=0
+SEMGREP_TOOL_ERRORS=""
 
 if [ "$HAVE_SEMGREP" -eq 1 ] && [ -n "$CLJ_STAGED" ]; then
   RULES_DIR="$(resolve_semgrep_rules)"
@@ -159,18 +160,25 @@ fi
 # --- decide -----------------------------------------------------------------
 
 if [ "$SEMGREP_ERROR_COUNT" -eq 0 ] && [ "$SEMGREP_WARN_COUNT" -eq 0 ] \
-   && [ "$GITLEAKS_COUNT" = "0" ]; then
+   && [ "$GITLEAKS_COUNT" = "0" ] && [ -z "$SEMGREP_TOOL_ERRORS" ]; then
   exit 0
 fi
 
 {
   if [ "$SEMGREP_ERROR_COUNT" -gt 0 ] || [ "$GITLEAKS_COUNT" != "0" ]; then
     echo "Commit blocked by clojure-security backstop. Staged diff has findings:"
-  else
+  elif [ "$SEMGREP_WARN_COUNT" -gt 0 ]; then
     echo "clojure-security backstop — advisory findings in the staged diff."
     echo "Not blocking: these rules do not gate CI either."
+  else
+    echo "clojure-security backstop — semgrep reported a tool error (not blocking)."
   fi
   echo
+  if [ -n "$SEMGREP_TOOL_ERRORS" ]; then
+    echo "## semgrep tool error — rules dir may be wrong, incomplete, or incompatible"
+    printf '%s\n' "$SEMGREP_TOOL_ERRORS"
+    echo
+  fi
   if [ -n "$GITLEAKS_REPORT" ]; then
     echo "## Secrets (gitleaks --staged) — ${GITLEAKS_COUNT}"
     printf '%s\n' "$GITLEAKS_REPORT"

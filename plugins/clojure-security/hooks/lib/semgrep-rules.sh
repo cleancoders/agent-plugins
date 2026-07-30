@@ -27,16 +27,31 @@ CC_SEMGREP_RULES_REF="${CC_SEMGREP_RULES_REF:-v1}"
 CC_SEMGREP_RULES_URL_BASE="${CC_SEMGREP_RULES_URL_BASE:-https://codeload.github.com/cleancoders/github-actions/tar.gz}"
 CC_SEMGREP_RULES_CACHE_ROOT="${CC_SEMGREP_RULES_CACHE_ROOT:-/tmp}"
 
-resolve_semgrep_rules() {
-  local cache tmp tarball src
+# True only if $1 contains at least one cc-*.yaml file. A directory that
+# cannot possibly be the rule set — a repo checkout root, an empty or
+# half-populated cache, a directory of unrelated YAML — must resolve to
+# nothing rather than being handed to semgrep, where a wrong `--config`
+# still runs, still exits non-zero, and looks identical to "clean" once
+# `run_semgrep_scan`'s `|| true` swallows the exit code.
+_semgrep_rules_dir_has_rules() {
+  local d="$1" f
+  for f in "${d}"/cc-*.yaml; do
+    [ -e "$f" ] && return 0
+  done
+  return 1
+}
 
-  if [ -n "${CC_SEMGREP_RULES_DIR:-}" ] && [ -d "${CC_SEMGREP_RULES_DIR}" ]; then
+resolve_semgrep_rules() {
+  local cache cache_tmp tmp tarball src
+
+  if [ -n "${CC_SEMGREP_RULES_DIR:-}" ] && [ -d "${CC_SEMGREP_RULES_DIR}" ] \
+     && _semgrep_rules_dir_has_rules "${CC_SEMGREP_RULES_DIR}"; then
     printf '%s' "${CC_SEMGREP_RULES_DIR}"
     return 0
   fi
 
   cache="${CC_SEMGREP_RULES_CACHE_ROOT}/cc-semgrep-rules-${CC_SEMGREP_RULES_REF}"
-  if [ -d "${cache}" ] && [ -n "$(ls -A "${cache}" 2>/dev/null)" ]; then
+  if [ -d "${cache}" ] && _semgrep_rules_dir_has_rules "${cache}"; then
     printf '%s' "${cache}"
     return 0
   fi
@@ -69,14 +84,36 @@ resolve_semgrep_rules() {
     return 0
   fi
 
-  mkdir -p "${cache}"
-  cp "${src}"/*.yaml "${cache}/" 2>/dev/null || true
-  rm -rf "${tmp}"
+  # Populate a temporary sibling directory and move it into place in one
+  # step, so the cache is always either absent or complete. Copying straight
+  # into `$cache` left a window — an interrupted or concurrent cold fetch —
+  # where a half-populated cache (even a single rule) would resolve as "warm"
+  # forever after, no different from a healthy one.
+  mkdir -p "${CC_SEMGREP_RULES_CACHE_ROOT}" 2>/dev/null || true
+  cache_tmp="$(mktemp -d "${CC_SEMGREP_RULES_CACHE_ROOT}/.cc-semgrep-rules-tmp-XXXXXX" 2>/dev/null)" || {
+    rm -rf "${tmp}"
+    return 0
+  }
+  cp "${src}"/*.yaml "${cache_tmp}/" 2>/dev/null || true
 
-  if [ -z "$(ls -A "${cache}" 2>/dev/null)" ]; then
-    rm -rf "${cache}"
+  if ! _semgrep_rules_dir_has_rules "${cache_tmp}"; then
+    rm -rf "${tmp}" "${cache_tmp}"
     return 0
   fi
+
+  if [ -d "${cache}" ] && _semgrep_rules_dir_has_rules "${cache}"; then
+    # Lost the race to a concurrent fetch; theirs is already complete.
+    rm -rf "${tmp}" "${cache_tmp}"
+    printf '%s' "${cache}"
+    return 0
+  fi
+
+  rm -rf "${cache}" 2>/dev/null || true
+  if ! mv "${cache_tmp}" "${cache}" 2>/dev/null; then
+    rm -rf "${tmp}" "${cache_tmp}"
+    return 0
+  fi
+  rm -rf "${tmp}"
 
   printf '%s' "${cache}"
   return 0

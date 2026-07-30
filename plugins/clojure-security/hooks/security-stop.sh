@@ -178,6 +178,7 @@ SEMGREP_ERRORS=""
 SEMGREP_WARNINGS=""
 SEMGREP_ERROR_COUNT=0
 SEMGREP_WARN_COUNT=0
+SEMGREP_TOOL_ERRORS=""
 
 if [ "$HAVE_SEMGREP" -eq 1 ] && [ -n "$CLJ_FILES" ]; then
   RULES_DIR="$(resolve_semgrep_rules)"
@@ -276,7 +277,8 @@ fi
 # --- emit report and exit ---------------------------------------------------
 
 if [ "$SEMGREP_ERROR_COUNT" -eq 0 ] && [ "$SEMGREP_WARN_COUNT" -eq 0 ] \
-   && [ "$GITLEAKS_COUNT" = "0" ] && [ -z "$REVIEW_FILES" ]; then
+   && [ "$GITLEAKS_COUNT" = "0" ] && [ -z "$REVIEW_FILES" ] \
+   && [ -z "$SEMGREP_TOOL_ERRORS" ]; then
   exit 0
 fi
 
@@ -287,7 +289,7 @@ fi
   # access-control work.
   HAVE_TOOL_FINDINGS=0
   if [ "$SEMGREP_ERROR_COUNT" -gt 0 ] || [ "$SEMGREP_WARN_COUNT" -gt 0 ] \
-     || [ "$GITLEAKS_COUNT" != "0" ]; then
+     || [ "$GITLEAKS_COUNT" != "0" ] || [ -n "$SEMGREP_TOOL_ERRORS" ]; then
     HAVE_TOOL_FINDINGS=1
   fi
 
@@ -297,6 +299,13 @@ fi
     echo "Security review of this turn's edits."
   fi
   echo
+  if [ -n "$SEMGREP_TOOL_ERRORS" ]; then
+    echo "## semgrep reported a tool error (not blocking)"
+    echo "The rules dir may be wrong, incomplete, or incompatible with this"
+    echo "semgrep version — a clean result cannot be trusted until this clears:"
+    printf '%s\n' "$SEMGREP_TOOL_ERRORS"
+    echo
+  fi
   if [ -n "$GITLEAKS_REPORT" ]; then
     echo "## Secrets (gitleaks) — ${GITLEAKS_COUNT}"
     printf '%s\n' "$GITLEAKS_REPORT"
