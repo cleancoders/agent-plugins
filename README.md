@@ -15,6 +15,7 @@ Then install individual plugins:
 ```
 /plugin install kanban-dashboard@cleancoders-agent-plugins
 /plugin install clojure@cleancoders-agent-plugins
+/plugin install a11y-toolkit@cleancoders-agent-plugins
 ```
 
 ### Team-Wide Configuration
@@ -60,6 +61,42 @@ Clojure / ClojureScript skills for the cleancoders stack: c3kit (bucket, apron, 
 **Skills:** `creating-pages`, `writing-migrations`, `using-forms`, `writing-tests`, `writing-reagent-components`, `using-c3kit-bucket`
 
 Invoke as `/clojure:<skill>` (e.g. `/clojure:writing-tests`).
+
+### [a11y-toolkit](plugins/a11y-toolkit/)
+
+Accessibility toolkit for **WCAG 2.2 Level AA**, framework-agnostic across HTML/CSS/JS — the
+checks that matter most (structure, contrast, keyboard behavior, ARIA) run against what
+actually renders, so it works the same for plain HTML, React, Vue, Svelte, or Clojure Hiccup.
+It covers two moments: authoring and auditing.
+
+**Skill:** `accessible-authoring` — fires automatically while you write or review
+HTML/CSS/JS, routing to references for design-time and dev-time checklists, ARIA widget
+patterns, cognitive/plain-language heuristics, and a WCAG 2.2 AA criterion map. No
+invocation needed.
+
+**Agent:** `a11y-auditor` — audits a source file, folder, or reachable URL with a static
+pass plus live Chrome DevTools MCP checks (keyboard nav, focus order, computed contrast,
+accessibility-tree snapshot, 320px reflow, target size).
+
+**Command:** `/a11y-review [file | folder | URL]` — the entry point to the auditor. Run bare
+and it smart-detects a target (a running localhost dev server, or the file you're in), then
+returns a severity-ranked report: summary scorecard, prioritized fix order, findings with
+WCAG criterion and before → after fixes, an explicit "what was NOT checked" list, and what
+passed.
+
+**Requires** the Chrome DevTools MCP server for the live browser checks, installed as a
+plugin so the tool names resolve:
+
+```
+/plugin install chrome-devtools-mcp@claude-plugins-official
+```
+
+Without it, audits degrade to static-only and say so in the report — but you lose keyboard,
+focus-order, live-contrast, reflow, and target-size coverage.
+
+Automated checks catch only part of real WCAG issues; reports are a starting point, not a
+certification of conformance. See [the plugin README](plugins/a11y-toolkit/README.md) for
+the full limitations and disclaimer.
 
 ## Adding to CLAUDE.md
 

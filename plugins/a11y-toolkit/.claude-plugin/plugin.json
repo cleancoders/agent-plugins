@@ -1,0 +1,8 @@
+{
+  "name": "a11y-toolkit",
+  "description": "Accessibility toolkit for WCAG 2.2 AA — an authoring skill, an audit agent, and /a11y-review for framework-agnostic HTML/CSS/JS.",
+  "version": "0.0.1",
+  "author": {
+    "name": "Nicole Sylvester"
+  }
+}

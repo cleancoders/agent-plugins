@@ -1,0 +1,13 @@
+## 1.0.0
+  * Initial release — WCAG 2.2 Level AA toolkit for framework-agnostic HTML/CSS/JS
+  * Skill: accessible-authoring, auto-fires while writing or reviewing HTML/CSS/JS
+    * Six reference files — design checklist, dev checklist, ARIA widget patterns,
+      cognitive/plain-language heuristics, WCAG 2.2 AA criterion map, external resources
+  * Agent: a11y-auditor, static source pass plus live Chrome DevTools MCP checks
+    * Keyboard nav, focus order, computed contrast, accessibility-tree snapshot,
+      320px reflow, target size
+    * Severity-ranked findings with confirmed-failure vs verify-manually confidence
+  * Command: /a11y-review [file | folder | URL]
+    * Smart-detects a target when run bare — localhost dev server, current file, or asks
+    * Offers to save the report to a file
+  * Sample pages for validation — samples/clean-page.html, samples/broken-page.html
